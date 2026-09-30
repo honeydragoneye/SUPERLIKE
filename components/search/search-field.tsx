@@ -8,7 +8,7 @@ export function SearchField() {
   const { query, setQuery, clear, loading } = useSearch();
 
   return (
-    <div className="flex h-[44px] w-[300px] shrink-0 items-center gap-[10px] rounded-pill bg-paper pl-[14px] pr-[8px] rule">
+    <div className="flex h-[44px] w-[416px] shrink-0 items-center gap-[10px] rounded-pill bg-paper pl-[14px] pr-[8px] rule">
       <span className="text-ink">
         <TintedIcon name="search" size={16} />
       </span>

@@ -17,6 +17,24 @@ const ARTIST_ALIAS: Record<string, string> = {
  * Drops the parenthetical noise Spotify carries and Last.fm does not —
  * "(Remastered 2011)", "[Live]", " - Radio Edit".
  */
+/**
+ * Spotify joins collaborating artists into one string — "T-ARA, 초신성" for a
+ * duet — but Last.fm has no such entry: it indexes each artist separately.
+ * Measured on TTL (Time To Love): the joined name returns 0 similar tracks and
+ * 0 tags, "T-ARA" alone returns 60 similar tracks and 10 tags.
+ *
+ * So the joined name is tried first — right for an artist whose own name
+ * contains a comma — then each part on its own, each with its alias.
+ */
+export function artistCandidates(artistName: string): string[] {
+  const parts = artistName
+    .split(",")
+    .map((a) => a.trim())
+    .filter(Boolean);
+  const withAliases = [artistName, ...parts].flatMap((n) => [n, ARTIST_ALIAS[n]]);
+  return Array.from(new Set(withAliases.filter(Boolean) as string[]));
+}
+
 export function cleanTitle(name: string): string {
   return name
     .replace(/\([^)]*\)/g, "")
@@ -96,7 +114,7 @@ export async function similarTracks(
   artistName: string,
   limit: number,
 ): Promise<{ candidates: LfmCandidate[]; error: string | null }> {
-  const artists = [artistName, ARTIST_ALIAS[artistName]].filter(Boolean) as string[];
+  const artists = artistCandidates(artistName);
   const titles = Array.from(new Set([trackName, cleanTitle(trackName)]));
 
   for (const artist of artists) {
@@ -118,7 +136,7 @@ export async function similarTracks(
 
 /** Genre tags for an artist, most-weighted first. */
 export async function artistTopTags(artistName: string, limit = 3): Promise<string[]> {
-  const artists = [artistName, ARTIST_ALIAS[artistName]].filter(Boolean) as string[];
+  const artists = artistCandidates(artistName);
   for (const artist of artists) {
     const data = await call<{ toptags?: { tag?: unknown } }>(
       endpoint("artist.gettoptags", { artist }),

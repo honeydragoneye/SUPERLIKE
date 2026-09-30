@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { Icon } from "./ui/icon";
 import { ConnectButton } from "./player/connect-button";
+import { useSearch } from "./search/search-provider";
+import { useStationView } from "./station/station-view";
 
 function IconButton({ name, label }: { name: string; label: string }) {
   return (
@@ -15,9 +19,21 @@ function IconButton({ name, label }: { name: string; label: string }) {
 }
 
 export function SiteHeader() {
+  const { clear } = useSearch();
+  const { hide } = useStationView();
+
   return (
     <header className="flex h-[84px] shrink-0 items-center gap-[18px] overflow-hidden bg-white pl-[20px] pr-[14px] rule">
-      <Link href="/" className="shrink-0">
+      <Link
+        href="/"
+        onClick={() => {
+          clear();
+          hide();
+        }}
+        aria-label="홈으로"
+        title="홈으로"
+        className="shrink-0"
+      >
         <span className="whitespace-nowrap text-[36px] font-black tracking-[-1.6px]">
           Superlike®
         </span>
@@ -25,19 +41,9 @@ export function SiteHeader() {
 
       <div className="min-w-px flex-1" />
 
-      {/* MYPAGE — label and arrow share one hit area */}
-      <Link
-        href="/mypage"
-        className="flex shrink-0 items-center gap-[8px] rounded-pill"
-      >
+      <Link href="/mypage" className="shrink-0 rounded-pill">
         <span className="whitespace-nowrap text-[24px] tracking-[-0.3px]">
           MYPAGE
-        </span>
-        <span
-          aria-hidden
-          className="flex size-[26px] items-center justify-center rounded-pill bg-pink text-[13px]"
-        >
-          →
         </span>
       </Link>
 

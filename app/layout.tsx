@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Noto_Sans_KR } from "next/font/google";
 import { SpotifyProvider } from "@/components/player/spotify-provider";
 import { SearchProvider } from "@/components/search/search-provider";
+import { StationViewProvider } from "@/components/station/station-view";
 import "./globals.css";
 
 const notoSansKR = Noto_Sans_KR({
@@ -24,7 +25,9 @@ export default function RootLayout({
     <html lang="ko" className={notoSansKR.variable}>
       <body className="font-[family-name:var(--font-noto-sans-kr)] font-bold">
         <SpotifyProvider>
-          <SearchProvider>{children}</SearchProvider>
+          <SearchProvider>
+            <StationViewProvider>{children}</StationViewProvider>
+          </SearchProvider>
         </SpotifyProvider>
       </body>
     </html>

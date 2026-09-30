@@ -11,10 +11,13 @@ export function RecentRow({
   track,
   onPlay,
   onStation,
+  stationBusy = false,
 }: {
   track: RecentTrack;
   onPlay?: (uri: string) => void;
   onStation?: (track: RecentTrack) => void;
+  /** a station is being built right now, so a second click would be ignored */
+  stationBusy?: boolean;
 }) {
   const playable = Boolean(track.uri && onPlay);
 
@@ -58,14 +61,21 @@ export function RecentRow({
         </span>
       </button>
 
+      {/* clears the PLAYED (72) and TIME (40) columns and the 12px gaps
+          between them, so it never sits on top of either */}
       {onStation && track.uri && (
         <button
           type="button"
           onClick={() => onStation(track)}
-          title={`${track.title} 기준으로 스테이션 시작`}
-          className="absolute right-0 top-1/2 -translate-y-1/2 rounded-pill bg-ink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-opacity group-hover:opacity-100"
+          disabled={stationBusy}
+          title={
+            stationBusy
+              ? "스테이션 구성 중…"
+              : `${track.title} 기준으로 스테이션 시작`
+          }
+          className="absolute right-[136px] top-1/2 -translate-y-1/2 rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-[opacity,background-color] group-hover:opacity-100 enabled:hover:bg-ink disabled:opacity-40 disabled:group-hover:opacity-40"
         >
-          STATION
+          {stationBusy ? "구성 중" : "STATION"}
         </button>
       )}
     </li>

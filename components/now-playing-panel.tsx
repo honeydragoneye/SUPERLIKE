@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Icon, TintedIcon } from "./ui/icon";
 import { QueueItem } from "./ui/queue-item";
 import { usePlaybackPosition, useSpotify } from "./player/spotify-provider";
+import { useStationView } from "./station/station-view";
 import { clock } from "@/lib/time";
 import type { Track } from "@/lib/data";
 
@@ -50,6 +51,9 @@ export function NowPlayingPanel() {
     stationQueue,
     stationActive,
     stationBusy,
+    stationSeed,
+    stopStation,
+    playFromStation,
     recent,
     shuffle,
     repeatMode,
@@ -63,6 +67,7 @@ export function NowPlayingPanel() {
     seek,
   } = useSpotify();
 
+  const { show: showStation, hide: hideStation } = useStationView();
   // the only subscriber to the per-second position, so the ticker re-renders
   // this panel alone rather than the whole grid
   const positionMs = usePlaybackPosition();
@@ -125,12 +130,39 @@ export function NowPlayingPanel() {
                 durationMs: t.durationMs,
               }));
 
-  const upNext: Track[] = upNextSource.map((t, i) => ({
-    index: String(i + 1).padStart(2, "0"),
-    title: t.title,
-    artist: t.artist,
-    time: clock(t.durationMs),
+  const upNext = upNextSource.map((t, i) => ({
+    uri: t.uri,
+    track: {
+      index: String(i + 1).padStart(2, "0"),
+      title: t.title,
+      artist: t.artist,
+      time: clock(t.durationMs),
+    } satisfies Track,
   }));
+
+  /**
+   * Picking a row jumps to it and consumes the rows above it, so what follows
+   * the picked track becomes the top of UP NEXT. Every list in this panel
+   * behaves this way, whatever filled it.
+   *
+   * A station's queue is ours, so it just reorders in place. Otherwise the
+   * picked track *and everything after it* is handed over as the new queue:
+   * playing the single uri would leave Spotify holding a one-track queue with
+   * nothing to advance to, which is why the reorder never stuck before.
+   */
+  const playRow = (uri: string) => {
+    if (!uri) return;
+    const inStation = stationQueue.find((t) => t.uri === uri);
+    if (stationActive && inStation) return void playFromStation(inStation);
+
+    const at = upNextSource.findIndex((t) => t.uri === uri);
+    const rest = at >= 0 ? upNextSource.slice(at).filter((t) => t.uri) : [];
+    if (rest.length > 1) {
+      void play({ uris: rest.map((t) => t.uri), tracks: rest });
+      return;
+    }
+    void play({ uris: [uri] });
+  };
 
   return (
     <section className="flex h-full min-h-0 flex-col gap-[12px] overflow-hidden bg-panel p-[16px]">
@@ -264,22 +296,70 @@ export function NowPlayingPanel() {
         <p className="shrink-0 text-[9px] leading-[12px] text-pink-bright">{error}</p>
       )}
 
+      {/* the status itself opens the station screen; STOP stays a separate
+          control beside it, since a button cannot be nested inside a button */}
+      {stationActive && (
+        <div className="flex w-full shrink-0 items-center gap-[8px] rounded-[4px] bg-white/10 px-[8px] py-[6px]">
+          <button
+            type="button"
+            onClick={showStation}
+            title="스테이션 화면 열기"
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-[8px] text-left transition-opacity hover:opacity-70"
+          >
+            <span
+              className={`size-[6px] shrink-0 rounded-pill ${
+                stationBusy ? "animate-pulse bg-pink-bright" : "bg-mint"
+              }`}
+              aria-hidden
+            />
+            <span className="flex min-w-0 flex-1 flex-col gap-px">
+              <span className="text-[8px] tracking-[0.8px] text-on-dark-muted">
+                {stationBusy ??
+                  (stationQueue.length ? "STATION 재생 중" : "유사곡을 찾지 못했습니다")}
+              </span>
+              <span className="truncate text-[9px] text-on-dark">{stationSeed}</span>
+            </span>
+            <span
+              aria-hidden
+              className="shrink-0 text-[11px] leading-none text-on-dark-muted"
+            >
+              →
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              stopStation();
+              hideStation();
+            }}
+            title="스테이션 종료"
+            className="shrink-0 rounded-pill bg-on-dark-muted px-[8px] py-[4px] text-[8px] tracking-[0.6px] text-panel"
+          >
+            STOP
+          </button>
+        </div>
+      )}
+
       <div className="h-[1.5px] w-full shrink-0 bg-on-dark-muted" />
 
       <div className="flex w-full shrink-0 items-center justify-between whitespace-nowrap">
         <p className="text-[10px] tracking-[1px] text-on-dark">UP NEXT</p>
         <p className="text-[8px] tracking-[0.5px] text-on-dark-muted">
-          {stationBusy
-            ? stationBusy
-            : upNext.length
-              ? `${upNext.length} TRACKS · ${stationActive ? "STATION" : `SHUFFLE ${shuffle ? "ON" : "OFF"}`}`
+          {upNext.length
+            ? `${upNext.length} TRACKS · ${stationActive ? "STATION" : `SHUFFLE ${shuffle ? "ON" : "OFF"}`}`
+            : stationBusy
+              ? "채우는 중…"
               : "대기열 없음"}
         </p>
       </div>
 
       <ul className="scroll-y flex min-h-0 w-full flex-1 flex-col">
-        {upNext.map((track) => (
-          <QueueItem key={`${track.index}-${track.title}`} track={track} />
+        {upNext.map(({ uri, track }) => (
+          <QueueItem
+            key={`${track.index}-${track.title}`}
+            track={track}
+            onPlay={uri ? () => playRow(uri) : undefined}
+          />
         ))}
       </ul>
 

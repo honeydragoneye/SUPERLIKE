@@ -11,7 +11,7 @@ const ACTIVE_RANGE = "TODAY";
  * Spotify is connected so the block never collapses during design review.
  */
 export function RecentlyPlayed() {
-  const { connected, recent, recentLive, recentError, play, startStation } =
+  const { connected, recent, recentLive, recentError, play, startStation, stationBusy } =
     useSpotify();
   // no stand-in rows: an invented track flashing before the real history lands
   // is worse than an empty list for a beat
@@ -66,6 +66,7 @@ export function RecentlyPlayed() {
           <RecentRow
             key={track.index}
             track={track}
+            stationBusy={stationBusy !== null}
             onPlay={(uri) => void play({ uris: [uri] })}
             onStation={(t) =>
               void startStation({

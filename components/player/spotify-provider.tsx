@@ -68,6 +68,8 @@ type Ctx = {
   /** station: an app-managed queue, rebuildable without touching what plays */
   stationQueue: StationCandidate[];
   stationSeed: string | null;
+  /** the seed track itself — the station view shows its artwork and title */
+  stationSeedTrack: StationSeed | null;
   stationBusy: string | null;
   stationActive: boolean;
   startStation: (seed: StationSeed) => Promise<void>;
@@ -98,6 +100,23 @@ const SpotifyContext = createContext<Ctx | null>(null);
  * the page flickering. Only the progress readout subscribes here.
  */
 const PositionContext = createContext<number>(0);
+
+/**
+ * Spotify reports control failures as a raw JSON body. Surface something a
+ * listener can act on instead, and keep the original for the console.
+ */
+function readableError(status: number, detail?: string, fallback?: string): string {
+  const text = detail ?? "";
+  if (/Restriction violated/i.test(text)) {
+    return "지금은 이 동작을 할 수 없습니다";
+  }
+  if (/premium/i.test(text)) return "Spotify Premium 계정이 필요합니다";
+  if (status === 404 || /NO_ACTIVE_DEVICE/i.test(text)) {
+    return "재생 기기를 찾을 수 없습니다";
+  }
+  if (status === 429) return "요청이 몰렸습니다. 잠시 후 다시 시도해 주세요";
+  return fallback ?? "재생에 실패했습니다";
+}
 
 async function fetchToken(): Promise<string | null> {
   const res = await fetch("/api/spotify/token", { cache: "no-store" });
@@ -324,7 +343,8 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       activatedRef.current = true;
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.detail ?? data.error ?? "재생에 실패했습니다.");
+        console.warn("[play]", res.status, data);
+        setError(readableError(res.status, data.detail, "재생에 실패했습니다"));
       } else {
         setError(null);
       }
@@ -343,7 +363,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
 
   /** shuffle and repeat are Web API settings; the SDK only reports them back */
   const setMode = useCallback(
-    async (payload: Record<string, unknown>) => {
+    async (payload: Record<string, unknown>, silent = false) => {
       const res = await fetch("/api/spotify/player", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -351,10 +371,14 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.detail ?? data.error ?? "설정을 바꾸지 못했습니다.");
-      } else {
-        setError(null);
+        console.warn("[player]", res.status, data);
+        // housekeeping calls must not put an error in front of the listener
+        if (!silent) {
+          setError(readableError(res.status, data.detail, "설정을 바꾸지 못했습니다"));
+        }
+        return;
       }
+      setError(null);
     },
     [deviceId],
   );
@@ -403,14 +427,25 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       refreshRecent,
       stationQueue: station.queue,
       stationSeed: station.seedLabel,
+      stationSeedTrack: station.seed,
       stationBusy: station.busy,
       stationActive: station.isActive,
       startStation: async (seed) => {
-        stationOwnsShuffleRef.current = false;
+        /**
+         * A station owns shuffle for its whole life, not just once the user
+         * turns it on: Spotify's flag can still be set from an earlier PLAY ALL,
+         * and the SDK would report that back the moment playback starts.
+         */
+        stationOwnsShuffleRef.current = true;
         setShuffle(false);
+        if (deviceId) await setMode({ action: "shuffle", state: false }, true);
         await station.startStation(seed);
       },
-      stopStation: station.stopStation,
+      stopStation: () => {
+        stationOwnsShuffleRef.current = false;
+        setShuffle(false);
+        station.stopStation();
+      },
       playFromStation: station.playFromQueue,
       playlists: playlists ?? [],
       playlistTotal,

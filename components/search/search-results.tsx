@@ -31,7 +31,7 @@ function Thumb({ src, size = 32 }: { src: string | null; size?: number }) {
  */
 export function SearchResults() {
   const { query, results, loading, error, tab, setTab, total } = useSearch();
-  const { play, startStation } = useSpotify();
+  const { play, startStation, stationBusy } = useSpotify();
 
   const counts: Record<SearchTab, number> = {
     track: results.tracks.length,
@@ -125,10 +125,15 @@ export function SearchResults() {
                       durationMs: t.durationMs,
                     })
                   }
-                  title={`${t.name} 기준으로 스테이션 시작`}
-                  className="w-[62px] shrink-0 rounded-pill bg-pink py-[6px] text-[8px] tracking-[0.7px] text-paper"
+                  disabled={stationBusy !== null}
+                  title={
+                    stationBusy
+                      ? "스테이션 구성 중…"
+                      : `${t.name} 기준으로 스테이션 시작`
+                  }
+                  className="w-[62px] shrink-0 rounded-pill bg-pink py-[6px] text-[8px] tracking-[0.7px] text-paper transition-colors enabled:hover:bg-ink disabled:opacity-40"
                 >
-                  STATION
+                  {stationBusy ? "구성 중" : "STATION"}
                 </button>
                 <span className="tnum w-[40px] shrink-0 text-right text-[10px] text-on-bright">
                   {clock(t.durationMs)}

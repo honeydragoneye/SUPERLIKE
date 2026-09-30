@@ -77,7 +77,9 @@ export function useStation({
   /** tracks already played, newest last — powers the previous button */
   const historyRef = useRef<StationCandidate[]>([]);
   const [queue, setQueue] = useState<StationCandidate[]>([]);
-  const [seedLabel, setSeedLabel] = useState<string | null>(null);
+  /** the seed track itself: the label is derived, the station view needs the rest */
+  const [seed, setSeed] = useState<StationSeed | null>(null);
+  const seedLabel = seed ? `${seed.name} — ${seed.artist}` : null;
   const [busy, setBusy] = useState<string | null>(null);
 
   // mirrored in an effect rather than during render: callbacks below run after
@@ -162,14 +164,21 @@ export function useStation({
     });
   }, []);
 
-  /** Advance to a specific track, or the head of the queue. */
+  /**
+   * Advance to a specific track, or the head of the queue.
+   *
+   * Jumping ahead consumes everything before the target too — picking the third
+   * row means the first two were skipped, so up-next resumes from the fourth
+   * rather than replaying what the user passed over.
+   */
   const playFromQueue = useCallback(
     async (target?: StationCandidate) => {
       const list = queueRef.current;
       const next = target ?? list[0];
       if (!next) return;
 
-      setQueue(list.filter((t) => t.id !== next.id));
+      const at = list.findIndex((t) => t.id === next.id);
+      setQueue(at >= 0 ? list.slice(at + 1) : list.filter((t) => t.id !== next.id));
       historyRef.current.push(next);
       stationRef.current.lastPlayed = {
         id: next.id,
@@ -225,7 +234,7 @@ export function useStation({
           lfmKey: `${seed.name}|${seed.artist}`.toLowerCase(),
         },
       ];
-      setSeedLabel(`${seed.name} — ${seed.artist}`);
+      setSeed(seed);
       await onPlay(seed.uri);
       await fillQueue(true);
     },
@@ -236,7 +245,7 @@ export function useStation({
     stationRef.current = emptyState();
     historyRef.current = [];
     setQueue([]);
-    setSeedLabel(null);
+    setSeed(null);
   }, []);
 
   /**
@@ -276,9 +285,10 @@ export function useStation({
   return {
     queue,
     setQueue,
+    seed,
     seedLabel,
     busy,
-    isActive: seedLabel !== null,
+    isActive: seed !== null,
     station: stationRef,
     startStation,
     stopStation,
