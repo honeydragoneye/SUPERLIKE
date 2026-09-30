@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------
+   Superlike design tokens — mirrored from the Figma collection
+   "superlike/tokens". Alpha is baked into each colour on purpose:
+   the design is a riso-style stack of translucent flat inks.
+   --------------------------------------------------------------- */
+@theme {
+  /* core ink / paper */
+  --color-ink: rgba(0, 0, 0, 0.8);
+  --color-paper: rgba(255, 253, 246, 0.72);
+  /* the same warm white at full strength, for copy that must not wash out */
+  --color-paper-solid: #fffdf6;
+  --color-muted: rgba(110, 100, 128, 0.74);
+
+  /* accents */
+  --color-pink: rgba(255, 78, 156, 0.73);
+  /* full-strength pink: the 0.73 alpha drops to ~1.4:1 on the dark blocks */
+  --color-pink-bright: #ff4e9c;
+  --color-gold: rgba(255, 212, 70, 0.74);
+  --color-violet: rgba(123, 91, 255, 0.72);
+  --color-mint: rgba(46, 217, 166, 0.71);
+
+  /* surfaces */
+  --color-panel: rgba(0, 0, 0, 0.82);
+  --color-artwork: rgba(255, 0, 4, 0.7);
+  --color-ticker: #ffe000;
+  --color-lime: #f0fe77;
+  --color-lime-soft: #e4fb8a;
+  --color-chart: #f4f9f9;
+  --color-sky: #54bdff;
+  --color-alert: #ff383c;
+  --color-shell: #ffffff;
+
+  /* Readability layer. The Figma file leans on `ink` and `paper`
+     everywhere, which drops to ~1.4:1 on the dark panel and on the
+     sky-blue block. These are the same hues pushed to a legible
+     alpha, used only where the surface demands it. */
+  --color-on-dark: rgba(255, 253, 246, 0.96);
+  --color-on-dark-muted: rgba(255, 253, 246, 0.62);
+  --color-on-bright: rgba(0, 0, 0, 0.92);
+  --color-on-bright-muted: rgba(0, 0, 0, 0.62);
+
+  --radius-pill: 40px;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background: var(--color-shell);
+    color: var(--color-ink);
+  }
+}
+
+@layer utilities {
+  /* every block in the design carries the same 1.5px inside rule */
+  .rule {
+    border: 1.5px solid var(--color-ink);
+  }
+  .rule-b {
+    border-bottom: 1px solid var(--color-ink);
+  }
+  /* blocks that separate with horizontal rules instead of a full border */
+  .rule-y {
+    border-top: 1px solid var(--color-ink);
+    border-bottom: 1px solid var(--color-ink);
+  }
+  /* horizontal rail: slim ink scrollbar that fits the block's spare 8px */
+  .scroll-x {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-ink) transparent;
+  }
+  .scroll-x::-webkit-scrollbar {
+    height: 6px;
+  }
+  .scroll-x::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-x::-webkit-scrollbar-thumb {
+    background: var(--color-ink);
+    border-radius: 999px;
+  }
+
+  /* up-next list: scrolls so the square cover can claim its space */
+  .scroll-y {
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-on-dark-muted) transparent;
+  }
+  /* on the light app shell the dark thumb reads better */
+  .scroll-y-ink {
+    scrollbar-color: var(--color-ink) transparent;
+  }
+  .scroll-y-ink::-webkit-scrollbar-thumb {
+    background: var(--color-ink);
+  }
+  .scroll-y::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scroll-y::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-y::-webkit-scrollbar-thumb {
+    background: var(--color-on-dark-muted);
+    border-radius: 999px;
+  }
+
+  /* chart figures line up column-wise even without a mono face */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
