@@ -3,6 +3,7 @@
 import type { Playlist, RecentTrack } from "@/lib/data";
 import {
   useStation,
+  type PlayOutcome,
   type StationSeed,
 } from "@/components/station/use-station";
 import type { StationCandidate } from "@/app/api/station/similar/route";
@@ -82,7 +83,8 @@ type Ctx = {
   playlistError: string | null;
   error: string | null;
   isPlaying: boolean;
-  play: (opts?: PlayOptions) => Promise<void>;
+  /** the station skips only on "refused", never on "unavailable" */
+  play: (opts?: PlayOptions) => Promise<PlayOutcome>;
   toggle: () => Promise<void>;
   next: () => Promise<void>;
   previous: () => Promise<void>;
@@ -105,8 +107,33 @@ const PositionContext = createContext<number>(0);
  * Spotify reports control failures as a raw JSON body. Surface something a
  * listener can act on instead, and keep the original for the console.
  */
-function readableError(status: number, detail?: string, fallback?: string): string {
+type Restriction = { isPlayable?: boolean; reason?: string; explicit?: boolean };
+
+function readableError(
+  status: number,
+  detail?: string,
+  fallback?: string,
+  restriction?: Restriction,
+): string {
   const text = detail ?? "";
+  // Spotify's own 403 says `reason: "UNKNOWN"`; the play route looks the track
+  // up so the listener is told what to change rather than just that it failed
+  switch (restriction?.reason) {
+    case "explicit":
+      return "명시적 콘텐츠로 설정된 곡입니다. Spotify 설정에서 허용해 주세요";
+    case "market":
+      return "이 지역에서는 재생할 수 없는 곡입니다";
+    case "product":
+      return "현재 요금제로는 재생할 수 없는 곡입니다";
+  }
+  if (restriction?.isPlayable === false) {
+    return "이 계정에서는 재생할 수 없는 곡입니다";
+  }
+  // no catalogue restriction, but the track is explicit and the account refused
+  // it: that combination only happens when explicit content is filtered
+  if (status === 403 && restriction?.explicit) {
+    return "19금 곡입니다. Spotify 설정에서 명시적 콘텐츠를 허용해 주세요";
+  }
   if (/Restriction violated/i.test(text)) {
     return "지금은 이 동작을 할 수 없습니다";
   }
@@ -322,8 +349,8 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
   }, [connected]);
 
   const play = useCallback(
-    async (opts: PlayOptions = {}) => {
-      if (!deviceId) return;
+    async (opts: PlayOptions = {}): Promise<PlayOutcome> => {
+      if (!deviceId) return "unavailable";
       if (opts.tracks) {
         sourceOrderRef.current = opts.tracks;
         setQueue(opts.tracks);
@@ -344,10 +371,13 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         console.warn("[play]", res.status, data);
-        setError(readableError(res.status, data.detail, "재생에 실패했습니다"));
-      } else {
-        setError(null);
+        setError(
+          readableError(res.status, data.detail, "재생에 실패했습니다", data.restriction),
+        );
+        return "refused";
       }
+      setError(null);
+      return "played";
     },
     [deviceId],
   );
@@ -457,7 +487,10 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
         const p = playerRef.current;
         if (!p) return;
         const state = await p.getCurrentState();
-        if (!state) return play();
+        if (!state) {
+          await play();
+          return;
+        }
         await p.togglePlay();
       },
       /**

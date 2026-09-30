@@ -8,6 +8,23 @@ export const QUEUE_TARGET = 10;
 /** Refill once the queue drops to this. */
 export const REFILL_WHEN = 2;
 
+/**
+ * What a play attempt did.
+ *
+ * Only `refused` means Spotify looked at the track and said no; `unavailable`
+ * means the request never got that far (no device yet), which must not cost the
+ * queue a track.
+ */
+export type PlayOutcome = "played" | "refused" | "unavailable";
+/**
+ * How many refusals in a row to ride out before giving up.
+ *
+ * Spotify answers 403 for anything the account may not play — an explicit track
+ * on a filtered account, a release with no local licence. Its own apps skip
+ * those silently; this queue has to do the same or it stops dead on one track.
+ */
+const MAX_SKIPS = 5;
+
 export type StationSeed = {
   id: string;
   uri: string;
@@ -64,7 +81,7 @@ export function useStation({
   repeatOne,
   shuffled,
 }: {
-  onPlay: (uri: string) => Promise<void>;
+  onPlay: (uri: string) => Promise<PlayOutcome>;
   currentUri: string | null;
   isPaused: boolean;
   positionMs: number;
@@ -96,9 +113,9 @@ export function useStation({
   }, [shuffled]);
 
   /** Pull more candidates, branching off the last played track. */
-  const fillQueue = useCallback(async (initial: boolean) => {
+  const fillQueue = useCallback(async (initial: boolean): Promise<StationCandidate[]> => {
     const station = stationRef.current;
-    if (!station.seed || fillingRef.current) return;
+    if (!station.seed || fillingRef.current) return [];
     fillingRef.current = true;
     setBusy(initial ? "스테이션 구성 중…" : "큐 리필 중…");
 
@@ -139,6 +156,7 @@ export function useStation({
           return merged;
         });
       }
+      return found;
     } finally {
       fillingRef.current = false;
       setBusy(null);
@@ -170,27 +188,53 @@ export function useStation({
    * Jumping ahead consumes everything before the target too — picking the third
    * row means the first two were skipped, so up-next resumes from the fourth
    * rather than replaying what the user passed over.
+   *
+   * A refused track is dropped and the one behind it tried instead, up to
+   * MAX_SKIPS, so a run of unplayable candidates cannot stall the station. The
+   * queue is only committed once a track actually starts — a refusal must not
+   * look like it played. A player that is not ready yet is not a refusal and
+   * stops the walk, so a missing device cannot eat the queue.
+   *
+   * `from` overrides the committed queue, for the one caller that has a fresher
+   * list than React has rendered yet.
    */
   const playFromQueue = useCallback(
-    async (target?: StationCandidate) => {
-      const list = queueRef.current;
-      const next = target ?? list[0];
+    async (target?: StationCandidate, from?: StationCandidate[]) => {
+      let list = from ?? queueRef.current;
+      let next: StationCandidate | undefined = target ?? list[0];
       if (!next) return;
 
-      const at = list.findIndex((t) => t.id === next.id);
-      setQueue(at >= 0 ? list.slice(at + 1) : list.filter((t) => t.id !== next.id));
-      historyRef.current.push(next);
-      stationRef.current.lastPlayed = {
-        id: next.id,
-        uri: next.uri,
-        name: next.name,
-        artist: next.artist,
-        artwork: next.artwork,
-        durationMs: next.durationMs,
-      };
-      await onPlay(next.uri);
+      const refused: string[] = [];
+      for (let tries = 0; next && tries < MAX_SKIPS; tries++) {
+        const head: StationCandidate = next;
+        const at = list.findIndex((t) => t.id === head.id);
+        const rest = at >= 0 ? list.slice(at + 1) : list.filter((t) => t.id !== head.id);
 
-      if (queueRef.current.length - 1 <= REFILL_WHEN) void fillQueue(false);
+        const outcome = await onPlay(head.uri);
+        if (outcome === "unavailable") return;   // no device: nothing to skip to
+        if (outcome === "played") {
+          setQueue(rest);
+          historyRef.current.push(head);
+          stationRef.current.lastPlayed = {
+            id: head.id,
+            uri: head.uri,
+            name: head.name,
+            artist: head.artist,
+            artwork: head.artwork,
+            durationMs: head.durationMs,
+          };
+          if (rest.length <= REFILL_WHEN) void fillQueue(false);
+          return;
+        }
+
+        refused.push(`${head.name} — ${head.artist}`);
+        list = rest;
+        next = rest[0];
+      }
+
+      setQueue(list);
+      if (refused.length) console.warn("[station] skipped unplayable", refused);
+      if (list.length <= REFILL_WHEN) void fillQueue(false);
     },
     [onPlay, fillQueue],
   );
@@ -235,10 +279,16 @@ export function useStation({
         },
       ];
       setSeed(seed);
-      await onPlay(seed.uri);
-      await fillQueue(true);
+      const started = await onPlay(seed.uri);
+      const candidates = await fillQueue(true);
+      // the seed itself can be refused — an explicit track on a filtered
+      // account, say. Build the queue anyway and start at the first one that
+      // will play, rather than leaving the station running but silent.
+      if (started === "refused" && candidates.length) {
+        await playFromQueue(candidates[0], candidates);
+      }
     },
-    [onPlay, fillQueue],
+    [onPlay, fillQueue, playFromQueue],
   );
 
   const stopStation = useCallback(() => {

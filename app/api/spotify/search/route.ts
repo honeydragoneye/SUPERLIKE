@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
+  MARKET,
   NotConnectedError,
   SpotifyApiError,
   flushToken,
@@ -72,7 +73,7 @@ function present<T>(items: (T | null)[] | undefined): T[] {
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const query = (url.searchParams.get("q") ?? "").trim();
-  const market = url.searchParams.get("market") ?? "KR";
+  const market = url.searchParams.get("market") ?? MARKET;
   const offset = Number(url.searchParams.get("offset") ?? 0) || 0;
   const limit = Math.min(Number(url.searchParams.get("limit") ?? MAX_LIMIT) || MAX_LIMIT, MAX_LIMIT);
   const types = url.searchParams.get("type") ?? "track,album,artist,playlist";

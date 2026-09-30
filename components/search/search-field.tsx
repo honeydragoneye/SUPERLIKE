@@ -2,10 +2,16 @@
 
 import { TintedIcon } from "@/components/ui/icon";
 import { useSearch } from "./search-provider";
+import { useStationView } from "@/components/station/station-view";
 
 /** Sits in the action bar, where the quality pills used to be. */
 export function SearchField() {
   const { query, setQuery, clear, loading } = useSearch();
+  const { hide } = useStationView();
+
+  // the station screen outranks the results, so reaching for the field is what
+  // steps back out of it — the query itself is never touched
+  const leaveStation = () => hide();
 
   return (
     <div className="flex h-[44px] w-[416px] shrink-0 items-center gap-[10px] rounded-pill bg-paper pl-[14px] pr-[8px] rule">
@@ -15,7 +21,11 @@ export function SearchField() {
       <input
         type="search"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => {
+          leaveStation();
+          setQuery(e.target.value);
+        }}
+        onFocus={leaveStation}
         placeholder="곡, 아티스트 검색"
         aria-label="검색"
         className="min-w-0 flex-1 bg-transparent text-[12px] text-ink outline-none placeholder:text-muted [&::-webkit-search-cancel-button]:hidden"

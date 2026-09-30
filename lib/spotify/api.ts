@@ -4,6 +4,21 @@ import { resolveAccessToken, writeTokens, type Resolved } from "./tokens";
 
 const API = "https://api.spotify.com/v1";
 
+/**
+ * Fallback market for catalogue lookups.
+ *
+ * This is the *listener's* market, not the music's origin — it decides which
+ * regional pressing of a track comes back, not which countries' artists do.
+ *
+ * Every request here carries a user token, and Spotify gives the country on
+ * that account priority over this value, so it is a fallback rather than a
+ * setting. Sending one at all is what matters: without a market Spotify skips
+ * track relinking and hands back a URI that may hold no licence for the
+ * listener, and it omits `is_playable`, so code that checks that field never
+ * fires. One constant so the station and the search route cannot drift apart.
+ */
+export const MARKET = "KR";
+
 export class NotConnectedError extends Error {
   constructor() {
     super("not_connected");
@@ -110,6 +125,9 @@ function rank(track: SpotifyTrack): [number, number, string] {
  * `limit` is 10 because that is what this app's credentials actually accept:
  * 20 and 50 come back `400 Invalid limit`, despite the documented range being
  * 0–50. Measured, not assumed — raising it silently breaks every lookup.
+ *
+ * `market` is what makes the `is_playable` rank above mean anything, and what
+ * makes Spotify hand back the locally licensed pressing of a track.
  */
 export async function findTrack(
   name: string,
@@ -117,7 +135,7 @@ export async function findTrack(
 ): Promise<{ track: SpotifyTrack | null; resolved: Resolved }> {
   const q = `track:"${name}" artist:"${artist}"`;
   const { data, resolved } = await spotifyGet<{ tracks?: { items?: SpotifyTrack[] } }>(
-    `/search?q=${encodeURIComponent(q)}&type=track&limit=10`,
+    `/search?q=${encodeURIComponent(q)}&type=track&limit=10&market=${MARKET}`,
   );
   const items = data.tracks?.items ?? [];
   if (!items.length) return { track: null, resolved };

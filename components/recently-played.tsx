@@ -61,8 +61,10 @@ export function RecentlyPlayed() {
         <span className="w-[40px] shrink-0 text-right">TIME</span>
       </div>
 
-      <ul className="flex min-h-px w-full flex-1 flex-col overflow-hidden">
-        {tracks.slice(0, 7).map((track) => (
+      {/* the whole history scrolls: /recently-played returns up to 50 and
+          clipping at the block's height hid everything past the seventh row */}
+      <ul className="scroll-y scroll-y-ink flex min-h-px w-full flex-1 flex-col">
+        {tracks.map((track) => (
           <RecentRow
             key={track.index}
             track={track}

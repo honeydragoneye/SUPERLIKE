@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { resolveAccessToken, writeTokens } from "@/lib/spotify/tokens";
 import { spotifyHttp } from "@/lib/http/throttle";
+import { MARKET } from "@/lib/spotify/api";
 
 const API = "https://api.spotify.com/v1";
 
@@ -75,8 +76,49 @@ export async function PUT(request: NextRequest) {
 
   if (res.status === 204 || res.ok) return reply({ ok: true });
 
+  const detail = await res.text();
+
+  /**
+   * A refused play answers `Restriction violated` with `reason: "UNKNOWN"`,
+   * which names nothing. One lookup of the track names it instead.
+   *
+   * `restrictions.reason` covers catalogue-level blocks (`market`, `product`).
+   * An account that filters explicit content is not one of those: the track
+   * stays `is_playable: true` and carries no restriction, because the block
+   * happens at playback. Measured on CHROMAKOPIA's "Like Him", which Spotify
+   * lists twice — the clean cut plays and the explicit one is refused. So the
+   * track's own `explicit` flag is what identifies that case.
+   */
+  let restriction:
+    | { isPlayable?: boolean; reason?: string; explicit?: boolean }
+    | undefined;
+  if (res.status === 403 && uris?.length) {
+    const id = uris[0].split(":").pop();
+    try {
+      const probe = await spotifyHttp(`${API}/tracks/${id}?market=${MARKET}`, {
+        headers,
+        cache: "no-store",
+      });
+      if (probe.ok) {
+        const track = (await probe.json()) as {
+          is_playable?: boolean;
+          explicit?: boolean;
+          restrictions?: { reason?: string };
+        };
+        restriction = {
+          isPlayable: track.is_playable,
+          reason: track.restrictions?.reason,
+          explicit: track.explicit,
+        };
+      }
+    } catch {
+      // diagnosis is best-effort; the 403 below is the answer either way
+    }
+    console.warn("[play] refused", uris[0], restriction ?? "(no track detail)");
+  }
+
   return reply(
-    { error: "play_failed", status: res.status, detail: await res.text() },
+    { error: "play_failed", status: res.status, detail, restriction },
     { status: res.status === 403 ? 403 : 502 },
   );
 }
