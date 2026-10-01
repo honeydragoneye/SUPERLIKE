@@ -35,6 +35,17 @@ const MAX_BACKOFF_MS = 30_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function createThrottled(options: ThrottleOptions) {
+  /**
+   * When this API is locked out, and until when.
+   *
+   * Spotify answers a badly exceeded quota with a `Retry-After` measured in
+   * hours — 27,013 seconds, once — not the seconds a rolling window costs.
+   * Sleeping through that is impossible, and retrying into it only deepens the
+   * hole, so the gate is remembered and every later call fails at once instead
+   * of spending ninety seconds discovering the same thing.
+   */
+  let blockedUntil = 0;
+
   const {
     minGapMs,
     retryOn429 = false,
@@ -84,14 +95,38 @@ export function createThrottled(options: ThrottleOptions) {
   }
 
   return async function request(url: string, init?: RequestInit): Promise<Response> {
+    const waitLeft = Math.ceil((blockedUntil - Date.now()) / 1000);
+    if (waitLeft > 0) throw new RateLimitedError(waitLeft);
+
     for (let attempt = 0; ; attempt++) {
       const res = await paced(() => once(url, init));
 
       if (res.status === 429) {
         const retryAfterSec = Number(res.headers.get("Retry-After") ?? "1") || 1;
+
+        // longer than we could ever sit out: record it and stop trying
+        if (retryAfterSec * 1000 > MAX_BACKOFF_MS) {
+          blockedUntil = Date.now() + retryAfterSec * 1000;
+          console.warn(
+            `[throttle] ${new URL(url).pathname} locked out for ${retryAfterSec}s — ` +
+              `failing fast until ${new Date(blockedUntil).toLocaleString("ko-KR")}`,
+          );
+          throw new RateLimitedError(retryAfterSec);
+        }
+
         if (!retryOn429 || attempt >= maxRetries) {
           throw new RateLimitedError(retryAfterSec);
         }
+        /**
+         * Logged, because waiting here is invisible otherwise.
+         *
+         * A search that took forty-five seconds looked like a slow upstream
+         * until this line existed; it was this process sitting out a window it
+         * had filled itself.
+         */
+        console.warn(
+          `[throttle] 429 ${new URL(url).pathname} — waiting ${retryAfterSec}s (attempt ${attempt + 1})`,
+        );
         // the extra half second keeps us clear of the window's edge
         await sleep(Math.min((retryAfterSec + 0.5) * 1000, MAX_BACKOFF_MS));
         continue;
@@ -104,6 +139,7 @@ export function createThrottled(options: ThrottleOptions) {
         continue;
       }
 
+      if (res.ok) blockedUntil = 0;
       return res;
     }
   };

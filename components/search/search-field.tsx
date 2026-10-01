@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TintedIcon } from "@/components/ui/icon";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { clock } from "@/lib/time";
@@ -22,6 +22,7 @@ import { useSuggest } from "./search-suggest";
  */
 export function SearchField() {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useSearchParams();
   const urlQuery = params.get("q") ?? "";
   const { play } = useSpotify();
@@ -35,7 +36,14 @@ export function SearchField() {
   const text = held.url === urlQuery ? held.text : urlQuery;
 
   const [open, setOpen] = useState(false);
-  const showing = open && text.trim().length > 0;
+
+  /**
+   * The results page is already showing this exact query, so the panel has
+   * nothing to add — and searching for it a second time is what tipped Spotify
+   * into rate-limiting the whole field.
+   */
+  const settled = pathname === "/search" && urlQuery === text.trim();
+  const showing = open && text.trim().length > 0 && !settled;
   const { items, loading } = useSuggest(showing ? text : "");
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useRouter } from "next/navigation";
+import { StationButton } from "@/components/ui/station-button";
 import { clock } from "@/lib/time";
 import type { AlbumPage as Album } from "@/lib/data";
 import { DetailShell, DetailStatus } from "./detail-shell";
@@ -94,7 +95,7 @@ export function AlbumPage({ id }: { id: string }) {
 
           <ul className="flex w-full shrink-0 flex-col">
             {data.tracks.map((t) => (
-              <li key={t.id} className="rule-b">
+              <li key={t.id} className="group relative rule-b">
                 <button
                   type="button"
                   onClick={() =>
@@ -116,6 +117,18 @@ export function AlbumPage({ id }: { id: string }) {
                     {clock(t.durationMs)}
                   </span>
                 </button>
+                <StationButton
+                  label={t.name}
+                  className="right-[64px]"
+                  seed={async () => ({
+                    id: t.id,
+                    uri: t.uri,
+                    name: t.name,
+                    artist: t.artist,
+                    artwork: data.artwork,
+                    durationMs: t.durationMs,
+                  })}
+                />
               </li>
             ))}
           </ul>

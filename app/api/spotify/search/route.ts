@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { RateLimitedError } from "@/lib/http/throttle";
 import {
   MARKET,
   NotConnectedError,
@@ -139,6 +140,17 @@ export async function GET(request: NextRequest) {
       resolved,
     );
   } catch (e) {
+    if (e instanceof RateLimitedError) {
+      const mins = Math.ceil(e.retryAfterSec / 60);
+      return NextResponse.json(
+        {
+          error: "rate_limited",
+          retryAfterSec: e.retryAfterSec,
+          detail: `Spotify 검색 요청 한도를 초과했습니다. 약 ${mins}분 후 다시 시도할 수 있습니다.`,
+        },
+        { status: 429 },
+      );
+    }
     if (e instanceof NotConnectedError) {
       return NextResponse.json({ error: "not_connected" }, { status: 401 });
     }

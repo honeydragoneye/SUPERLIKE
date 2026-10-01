@@ -66,10 +66,12 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
         });
         if (run !== runRef.current) return;
         if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { detail?: string };
           setError(
             res.status === 401
               ? "Spotify를 연결해 주세요"
-              : "검색에 실패했습니다",
+              : // a lockout has a duration, and the listener deserves the number
+                (res.status === 429 && body.detail) || "검색에 실패했습니다",
           );
           setFetched(EMPTY);
           return;

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { clock } from "@/lib/time";
 import { useSpotify } from "@/components/player/spotify-provider";
+import { StationButton, seedFrom } from "@/components/ui/station-button";
 import { useSearch, type SearchTab } from "./search-provider";
 import { useRouter } from "next/navigation";
 
@@ -33,7 +34,7 @@ function Thumb({ src, size = 32 }: { src: string | null; size?: number }) {
 export function SearchResults() {
   const { query, results, loading, error, tab, setTab, total } = useSearch();
   const router = useRouter();
-  const { play, startStation, stationBusy } = useSpotify();
+  const { play } = useSpotify();
 
   const counts: Record<SearchTab, number> = {
     track: results.tracks.length,
@@ -96,7 +97,7 @@ export function SearchResults() {
         {tab === "track" && (
           <ul className="flex w-full flex-col">
             {results.tracks.map((t, i) => (
-              <li key={t.id} className="flex h-[52px] items-center gap-[12px] rule-b">
+              <li key={t.id} className="group relative flex h-[52px] items-center gap-[12px] rule-b">
                 <span className="tnum w-[32px] shrink-0 text-[16px] font-black tracking-[-0.4px] text-on-bright">
                   {String(i + 1).padStart(2, "0")}
                 </span>
@@ -115,31 +116,22 @@ export function SearchResults() {
                 <span className="w-[240px] shrink-0 truncate text-[10px] text-on-bright-muted">
                   {t.album}
                 </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void startStation({
-                      id: t.id,
-                      uri: t.uri,
-                      name: t.name,
-                      artist: t.artist,
-                      artwork: t.artwork,
-                      durationMs: t.durationMs,
-                    })
-                  }
-                  disabled={stationBusy !== null}
-                  title={
-                    stationBusy
-                      ? "스테이션 구성 중…"
-                      : `${t.name} 기준으로 스테이션 시작`
-                  }
-                  className="w-[62px] shrink-0 rounded-pill bg-pink py-[6px] text-[8px] tracking-[0.7px] text-paper transition-colors enabled:hover:bg-ink disabled:opacity-40"
-                >
-                  {stationBusy ? "구성 중" : "STATION"}
-                </button>
                 <span className="tnum w-[40px] shrink-0 text-right text-[10px] text-on-bright">
                   {clock(t.durationMs)}
                 </span>
+                {/* clears the TIME column so it never covers the duration */}
+                <StationButton
+                  label={t.name}
+                  className="right-[64px]"
+                  seed={async () => ({
+                    id: t.id,
+                    uri: t.uri,
+                    name: t.name,
+                    artist: t.artist,
+                    artwork: t.artwork,
+                    durationMs: t.durationMs,
+                  })}
+                />
               </li>
             ))}
           </ul>
@@ -148,7 +140,7 @@ export function SearchResults() {
         {tab === "album" && (
           <ul className="flex w-full flex-col">
             {results.albums.map((a) => (
-              <li key={a.id} className="rule-b">
+              <li key={a.id} className="group relative rule-b">
                 <button
                   type="button"
                   onClick={() => router.push(`/album/${a.id}`)}
@@ -166,6 +158,11 @@ export function SearchResults() {
                   {a.albumType}
                 </span>
                 </button>
+                <StationButton
+                  label={a.name}
+                  className="right-[190px]"
+                  seed={() => seedFrom("album", a.id)}
+                />
               </li>
             ))}
           </ul>
@@ -174,7 +171,7 @@ export function SearchResults() {
         {tab === "artist" && (
           <ul className="flex w-full flex-col">
             {results.artists.map((a) => (
-              <li key={a.id} className="rule-b">
+              <li key={a.id} className="group relative rule-b">
                 <button
                   type="button"
                   onClick={() => router.push(`/artist/${a.id}`)}
@@ -195,6 +192,11 @@ export function SearchResults() {
                   팔로워 {a.followers.toLocaleString("ko-KR")}
                 </span>
                 </button>
+                <StationButton
+                  label={a.name}
+                  className="right-[152px]"
+                  seed={() => seedFrom("artist", a.id)}
+                />
               </li>
             ))}
           </ul>
@@ -203,17 +205,28 @@ export function SearchResults() {
         {tab === "playlist" && (
           <ul className="flex w-full flex-col">
             {results.playlists.map((p) => (
-              <li key={p.id} className="flex h-[56px] items-center gap-[12px] rule-b">
-                <Thumb src={p.cover} size={40} />
-                <span className="flex min-w-0 flex-1 flex-col gap-px">
-                  <span className="truncate text-[13px] text-on-bright">{p.name}</span>
-                  <span className="truncate text-[9px] text-on-bright-muted">
-                    {p.owner || "알 수 없음"}
+              <li key={p.id} className="group relative rule-b">
+                <button
+                  type="button"
+                  onClick={() => router.push(`/playlist/${p.id}`)}
+                  className="flex h-[56px] w-full cursor-pointer items-center gap-[12px] text-left"
+                >
+                  <Thumb src={p.cover} size={40} />
+                  <span className="flex min-w-0 flex-1 flex-col gap-px">
+                    <span className="truncate text-[13px] text-on-bright">{p.name}</span>
+                    <span className="truncate text-[9px] text-on-bright-muted">
+                      {p.owner || "알 수 없음"}
+                    </span>
                   </span>
-                </span>
-                <span className="tnum w-[90px] shrink-0 text-right text-[10px] text-on-bright-muted">
-                  {p.trackCount}곡
-                </span>
+                  <span className="tnum w-[90px] shrink-0 text-right text-[10px] text-on-bright-muted">
+                    {p.trackCount}곡
+                  </span>
+                </button>
+                <StationButton
+                  label={p.name}
+                  className="right-[102px]"
+                  seed={() => seedFrom("playlist", p.id)}
+                />
               </li>
             ))}
           </ul>

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { Icon } from "@/components/ui/icon";
 import { LoadingDots } from "@/components/ui/loading-dots";
+import { StationButton } from "@/components/ui/station-button";
 import { clock } from "@/lib/time";
 import type { PlaylistPage as Playlist } from "@/lib/data";
 import { DetailShell, DetailStatus } from "./detail-shell";
@@ -109,7 +110,7 @@ export function PlaylistPage({ id }: { id: string }) {
 
           <ul className="flex w-full shrink-0 flex-col">
             {data.tracks.map((t) => (
-              <li key={`${t.id}-${t.index}`} className="shrink-0 rule-b">
+              <li key={`${t.id}-${t.index}`} className="group relative shrink-0 rule-b">
                 <button
                   type="button"
                   onClick={() => void play({ contextUri: data.uri, offsetUri: t.uri })}
@@ -148,6 +149,18 @@ export function PlaylistPage({ id }: { id: string }) {
                     {clock(t.durationMs)}
                   </span>
                 </button>
+                <StationButton
+                  label={t.name}
+                  className="right-[64px]"
+                  seed={async () => ({
+                    id: t.id,
+                    uri: t.uri,
+                    name: t.name,
+                    artist: t.artist,
+                    artwork: t.artwork,
+                    durationMs: t.durationMs,
+                  })}
+                />
               </li>
             ))}
           </ul>
