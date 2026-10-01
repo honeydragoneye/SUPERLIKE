@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import type { StationCandidate } from "@/app/api/station/similar/route";
+import type { StationCandidate } from "@/lib/station/types";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { Icon } from "@/components/ui/icon";
 import { clock } from "@/lib/time";

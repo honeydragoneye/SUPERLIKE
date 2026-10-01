@@ -2,8 +2,14 @@ import { RateLimitedError, lastfmHttp } from "@/lib/http/throttle";
 
 const BASE = "https://ws.audioscrobbler.com/2.0/";
 
-/** A candidate as Last.fm knows it — names only, no Spotify id yet. */
-export type LfmCandidate = { name: string; artist: string };
+/**
+ * A candidate as Last.fm knows it — names only, no Spotify id yet.
+ *
+ * `match` is Last.fm's own similarity, 0–1. Measured on "International Love
+ * Song": 1.0, 0.63, 0.13, 0.054 — the tail is noise, and throwing the score
+ * away meant the queue treated the last of those like the first.
+ */
+export type LfmCandidate = { name: string; artist: string; match?: number };
 
 /**
  * Last.fm indexes some artists under a different name than Spotify uses.
@@ -83,11 +89,68 @@ function asList(value: unknown): Record<string, unknown>[] {
 
 function toCandidate(t: Record<string, unknown>): LfmCandidate {
   const artist = t.artist as { name?: string } | string | undefined;
+  const match = Number(t.match);
   return {
     name: String(t.name ?? ""),
-    artist:
-      typeof artist === "string" ? artist : String(artist?.name ?? ""),
+    artist: typeof artist === "string" ? artist : String(artist?.name ?? ""),
+    match: Number.isFinite(match) ? match : undefined,
   };
+}
+
+/**
+ * Tags that say where a record is from, not what it sounds like.
+ *
+ * "Korean" is the top tag on The Black Skirts at weight 100, ahead of "indie"
+ * (86) and "korean indie" (50). Its top tracks are the most-played Korean songs
+ * on Last.fm — Gee, The Boys, Run Devil Run — so a Korean indie seed built a
+ * queue of Girls' Generation. Nationality, language, decade and personal
+ * shelving tags all fail the same way.
+ */
+const NON_GENRE_TAGS = new Set([
+  "korean", "japanese", "chinese", "spanish", "french", "german", "swedish",
+  "british", "american", "english", "uk", "usa", "japan", "korea",
+  "seen live", "favorites", "favourites", "favorite songs", "my favorites",
+  "love", "beautiful", "awesome", "cool", "catchy", "masterpiece",
+  "male vocalists", "female vocalists", "male vocalist", "female vocalist",
+  "60s", "70s", "80s", "90s", "00s", "10s", "20s",
+  "1960s", "1970s", "1980s", "1990s", "2000s", "2010s", "2020s",
+]);
+
+/** True when a tag names a sound rather than an origin or a shelf. */
+export function isGenreTag(tag: string): boolean {
+  return !NON_GENRE_TAGS.has(tag.trim().toLowerCase());
+}
+
+/** Artists Last.fm considers close to this one, strongest first. */
+export async function similarArtists(
+  artistName: string,
+  limit = 5,
+): Promise<{ name: string; match: number }[]> {
+  for (const artist of artistCandidates(artistName)) {
+    const data = await call<{ similarartists?: { artist?: unknown } }>(
+      endpoint("artist.getsimilar", { artist, limit, autocorrect: 1 }),
+    );
+    if (fatal(data)) return [];
+    const out = asList(data?.similarartists?.artist)
+      .map((a) => ({ name: String(a.name ?? ""), match: Number(a.match) || 0 }))
+      .filter((a) => a.name);
+    if (out.length) return out;
+  }
+  return [];
+}
+
+/** An artist's most-played tracks. */
+export async function artistTopTracks(
+  artistName: string,
+  limit = 10,
+): Promise<LfmCandidate[]> {
+  const data = await call<{ toptracks?: { track?: unknown } }>(
+    endpoint("artist.gettoptracks", { artist: artistName, limit, autocorrect: 1 }),
+  );
+  if (fatal(data)) return [];
+  return asList(data?.toptracks?.track)
+    .map(toCandidate)
+    .filter((c) => c.name && c.artist);
 }
 
 async function call<T>(url: string): Promise<T & LfmError> {
@@ -144,7 +207,8 @@ export async function artistTopTags(artistName: string, limit = 3): Promise<stri
     if (fatal(data)) return [];
     const tags = asList(data?.toptags?.tag)
       .map((t) => String(t.name ?? "").toLowerCase())
-      .filter(Boolean);
+      .filter(Boolean)
+      .filter(isGenreTag);
     if (tags.length > 0) return tags.slice(0, limit);
   }
   return [];

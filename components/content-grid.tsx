@@ -5,6 +5,7 @@ import { DiscoverColumn } from "./discover-column";
 import { NowPlayingPanel } from "./now-playing-panel";
 import { RightRail } from "./right-rail";
 import { TagSpace } from "./tag-space";
+import { TagFilter } from "./station/tag-filter";
 import { useSearch } from "./search/search-provider";
 import { useStationView } from "./station/station-view";
 
@@ -23,8 +24,8 @@ import { useStationView } from "./station/station-view";
  */
 export function ContentGrid() {
   const { active } = useSearch();
-  const { open } = useStationView();
-  const wide = active || open;
+  const { open: stationOpen } = useStationView();
+  const wide = active || stationOpen;
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -60,7 +61,7 @@ export function ContentGrid() {
           className="min-h-0 overflow-hidden"
           style={{ gridColumn: "2 / 3", gridRow: wide ? "2 / 3" : "1 / 3" }}
         >
-          {wide ? <TagSpace /> : <RightRail />}
+          {!wide ? <RightRail /> : stationOpen ? <TagFilter /> : <TagSpace />}
         </div>
       </div>
     </div>

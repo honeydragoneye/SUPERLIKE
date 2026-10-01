@@ -1,4 +1,4 @@
-import { RateLimitedError, lrclibHttp } from "@/lib/http/throttle";
+import { lrclibHttp } from "@/lib/http/throttle";
 
 /**
  * Whether a track has lyrics.
@@ -6,8 +6,13 @@ import { RateLimitedError, lrclibHttp } from "@/lib/http/throttle";
  * `null` means LRCLIB has no entry, not "no lyrics" — niche tracks are often
  * missing, and treating absence as instrumental would quietly corrupt the
  * filter. Callers exclude unknowns.
+ *
+ * The type and the predicate live in lib/station/filter so the browser can use
+ * them without pulling in this module's HTTP layer.
  */
-export type LyricsFlag = true | false | null;
+export { matchesFilter } from "@/lib/station/filter";
+export type { FilterKind, LyricsFlag } from "@/lib/station/filter";
+import type { LyricsFlag } from "@/lib/station/filter";
 
 type LrclibHit = {
   trackName: string;
@@ -20,8 +25,17 @@ type LrclibHit = {
 /** Survives a page reload only as long as the server process does; that is enough. */
 const cache = new Map<string, LyricsFlag>();
 
-function keyOf(track: string, artist: string): string {
-  return `${track}|${artist}`.toLowerCase();
+/**
+ * Cache identity.
+ *
+ * Spotify's track id when the caller has one, which every caller here does.
+ * Keying on `name|artist` looked equivalent and was not: the ladder passes the
+ * first artist and the batch route passes the joined string, so the same track
+ * cached twice and a queue that had just been judged was judged again from
+ * scratch. An id has no such ambiguity.
+ */
+function keyOf(id: string | undefined, track: string, artist: string): string {
+  return id ? `id:${id}` : `${track}|${artist}`.toLowerCase();
 }
 
 /**
@@ -47,8 +61,9 @@ export async function checkInstrumental(
   trackName: string,
   artistName: string,
   durationMs?: number,
+  trackId?: string,
 ): Promise<LyricsFlag> {
-  const key = keyOf(trackName, artistName);
+  const key = keyOf(trackId, trackName, artistName);
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
 
@@ -65,20 +80,18 @@ export async function checkInstrumental(
       if (hit) flag = Boolean(hit.instrumental);
     }
   } catch (e) {
-    // a throttled or unreachable LRCLIB leaves the track unknown, not wrong
-    if (!(e instanceof RateLimitedError)) throw e;
+    /**
+     * Any failure leaves the track unknown, never wrong.
+     *
+     * Re-throwing anything but a rate limit contradicted the line above and had
+     * teeth: a single network blip inside a queue build propagated out and took
+     * the whole build with it. Unknown is already excluded by matchesFilter, so
+     * swallowing here loses a candidate rather than the request.
+     */
+    console.warn("[lrclib]", key, e instanceof Error ? e.message : e);
   }
 
   cache.set(key, flag);
   return flag;
 }
 
-export type FilterKind = "instrumental" | "lyrics" | null;
-
-/** Mirrors the prototype: unknown (null) never satisfies a filter. */
-export function matchesFilter(flag: LyricsFlag, filter: FilterKind): boolean {
-  if (filter === null) return true;
-  if (filter === "instrumental") return flag === true;
-  if (filter === "lyrics") return flag === false;
-  return true;
-}

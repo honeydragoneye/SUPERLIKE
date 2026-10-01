@@ -10,7 +10,11 @@ export type RecentTrack = {
   index: string;
   title: string;
   artist: string;
+  /** sized for the 32px row thumbnail */
   artwork: string | null;
+  /** sized for the 231px Now Playing panel, which falls back to this track
+   *  after a reload — the row-sized image came out blurred there */
+  artworkLarge: string | null;
   /** ISO timestamp from Spotify */
   playedAt: string;
   durationMs: number;

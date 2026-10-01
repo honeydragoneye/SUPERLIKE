@@ -6,7 +6,8 @@ import {
   type PlayOutcome,
   type StationSeed,
 } from "@/components/station/use-station";
-import type { StationCandidate } from "@/app/api/station/similar/route";
+import type { StationCandidate } from "@/lib/station/types";
+import type { FilterKind } from "@/lib/station/filter";
 import {
   createContext,
   useCallback,
@@ -73,6 +74,9 @@ type Ctx = {
   stationSeedTrack: StationSeed | null;
   stationBusy: string | null;
   stationActive: boolean;
+  /** 전체 / 가사 없음 / 가사 있음 — rebuilds up-next only */
+  stationFilter: FilterKind;
+  setStationFilter: (filter: FilterKind) => Promise<void>;
   startStation: (seed: StationSeed) => Promise<void>;
   stopStation: () => void;
   playFromStation: (track: StationCandidate) => Promise<void>;
@@ -460,6 +464,8 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       stationSeedTrack: station.seed,
       stationBusy: station.busy,
       stationActive: station.isActive,
+      stationFilter: station.filter,
+      setStationFilter: station.setFilter,
       startStation: async (seed) => {
         /**
          * A station owns shuffle for its whole life, not just once the user

@@ -79,7 +79,8 @@ export function NowPlayingPanel() {
     ? `${now.artist} · ${now.album}`
     : (last?.artist ??
       (connected ? "최근 재생 기록이 없습니다" : "Spotify를 연결해 주세요"));
-  const artwork = now?.artwork ?? last?.artwork ?? null;
+  // the panel renders at 231px, so the fallback uses the panel-sized art
+  const artwork = now?.artwork ?? last?.artworkLarge ?? last?.artwork ?? null;
   const durationMs = now?.durationMs ?? last?.durationMs ?? 0;
   const elapsed = clock(positionMs);
   const duration = durationMs ? clock(durationMs) : "0:00";

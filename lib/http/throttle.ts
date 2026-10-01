@@ -14,6 +14,8 @@ export type ThrottleOptions = {
   minGapMs: number;
   /** honour a 429 and try again, up to `maxRetries` times */
   retryOn429?: boolean;
+  /** treat a 5xx as the upstream having a moment and try again */
+  retryOn5xx?: boolean;
   maxRetries?: number;
   /** give up on a silent upstream rather than hold the request open */
   timeoutMs?: number;
@@ -36,6 +38,7 @@ export function createThrottled(options: ThrottleOptions) {
   const {
     minGapMs,
     retryOn429 = false,
+    retryOn5xx = false,
     maxRetries = 3,
     timeoutMs = 10_000,
     headers: baseHeaders,
@@ -83,14 +86,25 @@ export function createThrottled(options: ThrottleOptions) {
   return async function request(url: string, init?: RequestInit): Promise<Response> {
     for (let attempt = 0; ; attempt++) {
       const res = await paced(() => once(url, init));
-      if (res.status !== 429) return res;
 
-      const retryAfterSec = Number(res.headers.get("Retry-After") ?? "1") || 1;
-      if (!retryOn429 || attempt >= maxRetries) {
-        throw new RateLimitedError(retryAfterSec);
+      if (res.status === 429) {
+        const retryAfterSec = Number(res.headers.get("Retry-After") ?? "1") || 1;
+        if (!retryOn429 || attempt >= maxRetries) {
+          throw new RateLimitedError(retryAfterSec);
+        }
+        // the extra half second keeps us clear of the window's edge
+        await sleep(Math.min((retryAfterSec + 0.5) * 1000, MAX_BACKOFF_MS));
+        continue;
       }
-      // the extra half second keeps us clear of the window's edge
-      await sleep(Math.min((retryAfterSec + 0.5) * 1000, MAX_BACKOFF_MS));
+
+      // a 5xx carries no answer, only "not right now" — and LRCLIB returns
+      // them often enough that giving up costs the lyrics filter real material
+      if (retryOn5xx && res.status >= 500 && attempt < maxRetries) {
+        await sleep(Math.min(400 * 2 ** attempt, MAX_BACKOFF_MS));
+        continue;
+      }
+
+      return res;
     }
   };
 }
@@ -104,5 +118,8 @@ export const spotifyHttp = createThrottled({ minGapMs: 120, retryOn429: true });
 export const lastfmHttp = createThrottled({ minGapMs: 250, retryOn429: true });
 export const lrclibHttp = createThrottled({
   minGapMs: 150,
+  // measured: LRCLIB answered 503 on 2 of 6 consecutive searches
+  retryOn5xx: true,
+  maxRetries: 2,
   headers: { "User-Agent": "Superlike/1.0 (graduation project)" },
 });

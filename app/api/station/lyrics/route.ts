@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
   const results = [];
   for (const t of tracks) {
-    const flag = await checkInstrumental(t.name, t.artist, t.durationMs);
+    const flag = await checkInstrumental(t.name, t.artist, t.durationMs, t.id);
     results.push({
       id: t.id,
       instrumental: flag,
