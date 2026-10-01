@@ -1,8 +1,9 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Noto_Sans_KR } from "next/font/google";
 import { SpotifyProvider } from "@/components/player/spotify-provider";
 import { SearchProvider } from "@/components/search/search-provider";
-import { StationViewProvider } from "@/components/station/station-view";
+import { AppShell } from "@/components/app-shell";
 import "./globals.css";
 
 const notoSansKR = Noto_Sans_KR({
@@ -25,9 +26,14 @@ export default function RootLayout({
     <html lang="ko" className={notoSansKR.variable}>
       <body className="font-[family-name:var(--font-noto-sans-kr)] font-bold">
         <SpotifyProvider>
-          <SearchProvider>
-            <StationViewProvider>{children}</StationViewProvider>
-          </SearchProvider>
+          {/* the search query lives in the URL, and reading it opts the tree
+              into client rendering — the boundary keeps that from failing the
+              prerender of pages that have no query at all, like 404 */}
+          <Suspense fallback={<div className="h-screen w-full bg-shell" />}>
+            <SearchProvider>
+              <AppShell>{children}</AppShell>
+            </SearchProvider>
+          </Suspense>
         </SpotifyProvider>
       </body>
     </html>

@@ -142,8 +142,8 @@ function readableError(
     return "지금은 이 동작을 할 수 없습니다";
   }
   if (/premium/i.test(text)) return "Spotify Premium 계정이 필요합니다";
-  if (status === 404 || /NO_ACTIVE_DEVICE/i.test(text)) {
-    return "재생 기기를 찾을 수 없습니다";
+  if (status === 404 || /NO_ACTIVE_DEVICE|Device not found/i.test(text)) {
+    return "재생 기기를 찾을 수 없습니다. 페이지를 새로고침해 주세요";
   }
   if (status === 429) return "요청이 몰렸습니다. 잠시 후 다시 시도해 주세요";
   return fallback ?? "재생에 실패했습니다";
@@ -226,7 +226,17 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
         setError(null);
 
       });
-      player.addListener("not_ready", () => setReady(false));
+      /**
+       * The browser device can disappear while the tab lives on — another
+       * client takes playback, or the socket drops. Remembering it as activated
+       * meant every later play went to an id Spotify had forgotten, answering
+       * `404 Device not found` forever. Forget the activation so the next play
+       * transfers afresh.
+       */
+      player.addListener("not_ready", () => {
+        setReady(false);
+        activatedRef.current = false;
+      });
       player.addListener("initialization_error", ({ message }) => setError(message));
       player.addListener("authentication_error", ({ message }) => {
         setError(message);
@@ -359,19 +369,37 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
         sourceOrderRef.current = opts.tracks;
         setQueue(opts.tracks);
       }
-      const res = await fetch("/api/spotify/play", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deviceId,
-          uris: opts.uris,
-          contextUri: opts.contextUri,
-          offsetUri: opts.offsetUri,
-          positionMs: opts.positionMs,
-          activate: !activatedRef.current,
-        }),
-      });
+
+      const send = (activate: boolean) =>
+        fetch("/api/spotify/play", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            deviceId,
+            uris: opts.uris,
+            contextUri: opts.contextUri,
+            offsetUri: opts.offsetUri,
+            positionMs: opts.positionMs,
+            activate,
+          }),
+        });
+
+      let res = await send(!activatedRef.current);
       activatedRef.current = true;
+
+      /**
+       * `404 Device not found` means Spotify no longer has the device this tab
+       * registered — it was taken over, or the connection lapsed. The id is
+       * still good; what is missing is the transfer that makes it current. One
+       * retry that transfers first recovers it without the listener noticing.
+       */
+      if (res.status === 404) {
+        console.warn("[play] device went missing; re-activating");
+        activatedRef.current = false;
+        res = await send(true);
+        activatedRef.current = true;
+      }
+
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         console.warn("[play]", res.status, data);

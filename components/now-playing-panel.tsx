@@ -4,7 +4,7 @@ import Image from "next/image";
 import { Icon, TintedIcon } from "./ui/icon";
 import { QueueItem } from "./ui/queue-item";
 import { usePlaybackPosition, useSpotify } from "./player/spotify-provider";
-import { useStationView } from "./station/station-view";
+import { useRouter } from "next/navigation";
 import { clock } from "@/lib/time";
 import type { Track } from "@/lib/data";
 
@@ -67,7 +67,7 @@ export function NowPlayingPanel() {
     seek,
   } = useSpotify();
 
-  const { show: showStation, hide: hideStation } = useStationView();
+  const router = useRouter();
   // the only subscriber to the per-second position, so the ticker re-renders
   // this panel alone rather than the whole grid
   const positionMs = usePlaybackPosition();
@@ -303,7 +303,7 @@ export function NowPlayingPanel() {
         <div className="flex w-full shrink-0 items-center gap-[8px] rounded-[4px] bg-white/10 px-[8px] py-[6px]">
           <button
             type="button"
-            onClick={showStation}
+            onClick={() => router.push("/station")}
             title="스테이션 화면 열기"
             className="flex min-w-0 flex-1 cursor-pointer items-center gap-[8px] text-left transition-opacity hover:opacity-70"
           >
@@ -331,7 +331,7 @@ export function NowPlayingPanel() {
             type="button"
             onClick={() => {
               stopStation();
-              hideStation();
+              router.push("/");
             }}
             title="스테이션 종료"
             className="shrink-0 rounded-pill bg-on-dark-muted px-[8px] py-[4px] text-[8px] tracking-[0.6px] text-panel"

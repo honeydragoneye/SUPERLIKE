@@ -2,13 +2,13 @@
 
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { useSearchParams } from "next/navigation";
 import type { SearchResults } from "@/lib/data";
 
 export type SearchTab = "track" | "album" | "artist" | "playlist";
@@ -22,12 +22,8 @@ const EMPTY: SearchResults = {
 };
 
 type Ctx = {
-  /** what the user has typed, updated on every keystroke */
+  /** the query, which lives in the URL as `?q=` */
   query: string;
-  setQuery: (q: string) => void;
-  clear: () => void;
-  /** true once a query is in play — the Discover column switches on this */
-  active: boolean;
   loading: boolean;
   error: string | null;
   results: SearchResults;
@@ -42,7 +38,10 @@ const SearchContext = createContext<Ctx | null>(null);
 const DEBOUNCE_MS = 400;
 
 export function SearchProvider({ children }: { children: React.ReactNode }) {
-  const [query, setQuery] = useState("");
+  // the URL is the query's home: shareable, bookmarkable, and restored by the
+  // back button. The field holds only the text it is mid-way through typing.
+  const params = useSearchParams();
+  const query = params.get("q") ?? "";
   const [fetched, setFetched] = useState<SearchResults>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,8 +86,6 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timer);
   }, [q]);
 
-  const clear = useCallback(() => setQuery(""), []);
-
   const value = useMemo<Ctx>(() => {
     const total =
       results.tracks.length +
@@ -97,9 +94,6 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
       results.playlists.length;
     return {
       query,
-      setQuery,
-      clear,
-      active: query.trim().length > 0,
       loading,
       error,
       results,
@@ -107,7 +101,7 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
       setTab,
       total,
     };
-  }, [query, clear, loading, error, results, tab]);
+  }, [query, loading, error, results, tab, setTab]);
 
   return <SearchContext.Provider value={value}>{children}</SearchContext.Provider>;
 }

@@ -117,8 +117,16 @@ export async function PUT(request: NextRequest) {
     console.warn("[play] refused", uris[0], restriction ?? "(no track detail)");
   }
 
+  /**
+   * Spotify's own status, not a blanket 502.
+   *
+   * Flattening everything but 403 hid the difference between "this account may
+   * not play that" and "the device is gone", and the client's message mapping
+   * reads the status — so a recoverable 404 arrived looking like a server
+   * fault and said nothing useful.
+   */
   return reply(
     { error: "play_failed", status: res.status, detail, restriction },
-    { status: res.status === 403 ? 403 : 502 },
+    { status: res.status >= 400 && res.status < 500 ? res.status : 502 },
   );
 }

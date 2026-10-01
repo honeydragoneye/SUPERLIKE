@@ -83,3 +83,104 @@ export type SearchResults = {
   artists: SearchArtist[];
   playlists: Playlist[];
 };
+
+/* ---------------------------------------------------------------
+   Artist and album screens. Shaped by what Spotify still returns:
+   Related Artists is withdrawn and the artist's own `genres`,
+   `followers` and `popularity` are deprecated, so the artist screen
+   falls back to Last.fm and says which source it used.
+   --------------------------------------------------------------- */
+
+export type ArtistTopTrack = {
+  id: string;
+  uri: string;
+  name: string;
+  durationMs: number;
+  explicit: boolean;
+  albumId: string;
+  albumName: string;
+  artwork: string | null;
+};
+
+export type ArtistAlbum = {
+  id: string;
+  uri: string;
+  name: string;
+  artwork: string | null;
+  releaseDate: string;
+  totalTracks: number;
+  albumType: "album" | "single" | "compilation";
+};
+
+export type ArtistPage = {
+  id: string;
+  uri: string;
+  name: string;
+  image: string | null;
+  genres: string[];
+  /** which source the genres came from, so the screen can label them honestly */
+  genreSource: "spotify" | "lastfm" | "none";
+  followers: number | null;
+  popularity: number | null;
+  topTracks: ArtistTopTrack[];
+  /** Spotify's top-tracks endpoint is 403 for this app, so this may be Last.fm */
+  topSource: "spotify" | "lastfm" | "none";
+  albums: ArtistAlbum[];
+  /** Last.fm's neighbours — Spotify's Related Artists is gone */
+  similar: { name: string; match: number }[];
+};
+
+export type AlbumTrack = {
+  id: string;
+  uri: string;
+  name: string;
+  durationMs: number;
+  explicit: boolean;
+  trackNumber: number;
+  discNumber: number;
+  artist: string;
+};
+
+export type AlbumPage = {
+  id: string;
+  uri: string;
+  name: string;
+  artwork: string | null;
+  releaseDate: string;
+  releaseDatePrecision: string;
+  totalTracks: number;
+  albumType: "album" | "single" | "compilation";
+  /** deprecated on Spotify's side; omitted by the screen when null */
+  label: string | null;
+  artists: { id: string; name: string }[];
+  copyrights: string[];
+  upc: string | null;
+  tracks: AlbumTrack[];
+};
+
+export type PlaylistTrack = {
+  index: string;
+  id: string;
+  uri: string;
+  name: string;
+  artist: string;
+  album: string;
+  artwork: string | null;
+  durationMs: number;
+  explicit: boolean;
+  addedAt: string | null;
+};
+
+export type PlaylistPage = {
+  id: string;
+  uri: string;
+  name: string;
+  description: string | null;
+  cover: string | null;
+  owner: string;
+  followers: number | null;
+  collaborative: boolean;
+  isPublic: boolean | null;
+  totalTracks: number;
+  tracks: PlaylistTrack[];
+};

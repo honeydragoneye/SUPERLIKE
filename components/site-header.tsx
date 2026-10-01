@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { Icon } from "./ui/icon";
 import { ConnectButton } from "./player/connect-button";
-import { useSearch } from "./search/search-provider";
-import { useStationView } from "./station/station-view";
 
 function IconButton({ name, label }: { name: string; label: string }) {
   return (
@@ -19,17 +17,10 @@ function IconButton({ name, label }: { name: string; label: string }) {
 }
 
 export function SiteHeader() {
-  const { clear } = useSearch();
-  const { hide } = useStationView();
-
   return (
     <header className="flex h-[84px] shrink-0 items-center gap-[18px] overflow-hidden bg-white pl-[20px] pr-[14px] rule">
       <Link
         href="/"
-        onClick={() => {
-          clear();
-          hide();
-        }}
         aria-label="홈으로"
         title="홈으로"
         className="shrink-0"

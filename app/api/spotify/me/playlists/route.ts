@@ -14,7 +14,7 @@ type SpotifyPlaylists = {
     uri: string;
     name: string;
     images: { url: string; width: number | null }[] | null;
-    owner: { display_name: string | null };
+    owner: { id: string; display_name: string | null };
     tracks: { total: number };
     public: boolean | null;
     collaborative: boolean;
@@ -28,16 +28,30 @@ function cover(images: { url: string; width: number | null }[] | null): string |
   return (sorted.find((i) => (i.width ?? 0) >= 300) ?? sorted[sorted.length - 1]).url;
 }
 
+/**
+ * The playlists this account made, not the ones it follows.
+ *
+ * `/me/playlists` mixes both, so the list filled up with saved and editorial
+ * playlists the listener never built. Ownership is the only honest divider, and
+ * it needs the account's own id — hence the extra `/me`, which is one small
+ * call and the same one that would be needed to show the profile anyway.
+ *
+ * It matters beyond tidiness: Spotify withdrew its own algorithmic and
+ * editorial playlists from the API for applications registered after November
+ * 2024, so those entries could never open a detail screen regardless.
+ */
 export async function GET() {
   try {
-    const { data, resolved } = await spotifyGet<SpotifyPlaylists>(
-      "/me/playlists?limit=50",
-    );
+    const [{ data: me }, { data, resolved }] = await Promise.all([
+      spotifyGet<{ id: string }>("/me"),
+      spotifyGet<SpotifyPlaylists>("/me/playlists?limit=50"),
+    ]);
 
     // Spotify occasionally returns null entries for playlists the user can no
     // longer see; they would otherwise blow up the mapping below.
     const playlists: Playlist[] = data.items
       .filter((p): p is NonNullable<(typeof data.items)[number]> => p !== null)
+      .filter((p) => p.owner?.id === me.id)
       .map((p) => ({
         id: p.id,
         uri: p.uri,
@@ -50,7 +64,8 @@ export async function GET() {
 
     return flushToken(
       NextResponse.json(
-        { playlists, total: data.total ?? playlists.length },
+        // `total` is now what the listener actually owns, not Spotify's count
+        { playlists, total: playlists.length },
         { headers: { "Cache-Control": "no-store" } },
       ),
       resolved,

@@ -5,7 +5,7 @@ import type { StationCandidate } from "@/lib/station/types";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { Icon } from "@/components/ui/icon";
 import { clock } from "@/lib/time";
-import { useStationView } from "./station-view";
+import { useRouter } from "next/navigation";
 
 /** One upcoming track. Mirrors 최근 재생 목록's row so the two read as one family. */
 function StationRow({
@@ -20,7 +20,7 @@ function StationRow({
   onPlay: () => void;
 }) {
   return (
-    <li className="rule-b">
+    <li className="shrink-0 rule-b">
       <button
         type="button"
         onClick={onPlay}
@@ -85,7 +85,7 @@ export function StationPage() {
     toggleShuffle,
     now,
   } = useSpotify();
-  const { hide } = useStationView();
+  const router = useRouter();
 
   const seed = stationSeedTrack;
 
@@ -96,7 +96,7 @@ export function StationPage() {
       : "유사곡을 더 찾지 못했습니다";
 
   return (
-    <section className="flex min-h-[492px] flex-1 flex-col gap-[10px] overflow-hidden bg-chart p-[16px]">
+    <section className="flex min-h-full flex-1 flex-col gap-[10px] bg-chart p-[16px]">
       <div className="flex w-full shrink-0 items-start justify-between gap-[10px]">
         {/* "<곡>의 Station" over the artist line, as the Figma frame titles it */}
         <div className="flex min-w-0 shrink flex-col gap-px">
@@ -124,7 +124,7 @@ export function StationPage() {
             type="button"
             onClick={() => {
               stopStation();
-              hide();
+              router.push("/");
             }}
             title="스테이션 종료"
             className="shrink-0 whitespace-nowrap rounded-pill bg-pink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid transition-colors hover:bg-ink rule"
@@ -133,7 +133,7 @@ export function StationPage() {
           </button>
           <button
             type="button"
-            onClick={hide}
+            onClick={() => router.back()}
             title="홈으로 돌아가기"
             className="shrink-0 whitespace-nowrap rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] rule"
           >
@@ -190,7 +190,7 @@ export function StationPage() {
         <span className="w-[40px] shrink-0 text-right">TIME</span>
       </div>
 
-      <ul className="scroll-y flex min-h-px w-full flex-1 flex-col">
+      <ul className="flex w-full flex-1 flex-col">
         {stationQueue.map((track, i) => (
           <StationRow
             key={track.id}

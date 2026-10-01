@@ -22,7 +22,10 @@ export function RecentRow({
   const playable = Boolean(track.uri && onPlay);
 
   return (
-    <li className="group relative rule-b">
+    /* shrink-0 is load-bearing: the scroll container is itself the flex column,
+       so without it flex squeezes fifty rows into the container's height and
+       there is no overflow left to scroll */
+    <li className="group relative shrink-0 rule-b">
       <button
         type="button"
         disabled={!playable}

@@ -13,7 +13,9 @@ export function ActionBar() {
   const canPlayAll = ready && (now !== null || uris.length > 0);
 
   return (
-    <div className="flex h-[76px] shrink-0 items-center gap-[12px] overflow-hidden bg-lime pl-[16px] pr-[12px]">
+    /* no overflow-hidden: the search field hangs its suggestion panel below
+       the bar, and clipping here would cut it off at 76px */
+    <div className="flex h-[76px] shrink-0 items-center gap-[12px] bg-lime pl-[16px] pr-[12px]">
       <SearchField />
 
       <div className="min-w-px flex-1" />

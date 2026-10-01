@@ -118,3 +118,37 @@
     font-feature-settings: "tnum";
   }
 }
+
+/*
+ * Three dots riding a wave while a screen loads.
+ *
+ * Declared outside @layer so nothing can question where the animation name
+ * resolves, and the lift is a length rather than a percentage: 40% of a 4px dot
+ * is 1.6px, which is motion only in principle. `--lift` is set per call site to
+ * match the dot it moves.
+ */
+@keyframes dot-wave {
+  0%,
+  70%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  35% {
+    transform: translateY(calc(var(--lift, 4px) * -1));
+    opacity: 1;
+  }
+}
+
+.dot-wave {
+  animation: dot-wave 1.1s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* a frozen row reads as "stuck", so slow it rather than stopping it */
+@media (prefers-reduced-motion: reduce) {
+  .dot-wave {
+    animation-duration: 2.4s;
+    animation-timing-function: linear;
+  }
+}

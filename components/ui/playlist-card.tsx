@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { SLEEVE_TONES, type Playlist } from "@/lib/data";
 import { Icon } from "./icon";
 
@@ -30,11 +31,12 @@ export function PlaylistCard({
   const tone = SLEEVE_TONES[index % SLEEVE_TONES.length];
 
   return (
-    <article className="flex w-[140px] shrink-0 snap-start flex-col gap-[8px]">
-      <button
-        type="button"
-        onClick={() => onPlay?.(playlist.uri)}
-        aria-label={`${playlist.name} 재생`}
+    <article className="group relative flex w-[140px] shrink-0 snap-start flex-col gap-[8px]">
+      {/* the sleeve opens the playlist; the knob on it plays, which is the
+          split every other player uses and keeps both within one tile */}
+      <Link
+        href={`/playlist/${playlist.id}`}
+        aria-label={`${playlist.name} 열기`}
         className={`relative aspect-square w-full shrink-0 overflow-hidden rounded-[4px] ${sleeve[tone]}`}
       >
         {playlist.cover ? (
@@ -61,10 +63,24 @@ export function PlaylistCard({
             />
           </span>
         )}
-      </button>
+      </Link>
+
+      {onPlay && (
+        <button
+          type="button"
+          onClick={() => onPlay(playlist.uri)}
+          aria-label={`${playlist.name} 재생`}
+          title="재생"
+          className="absolute right-[8px] top-[8px] flex size-[30px] items-center justify-center rounded-pill bg-pink opacity-0 transition-opacity group-hover:opacity-100 rule"
+        >
+          <Icon name="play-sm" size={12} />
+        </button>
+      )}
 
       <div className="flex flex-col gap-[2px] text-on-bright">
-        <p className="truncate text-[12px]">{playlist.name}</p>
+        <Link href={`/playlist/${playlist.id}`} className="truncate text-[12px]">
+          {playlist.name}
+        </Link>
         <p className="truncate text-[9px] tracking-[0.4px] text-on-bright-muted">
           {playlist.trackCount}곡
           {playlist.owner ? ` · ${playlist.owner}` : ""}

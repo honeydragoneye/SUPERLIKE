@@ -4,6 +4,7 @@ import Image from "next/image";
 import { clock } from "@/lib/time";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useSearch, type SearchTab } from "./search-provider";
+import { useRouter } from "next/navigation";
 
 const TABS: { key: SearchTab; label: string }[] = [
   { key: "track", label: "곡" },
@@ -31,6 +32,7 @@ function Thumb({ src, size = 32 }: { src: string | null; size?: number }) {
  */
 export function SearchResults() {
   const { query, results, loading, error, tab, setTab, total } = useSearch();
+  const router = useRouter();
   const { play, startStation, stationBusy } = useSpotify();
 
   const counts: Record<SearchTab, number> = {
@@ -41,7 +43,7 @@ export function SearchResults() {
   };
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-[10px] overflow-hidden bg-chart p-[16px]">
+    <section className="flex min-h-full flex-1 flex-col gap-[10px] bg-chart p-[16px]">
       <div className="flex w-full shrink-0 items-center justify-between gap-[10px]">
         <div className="flex shrink-0 flex-col gap-[3px]">
           <h2 className="text-[26px] font-black tracking-[-1px] text-on-bright">
@@ -90,7 +92,7 @@ export function SearchResults() {
 
       <div className="h-px w-full shrink-0 bg-ink" />
 
-      <div className="scroll-y scroll-y-ink min-h-0 w-full flex-1">
+      <div className="w-full flex-1">
         {tab === "track" && (
           <ul className="flex w-full flex-col">
             {results.tracks.map((t, i) => (
@@ -146,7 +148,12 @@ export function SearchResults() {
         {tab === "album" && (
           <ul className="flex w-full flex-col">
             {results.albums.map((a) => (
-              <li key={a.id} className="flex h-[56px] items-center gap-[12px] rule-b">
+              <li key={a.id} className="rule-b">
+                <button
+                  type="button"
+                  onClick={() => router.push(`/album/${a.id}`)}
+                  className="flex h-[56px] w-full cursor-pointer items-center gap-[12px] text-left"
+                >
                 <Thumb src={a.artwork} size={40} />
                 <span className="flex min-w-0 flex-1 flex-col gap-px">
                   <span className="truncate text-[13px] text-on-bright">{a.name}</span>
@@ -158,6 +165,7 @@ export function SearchResults() {
                 <span className="w-[90px] shrink-0 text-right text-[9px] uppercase tracking-[0.6px] text-on-bright-muted">
                   {a.albumType}
                 </span>
+                </button>
               </li>
             ))}
           </ul>
@@ -166,7 +174,12 @@ export function SearchResults() {
         {tab === "artist" && (
           <ul className="flex w-full flex-col">
             {results.artists.map((a) => (
-              <li key={a.id} className="flex h-[56px] items-center gap-[12px] rule-b">
+              <li key={a.id} className="rule-b">
+                <button
+                  type="button"
+                  onClick={() => router.push(`/artist/${a.id}`)}
+                  className="flex h-[56px] w-full cursor-pointer items-center gap-[12px] text-left"
+                >
                 <span className="relative size-[40px] shrink-0 overflow-hidden rounded-pill bg-ink">
                   {a.image && (
                     <Image src={a.image} alt="" fill sizes="40px" className="object-cover" unoptimized />
@@ -181,6 +194,7 @@ export function SearchResults() {
                 <span className="tnum w-[140px] shrink-0 text-right text-[10px] text-on-bright-muted">
                   팔로워 {a.followers.toLocaleString("ko-KR")}
                 </span>
+                </button>
               </li>
             ))}
           </ul>
