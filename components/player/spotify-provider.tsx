@@ -1,5 +1,6 @@
 "use client";
 
+import { useHydrated } from "@/components/ui/use-hydrated";
 import type { Playlist, RecentTrack } from "@/lib/data";
 import {
   useStation,
@@ -29,6 +30,53 @@ const SDK_SRC = "https://sdk.scdn.co/spotify-player.js";
  * reason the playback position lives in its own context below.
  */
 const NO_QUEUE: QueueTrack[] = [];
+
+/**
+ * What this context reports until React has finished hydrating.
+ *
+ * Everything here is knowledge only the browser has — a session, a device, a
+ * queue, a history, what is playing. The server renders the provider's initial state
+ * because it has no choice, so the hydration pass has to render the same thing
+ * or React finds markup it did not write, throws the subtree away and
+ * re-renders it. Measured: one unmarked `title` in the header cost nine
+ * hydration errors in a single dev session, seven of them only the wreckage of
+ * the first.
+ *
+ * Gated here rather than in each screen because the list of screens that read
+ * this is long and grows: the panel, the header, 최근 재생, /history, the action
+ * bar, the station page. One of them forgetting is one of them regenerating the
+ * page. The values match the `useState` initialisers above, field for field —
+ * the arrays reuse one identity each so a blank render costs no re-render.
+ */
+const NO_RECENT: RecentTrack[] = [];
+const NO_PLAYLISTS: Playlist[] = [];
+const NO_CANDIDATES: StationCandidate[] = [];
+
+const BLANK = {
+  connected: false,
+  ready: false,
+  now: null,
+  isPlaying: false,
+  nextUp: NO_QUEUE,
+  queue: NO_QUEUE,
+  queueIndex: -1,
+  shuffle: false,
+  repeatMode: 0,
+  recent: NO_RECENT,
+  recentLive: false,
+  recentError: null,
+  stationQueue: NO_CANDIDATES,
+  stationSeed: null,
+  stationSeedTrack: null,
+  stationBusy: null,
+  stationActive: false,
+  stationFilter: null,
+  playlists: NO_PLAYLISTS,
+  playlistTotal: 0,
+  playlistsLoaded: false,
+  playlistError: null,
+  error: null,
+} satisfies Partial<Ctx>;
 
 export type QueueTrack = {
   uri: string;
@@ -503,7 +551,9 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
     [deviceId],
   );
 
-  const value = useMemo<Ctx>(
+  const hydrated = useHydrated();
+
+  const live = useMemo<Ctx>(
     () => ({
       connected,
       ready,
@@ -653,6 +703,16 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       error,
       play,
     ],
+  );
+
+  /**
+   * The actions pass through untouched: a handler only ever runs once the page
+   * is interactive, so it should act on what is true then. Only the values
+   * that reach the DOM hold back.
+   */
+  const value = useMemo<Ctx>(
+    () => (hydrated ? live : { ...live, ...BLANK }),
+    [hydrated, live],
   );
 
   return (

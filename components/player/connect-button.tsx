@@ -11,9 +11,11 @@ import { useSpotify } from "./spotify-provider";
  * over it. Connection is knowledge only the browser has; the markup should not
  * depend on it.
  *
- * The labels still differ, which is the one thing that genuinely cannot match
- * a server that has no session: those spans say so rather than letting React
- * treat a correct difference as a fault.
+ * The labels and the tooltip cannot match a server that has no session either.
+ * Marking them as expected differences only hid them — React still found the
+ * `title` here, which carried no such marker, and threw the header away. They
+ * need no marker now: the provider reports nothing until hydration is done, so
+ * `connected` is already false for the render the server is compared against.
  */
 export function ConnectButton() {
   const { connected, ready, logout } = useSpotify();
@@ -39,15 +41,10 @@ export function ConnectButton() {
     >
       {/* green only once the device is actually live: CONNECTING is not yet a
           connection, and colouring it would promise something not true */}
-      <span
-        className={connected && ready ? "font-black text-spotify" : undefined}
-        suppressHydrationWarning
-      >
+      <span className={connected && ready ? "font-black text-spotify" : undefined}>
         {connected ? (ready ? "CONNECTED" : "CONNECTING…") : "CONNECT"}
       </span>
-      <span className="text-muted" suppressHydrationWarning>
-        {connected ? "DISCONNECT" : "SPOTIFY"}
-      </span>
+      <span className="text-muted">{connected ? "DISCONNECT" : "SPOTIFY"}</span>
     </button>
   );
 }
