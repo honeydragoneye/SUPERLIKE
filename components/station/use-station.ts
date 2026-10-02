@@ -156,6 +156,35 @@ export function useStation({
     queueRef.current = queue;
   }, [queue]);
   const fillingRef = useRef(false);
+  /**
+   * Tracks Spotify has refused, by uri.
+   *
+   * An account-level no is stable — an age-verified release, an explicit cut on
+   * a filtered account — so a second attempt spends a request to learn nothing.
+   * Measured in the dev log: one age-verified track was sent eight times, five
+   * of them back to back, because the callers that hand a single uri straight
+   * to the player never recorded the first no. Kept for the session rather than
+   * per station: the same track is refused by the next station too.
+   */
+  const refusedRef = useRef<Set<string>>(new Set());
+
+  /**
+   * The only way this hook starts a track.
+   *
+   * Every caller used to reach `onPlay` directly, so each of them had to
+   * remember to handle a refusal and none of them did except the queue walk.
+   * Routing them through here makes "never ask twice" a property of the hook
+   * instead of something four call sites have to agree on.
+   */
+  const attempt = useCallback(
+    async (uri: string): Promise<PlayOutcome> => {
+      if (refusedRef.current.has(uri)) return "refused";
+      const outcome = await onPlay(uri);
+      if (outcome === "refused") refusedRef.current.add(uri);
+      return outcome;
+    },
+    [onPlay],
+  );
   /** 전체 / 가사 없음 / 가사 있음 — rebuilds what is upcoming, never what plays */
   const [filter, setFilterState] = useState<FilterKind>(null);
   const filterRef = useRef<FilterKind>(null);
@@ -266,8 +295,16 @@ export function useStation({
    */
   const playFromQueue = useCallback(
     async (target?: StationCandidate, from?: StationCandidate[]) => {
-      let list = from ?? queueRef.current;
-      let next: StationCandidate | undefined = target ?? list[0];
+      /**
+       * Known-bad tracks leave the queue before the walk rather than being
+       * sent again: the answer will not have changed, and one left in place
+       * costs a request and a skip every time it reaches the head.
+       */
+      let list = (from ?? queueRef.current).filter(
+        (t) => !refusedRef.current.has(t.uri),
+      );
+      let next: StationCandidate | undefined =
+        target && !refusedRef.current.has(target.uri) ? target : list[0];
       if (!next) return;
 
       const refused: string[] = [];
@@ -276,7 +313,7 @@ export function useStation({
         const at = list.findIndex((t) => t.id === head.id);
         const rest = at >= 0 ? list.slice(at + 1) : list.filter((t) => t.id !== head.id);
 
-        const outcome = await onPlay(head.uri);
+        const outcome = await attempt(head.uri);
         if (outcome === "unavailable") return;   // no device: nothing to skip to
         if (outcome === "played") {
           setQueue(rest);
@@ -302,7 +339,7 @@ export function useStation({
       if (refused.length) console.warn("[station] skipped unplayable", refused);
       if (list.length <= REFILL_WHEN) void fillQueue(false, list.length);
     },
-    [onPlay, fillQueue],
+    [attempt, fillQueue],
   );
 
   /** Steps back through what has played, returning the current track to the queue. */
@@ -310,7 +347,19 @@ export function useStation({
     const hist = historyRef.current;
     if (hist.length < 2) return false;
     const current = hist.pop()!;
+    /**
+     * Step back past anything already refused. The seed is pushed onto the
+     * history before it is known to play, so 이전 could land on a track that
+     * answers 403 and leave the station silent while reporting success.
+     */
+    while (hist.length > 1 && refusedRef.current.has(hist[hist.length - 1].uri)) {
+      hist.pop();
+    }
     const target = hist[hist.length - 1];
+    if (!target || refusedRef.current.has(target.uri)) {
+      hist.push(current);
+      return false;
+    }
     setQueue((list) => [current, ...list]);
     stationRef.current.lastPlayed = {
       id: target.id,
@@ -320,9 +369,9 @@ export function useStation({
       artwork: target.artwork,
       durationMs: target.durationMs,
     };
-    await onPlay(target.uri);
+    await attempt(target.uri);
     return true;
-  }, [onPlay]);
+  }, [attempt]);
 
   const startStation = useCallback(
     async (seed: StationSeed) => {
@@ -345,7 +394,7 @@ export function useStation({
         },
       ];
       setSeed(seed);
-      const started = await onPlay(seed.uri);
+      const started = await attempt(seed.uri);
       const candidates = await fillQueue(true, 0);
       // the seed itself can be refused — an explicit track on a filtered
       // account, say. Build the queue anyway and start at the first one that
@@ -354,7 +403,7 @@ export function useStation({
         await playFromQueue(candidates[0], candidates);
       }
     },
-    [onPlay, fillQueue, playFromQueue],
+    [attempt, fillQueue, playFromQueue],
   );
 
   /**
@@ -428,11 +477,15 @@ export function useStation({
 
     // the queue drives playback here, so repeat-one has to be honoured by us
     if (repeatOne) {
-      void onPlay(currentUri);
+      // a track that cannot play cannot repeat either: yield to the queue
+      // rather than re-sending the same uri every time it ends
+      void attempt(currentUri).then((outcome) => {
+        if (outcome === "refused") void playFromQueue();
+      });
       return;
     }
     void playFromQueue();
-  }, [currentUri, isPaused, positionMs, repeatOne, onPlay, playFromQueue]);
+  }, [currentUri, isPaused, positionMs, repeatOne, attempt, playFromQueue]);
 
   return {
     queue,

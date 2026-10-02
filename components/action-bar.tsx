@@ -3,9 +3,12 @@
 import { Icon } from "./ui/icon";
 import { useSpotify } from "./player/spotify-provider";
 import { SearchField } from "./search/search-field";
+import { useWeeklyListening } from "./player/use-listening";
+import { formatSpan } from "@/lib/listening";
 
 export function ActionBar() {
   const { recent, ready, now, isPlaying, play, toggle } = useSpotify();
+  const weekMs = useWeeklyListening();
   const playable = recent.filter((t) => t.uri);
   const uris = playable.map((t) => t.uri);
   // pressing this while something is loaded pauses/resumes it, exactly like the
@@ -20,9 +23,13 @@ export function ActionBar() {
 
       <div className="min-w-px flex-1" />
 
-      <div className="flex shrink-0 flex-col items-end whitespace-nowrap">
+      {/* measured by this app since it was first run — see lib/listening.ts */}
+      <div
+        className="flex shrink-0 flex-col items-end whitespace-nowrap"
+        title="이번 주 Superlike에서 재생한 시간"
+      >
         <span className="text-[8px] tracking-[0.7px] text-muted">THIS WEEK</span>
-        <span className="tnum text-[19px] tracking-[-0.5px]">12.4M plays</span>
+        <span className="tnum text-[19px] tracking-[-0.5px]">{formatSpan(weekMs)}</span>
       </div>
 
       <button

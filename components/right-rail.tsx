@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Icon } from "./ui/icon";
 
 /**
@@ -46,13 +47,13 @@ function EditorsPick() {
 function StayConnected() {
   return (
     <section className="flex min-h-0 flex-[186_0_186px] flex-col gap-[10px] overflow-hidden bg-pink p-[16px]">
-      <button
-        type="button"
-        className="flex h-[36px] shrink-0 items-center gap-[8px] self-start rounded-pill bg-paper pl-[12px] pr-[14px] rule"
+      <Link
+        href="/subscribe"
+        className="flex h-[36px] shrink-0 items-center gap-[8px] self-start rounded-pill bg-paper pl-[12px] pr-[14px] transition-colors hover:bg-gold rule"
       >
         <Icon name="mail" size={17} />
         <span className="whitespace-nowrap text-[12px]">신청하기</span>
-      </button>
+      </Link>
       <h2 className="w-full text-[19px] font-black tracking-[-0.5px] text-on-bright">
         STAY CONNECTED
       </h2>

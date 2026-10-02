@@ -214,89 +214,126 @@ export async function POST(request: NextRequest) {
     stage.ms = Date.now() - startedAt;
   }
 
-  try {
-    // ---- rung 1: neighbours of whatever played last ----------------------
+  /**
+   * The seed artist's genre tags, fetched at most once.
+   *
+   * Two rungs want them — the genre rung for candidate names, the instrumental
+   * rung for ranking — and either can lead now, so neither can own the call.
+   */
+  let cachedTags: string[] | null = null;
+  async function seedTags(): Promise<string[]> {
+    if (cachedTags === null) cachedTags = await artistTopTags(seed.artist, 5);
+    return cachedTags;
+  }
+
+  /** Neighbours of whatever played last. */
+  async function rungSimilar(): Promise<void> {
     const fromBranch = await similarTracks(branch.name, branch.artist, need * NAMES_PER_WANTED);
+    // the one rung that reports Last.fm being unreachable; the rest return bare lists
     lastfmError = fromBranch.error;
     if (!lastfmError) await drain("similar", byMatch(fromBranch.candidates));
+  }
 
-    // ---- rung 2: neighbours of the seed, once the branch runs dry --------
+  /** Neighbours of the seed, once the branch runs dry. */
+  async function rungSeed(): Promise<void> {
     const sameAsSeed =
       branch.name.toLowerCase() === seed.name.toLowerCase() &&
       branch.artist.toLowerCase() === seed.artist.toLowerCase();
-    if (!lastfmError && candidates.length < need && !sameAsSeed) {
-      const fromSeed = await similarTracks(seed.name, seed.artist, need * NAMES_PER_WANTED);
-      await drain("seed", byMatch(fromSeed.candidates));
+    if (sameAsSeed) return;
+    const fromSeed = await similarTracks(seed.name, seed.artist, need * NAMES_PER_WANTED);
+    await drain("seed", byMatch(fromSeed.candidates));
+  }
+
+  /**
+   * The seed artist's neighbours.
+   *
+   * Measured on The Black Skirts: artist.getSimilar returns JANNABI (1.0),
+   * 언니네 이발관 (0.865), Car, The Garden (0.836) — Korean indie, all of it.
+   * The tag route returned Girls' Generation for the same seed. Artist-level
+   * data is also far thicker than track-level, which matters for the Korean
+   * catalogue where track.getSimilar often comes back empty.
+   */
+  async function rungArtists(): Promise<void> {
+    const neighbours = await similarArtists(seed.artist, ARTISTS_FIRST_PASS);
+    const lists: Names[] = [];
+    let gathered = 0;
+    for (const artist of neighbours) {
+      const top = await artistTopTracks(artist.name, 10);
+      if (top.length) lists.push(top);
+      gathered += top.length;
+      if (gathered >= need * NAMES_PER_WANTED) break;
     }
+
+    // round-robin, strongest artist first within each round: the queue opens
+    // with one track from each neighbour rather than ten from the closest
+    const pool: Names = [];
+    const deepest = Math.max(0, ...lists.map((l) => l.length));
+    for (let i = 0; i < deepest; i++) {
+      for (const list of lists) if (list[i]) pool.push(list[i]);
+    }
+    await drain("artists", pool);
+  }
+
+  /**
+   * Genre tags, as a safety net.
+   *
+   * Mostly for an artist Last.fm has no neighbours for. The tags are filtered
+   * to ones that describe a sound: the top tag is often a nationality, and a
+   * nationality's top tracks are simply that country's biggest hits.
+   */
+  async function rungGenre(): Promise<void> {
+    const pool: Names = [];
+    for (const tag of (await seedTags()).slice(0, 3)) {
+      pool.push(...(await tagTopTracks(tag, 30)));
+      if (pool.length >= need * NAMES_PER_WANTED) break;
+    }
+    await drain("genre", pool);
+  }
+
+  /** The instrumental pool, ranked by how much genre it shares with the seed. */
+  async function rungInstrumental(): Promise<void> {
+    const tags = await seedTags();
+    const pool = await tagTopTracks("instrumental", 40);
 
     /**
-     * ---- rung 3: the seed artist's neighbours ---------------------------
-     *
-     * Measured on The Black Skirts: artist.getSimilar returns JANNABI (1.0),
-     * 언니네 이발관 (0.865), Car, The Garden (0.836) — Korean indie, all of it.
-     * The tag route returned Girls' Generation for the same seed. Artist-level
-     * data is also far thicker than track-level, which matters for the Korean
-     * catalogue where track.getSimilar often comes back empty.
+     * Ranking by genre overlap costs one Last.fm call per candidate, and at
+     * 250ms apiece the old sample of 25 spent six seconds before a single
+     * track was resolved. Rank a short head and leave the tail in the order
+     * Last.fm gave it — relevance for the first picks, no bill for the rest.
      */
-    if (!lastfmError && candidates.length < need) {
-      const neighbours = await similarArtists(seed.artist, ARTISTS_FIRST_PASS);
-      const lists: Names[] = [];
-      let gathered = 0;
-      for (const artist of neighbours) {
-        const top = await artistTopTracks(artist.name, 10);
-        if (top.length) lists.push(top);
-        gathered += top.length;
-        if (gathered >= need * NAMES_PER_WANTED) break;
-      }
-
-      // round-robin, strongest artist first within each round: the queue opens
-      // with one track from each neighbour rather than ten from the closest
-      const pool: Names = [];
-      const deepest = Math.max(0, ...lists.map((l) => l.length));
-      for (let i = 0; i < deepest; i++) {
-        for (const list of lists) if (list[i]) pool.push(list[i]);
-      }
-      await drain("artists", pool);
+    const head = pool.slice(0, RANK_SAMPLE);
+    const scored: { cand: { name: string; artist: string }; overlap: number }[] = [];
+    for (const cand of head) {
+      const candTags = await artistTopTags(cand.artist, 5);
+      scored.push({ cand, overlap: candTags.filter((t) => tags.includes(t)).length });
     }
+    scored.sort((a, b) => b.overlap - a.overlap);
+    await drain("instrumental", [...scored.map((s) => s.cand), ...pool.slice(RANK_SAMPLE)]);
+  }
 
-    /**
-     * ---- rung 4: genre tags, as a safety net ----------------------------
-     *
-     * Only for an artist Last.fm has no neighbours for. Its tags are filtered
-     * to ones that describe a sound: the top tag is often a nationality, and
-     * a nationality's top tracks are simply that country's biggest hits.
-     */
-    let tags: string[] = [];
-    if (!lastfmError && candidates.length < need) {
-      tags = await artistTopTags(seed.artist, 3);
-      const pool: Names = [];
-      for (const tag of tags) {
-        pool.push(...(await tagTopTracks(tag, 30)));
-        if (pool.length >= need * NAMES_PER_WANTED) break;
-      }
-      await drain("genre", pool);
-    }
+  /**
+   * The ladder, ordered by what the filter will accept.
+   *
+   * Under 가사 없음 the instrumental rung leads. Measured on two builds before
+   * this change: `similar` kept 0 of 36 names in 12.8s and `genre` 0 of 60 in
+   * 7.2s, and only then did `instrumental` produce all nine tracks in 10.5s —
+   * and on the next build 0/40 in 5.2s, 0/60 in 6.8s, then 10 of 10 in 4.0s.
+   * The rungs above draw neighbours of a seed that has words, so the filter
+   * discards nearly everything they resolve; leading with the pool built for
+   * the filter spends the lookup budget where it pays.
+   *
+   * They still follow it rather than being dropped: an instrumental seed's
+   * neighbours are instrumental too, and closer to the seed than any tag pool.
+   */
+  const ladder =
+    filter === "instrumental"
+      ? [rungInstrumental, rungSimilar, rungSeed, rungArtists, rungGenre]
+      : [rungSimilar, rungSeed, rungArtists, rungGenre];
 
-    // ---- rung 5: the instrumental pool, ranked by genre overlap ----------
-    // only worth its cost under 가사 없음 — the rungs above skew vocal
-    if (!lastfmError && candidates.length < need && filter === "instrumental") {
-      const seedTags = tags.length ? tags : await artistTopTags(seed.artist, 5);
-      const pool = await tagTopTracks("instrumental", 40);
-
-      /**
-       * Ranking by genre overlap costs one Last.fm call per candidate, and at
-       * 250ms apiece the old sample of 25 spent six seconds before a single
-       * track was resolved. Rank a short head and leave the tail in the order
-       * Last.fm gave it — relevance for the first picks, no bill for the rest.
-       */
-      const head = pool.slice(0, RANK_SAMPLE);
-      const scored: { cand: { name: string; artist: string }; overlap: number }[] = [];
-      for (const cand of head) {
-        const candTags = await artistTopTags(cand.artist, 5);
-        scored.push({ cand, overlap: candTags.filter((t) => seedTags.includes(t)).length });
-      }
-      scored.sort((a, b) => b.overlap - a.overlap);
-      await drain("instrumental", [...scored.map((s) => s.cand), ...pool.slice(RANK_SAMPLE)]);
+  try {
+    for (const rung of ladder) {
+      if (lastfmError || candidates.length >= need) break;
+      await rung();
     }
 
     if (skipped.length) console.warn("[station/queue] skipped", skipped.slice(0, 5));

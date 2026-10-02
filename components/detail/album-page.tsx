@@ -31,6 +31,21 @@ export function AlbumPage({ id }: { id: string }) {
   const runtime = data?.tracks.reduce((a, t) => a + t.durationMs, 0) ?? 0;
   const multiDisc = (data?.tracks ?? []).some((t) => t.discNumber > 1);
 
+  /**
+   * The same rows in the shape the player wants them, handed over with the
+   * context so UP NEXT lists the album rather than Spotify's two-entry window.
+   * The cover stands in for per-track artwork, which an album's tracks do not
+   * carry — they all share this one.
+   */
+  const rows =
+    data?.tracks.map((t) => ({
+      uri: t.uri,
+      title: t.name,
+      artist: t.artist,
+      artwork: data.artwork,
+      durationMs: t.durationMs,
+    })) ?? [];
+
   return (
     <DetailShell
       eyebrow="ALBUM"
@@ -50,7 +65,7 @@ export function AlbumPage({ id }: { id: string }) {
         data?.tracks.length ? (
           <button
             type="button"
-            onClick={() => void play({ contextUri: data.uri })}
+            onClick={() => void play({ contextUri: data.uri, tracks: rows })}
             className="shrink-0 whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid"
           >
             앨범 재생
@@ -99,7 +114,7 @@ export function AlbumPage({ id }: { id: string }) {
                 <button
                   type="button"
                   onClick={() =>
-                    void play({ contextUri: data.uri, offsetUri: t.uri })
+                    void play({ contextUri: data.uri, offsetUri: t.uri, tracks: rows })
                   }
                   className="flex h-[44px] w-full cursor-pointer items-center gap-[12px] text-left"
                 >

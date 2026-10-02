@@ -20,6 +20,10 @@
   --color-gold: rgba(255, 212, 70, 0.74);
   --color-violet: rgba(123, 91, 255, 0.72);
   --color-mint: rgba(46, 217, 166, 0.71);
+  /* Spotify green, darkened for legibility. The signature #1db954 reads at
+     2.59:1 on the white header, and this label is 8px — #169c46 is the same
+     hue at 3.57:1. A brand colour rather than one of ours, so no alpha. */
+  --color-spotify: #169c46;
 
   /* surfaces */
   --color-panel: rgba(0, 0, 0, 0.82);

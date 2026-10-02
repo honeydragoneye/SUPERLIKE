@@ -5,6 +5,7 @@ import { Icon, TintedIcon } from "./ui/icon";
 import { QueueItem } from "./ui/queue-item";
 import { usePlaybackPosition, useSpotify } from "./player/spotify-provider";
 import { useRouter } from "next/navigation";
+import { useLyricsView } from "./lyrics/lyrics-view";
 import { clock } from "@/lib/time";
 import type { Track } from "@/lib/data";
 
@@ -48,6 +49,7 @@ export function NowPlayingPanel() {
     now,
     nextUp,
     queue,
+    queueIndex,
     stationQueue,
     stationActive,
     stationBusy,
@@ -68,6 +70,7 @@ export function NowPlayingPanel() {
   } = useSpotify();
 
   const router = useRouter();
+  const { open: lyricsOpen, toggle: toggleLyrics } = useLyricsView();
   // the only subscriber to the per-second position, so the ticker re-renders
   // this panel alone rather than the whole grid
   const positionMs = usePlaybackPosition();
@@ -91,6 +94,18 @@ export function NowPlayingPanel() {
     repeatMode === 2 ? "한 곡 반복" : repeatMode === 1 ? "전체 반복" : "반복 없음";
 
   /**
+   * What is still ahead in the list we handed Spotify.
+   *
+   * Searching it for `now.uri` here was wrong twice over: a track appearing
+   * twice in a playlist rewound the list to the first copy, and a track that
+   * was not in the list at all — a different playlist, or playback run past
+   * the part we loaded — listed the whole thing as though none of it had
+   * played. The provider follows the cursor instead, and -1 before the first
+   * track arrives correctly means "all of it is still ahead".
+   */
+  const queueRest = queue.slice(queueIndex + 1);
+
+  /**
    * The station queue wins whenever a station is running: it is the list the
    * app controls and rebuilds under a filter, and Spotify knows nothing of it.
    *
@@ -98,14 +113,6 @@ export function NowPlayingPanel() {
    * through the SDK window; off, our play queue holds the full list. The
    * history stands in before any of those exist.
    */
-  const queueRest =
-    queue.length > 0
-      ? (() => {
-          const at = queue.findIndex((t) => t.uri === now?.uri);
-          return at >= 0 ? queue.slice(at + 1) : queue;
-        })()
-      : [];
-
   const upNextSource =
     stationActive && stationQueue.length > 0
       ? stationQueue.map((t) => ({
@@ -367,6 +374,23 @@ export function NowPlayingPanel() {
       <div className="flex w-full shrink-0 items-center justify-between">
         <RoundButton name="heart-filled" label="좋아요" size={36} icon={16} />
         <div className="flex shrink-0 items-center gap-[6px]">
+          {/* a word rather than a glyph: there is no icon in the set for this,
+              and "가사" is shorter to read than any mark would be to learn */}
+          <button
+            type="button"
+            aria-label={lyricsOpen ? "가사 닫기" : "가사 보기"}
+            aria-pressed={lyricsOpen}
+            title={lyricsOpen ? "가사 닫기" : "가사 보기"}
+            disabled={!live}
+            onClick={toggleLyrics}
+            className={`flex h-[30px] shrink-0 items-center rounded-pill px-[12px] text-[10px] leading-none transition-colors rule disabled:opacity-40 ${
+              lyricsOpen
+                ? "bg-pink-bright text-paper-solid"
+                : "bg-[rgba(237,235,228,0.82)] text-ink"
+            }`}
+          >
+            가사
+          </button>
           <RoundButton name="plus" label="보관함에 추가" size={30} icon={14} />
           <RoundButton name="share" label="공유" size={30} icon={14} />
           <RoundButton name="more" label="더 보기" size={30} icon={14} />

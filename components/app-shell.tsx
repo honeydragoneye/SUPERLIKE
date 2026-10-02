@@ -5,9 +5,12 @@ import { ActionBar } from "./action-bar";
 import { NowPlayingPanel } from "./now-playing-panel";
 import { RightRail } from "./right-rail";
 import { SiteHeader } from "./site-header";
+import { useRecordListening } from "./player/use-listening";
 import { TagSpace } from "./tag-space";
 import { Ticker } from "./ticker";
 import { TagFilter } from "./station/tag-filter";
+import { LyricsPanel } from "./lyrics/lyrics-panel";
+import { useLyricsView } from "./lyrics/lyrics-view";
 
 /**
  * Everything that is not the page.
@@ -33,8 +36,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const station = pathname.startsWith("/station");
   /** screens that own the whole width: nothing in the rail slot would earn it */
   const railless =
-    pathname.startsWith("/mypage") || pathname.startsWith("/playlist");
+    pathname.startsWith("/mypage") ||
+    pathname.startsWith("/playlist") ||
+    /* the rail is what sent you here: showing STAY CONNECTED beside the
+       signup screen would offer the same button twice */
+    pathname.startsWith("/subscribe");
   const rail = !railless;
+  /**
+   * Lyrics take a column to the left of the page, next to the player they
+   * belong to, and stand in for the rail while they are up: two 330px columns
+   * would leave the page itself too narrow to read.
+   */
+  const { open: lyricsOpen } = useLyricsView();
+
+  /**
+   * Mounted here, once, because it writes rather than reads: a second copy
+   * would book every second of playback twice.
+   */
+  useRecordListening();
 
   return (
     <main className="flex h-screen min-w-[1512px] flex-col overflow-hidden bg-shell p-[20px]">
@@ -51,14 +70,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div
           className="grid min-h-0 min-w-0 flex-1"
           style={{
-            gridTemplateColumns: rail ? "minmax(0, 1fr) 330px" : "minmax(0, 1fr)",
+            gridTemplateColumns: lyricsOpen
+              ? "330px minmax(0, 1fr)"
+              : rail
+                ? "minmax(0, 1fr) 330px"
+                : "minmax(0, 1fr)",
             gridTemplateRows: "76px minmax(0, 1fr)",
           }}
         >
           <div
             className="min-w-0"
             style={{
-              gridColumn: home || railless ? "1 / 2" : "1 / 3",
+              gridColumn: lyricsOpen
+                ? "1 / 3"
+                : home || railless
+                  ? "1 / 2"
+                  : "1 / 3",
               gridRow: "1 / 2",
             }}
           >
@@ -77,14 +104,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ? "min-h-0 min-w-0 overflow-hidden"
                 : "scroll-y scroll-y-ink min-h-0 min-w-0"
             }
-            style={{ gridColumn: "1 / 2", gridRow: "2 / 3" }}
+            style={{
+              gridColumn: lyricsOpen ? "2 / 3" : "1 / 2",
+              gridRow: "2 / 3",
+            }}
           >
             <div className={`flex flex-col ${home ? "h-full" : "min-h-full"}`}>
               {children}
             </div>
           </div>
 
-          {rail && (
+          {lyricsOpen && (
+            <div
+              className="min-h-0 overflow-hidden"
+              style={{ gridColumn: "1 / 2", gridRow: "2 / 3" }}
+            >
+              <LyricsPanel />
+            </div>
+          )}
+
+          {rail && !lyricsOpen && (
             <div
               className="min-h-0 overflow-hidden"
               style={{ gridColumn: "2 / 3", gridRow: home ? "1 / 3" : "2 / 3" }}

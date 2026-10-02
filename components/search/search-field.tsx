@@ -7,6 +7,7 @@ import { TintedIcon } from "@/components/ui/icon";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { clock } from "@/lib/time";
 import { LoadingDots } from "@/components/ui/loading-dots";
+import { useSearchFocus } from "./search-focus";
 import { useSuggest } from "./search-suggest";
 
 /**
@@ -26,6 +27,8 @@ export function SearchField() {
   const params = useSearchParams();
   const urlQuery = params.get("q") ?? "";
   const { play } = useSpotify();
+  // the header's search button focuses this field through here
+  const { fieldRef } = useSearchFocus();
 
   /**
    * Derived rather than synced in an effect: when the URL changes from outside
@@ -38,25 +41,40 @@ export function SearchField() {
   const [open, setOpen] = useState(false);
 
   /**
+   * True while an IME is assembling a character.
+   *
+   * Korean is typed jamo by jamo, so "소녀시대" fires change events for ㅅ, 소,
+   * ㅅㄴ… and each one searched. That is where the rate limit went: a four
+   * character query cost roughly a dozen requests. The field still shows every
+   * keystroke; only the search waits for the character to be finished.
+   */
+  const composing = useRef(false);
+  const [settledText, setSettledText] = useState(urlQuery);
+
+  /**
    * The results page is already showing this exact query, so the panel has
    * nothing to add — and searching for it a second time is what tipped Spotify
    * into rate-limiting the whole field.
    */
   const settled = pathname === "/search" && urlQuery === text.trim();
   const showing = open && text.trim().length > 0 && !settled;
-  const { items, loading } = useSuggest(showing ? text : "");
+  // the suggestion query trails the field by one completed character
+  const { items, loading } = useSuggest(showing ? settledText : "");
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const submit = () => {
     const q = text.trim();
     if (!q) return;
+    composing.current = false;
+    setSettledText(text);
     setOpen(false);
     router.push(`/search?q=${encodeURIComponent(q)}`);
   };
 
-  const onType = (next: string) => {
+  const onType = (next: string, done = !composing.current) => {
     setHeld({ url: urlQuery, text: next });
     setOpen(next.trim().length > 0);
+    if (done) setSettledText(next);
   };
 
   return (
@@ -66,9 +84,18 @@ export function SearchField() {
           <TintedIcon name="search" size={16} />
         </span>
         <input
+          ref={fieldRef}
           type="search"
           value={text}
           onChange={(e) => onType(e.target.value)}
+          onCompositionStart={() => {
+            composing.current = true;
+          }}
+          onCompositionEnd={(e) => {
+            composing.current = false;
+            // the character is whole now, so this is worth searching for
+            onType(e.currentTarget.value, true);
+          }}
           onFocus={() => setOpen(text.trim().length > 0)}
           /* a click on a suggestion blurs the field first, so closing waits */
           onBlur={() => {

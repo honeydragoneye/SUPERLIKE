@@ -20,6 +20,16 @@ import {
 
 const SDK_SRC = "https://sdk.scdn.co/spotify-player.js";
 
+/**
+ * One array, reused, because clearing the queue has to be free.
+ *
+ * `setQueue([])` with a fresh literal fails the identity check every time, so
+ * a station — which calls `play` once per track — rebuilt the context value and
+ * re-rendered the whole grid, artwork included, on every advance. The same
+ * reason the playback position lives in its own context below.
+ */
+const NO_QUEUE: QueueTrack[] = [];
+
 export type QueueTrack = {
   uri: string;
   title: string;
@@ -57,6 +67,8 @@ type Ctx = {
   nextUp: QueueTrack[];
   /** the list we handed Spotify, in the order it will play */
   queue: QueueTrack[];
+  /** how far into `queue` playback has reached; -1 before it starts */
+  queueIndex: number;
   shuffle: boolean;
   /** 0 off · 1 whole context · 2 single track — the SDK's own encoding */
   repeatMode: 0 | 1 | 2;
@@ -180,6 +192,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
   const [positionMs, setPositionMs] = useState(0);
   const [nextUp, setNextUp] = useState<QueueTrack[]>([]);
   const [queue, setQueue] = useState<QueueTrack[]>([]);
+  const [queueIndex, setQueueIndex] = useState(-1);
   const sourceOrderRef = useRef<QueueTrack[]>([]);
   const [shuffle, setShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<0 | 1 | 2>(0);
@@ -259,6 +272,28 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
         if (!stationOwnsShuffleRef.current) setShuffle(state.shuffle);
         setRepeatMode(state.repeat_mode);
         const t = state.track_window.current_track;
+        /**
+         * Where the track now playing sits in the list we handed over.
+         *
+         * Spotify advances its own queue without telling us which row that
+         * was, so UP NEXT has to locate it to know what is still ahead.
+         * Searched forward from the last known row first: a playlist that
+         * includes the same track twice would otherwise rewind the list to
+         * the first copy every time the second one came round.
+         *
+         * A track that is in no row at all leaves the cursor alone — that is
+         * playback having run past the part of a long playlist we loaded, and
+         * holding the last known row empties `queueRest` so the panel falls
+         * through to Spotify's own window instead of replaying a stale list.
+         */
+        setQueueIndex((at) => {
+          const order = sourceOrderRef.current;
+          if (!order.length) return -1;
+          const ahead = order.findIndex((q, i) => i > at && q.uri === t.uri);
+          if (ahead >= 0) return ahead;
+          const anywhere = order.findIndex((q) => q.uri === t.uri);
+          return anywhere >= 0 ? anywhere : at;
+        });
         setNextUp(
           state.track_window.next_tracks.map((n) => ({
             uri: n.uri,
@@ -365,10 +400,23 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
   const play = useCallback(
     async (opts: PlayOptions = {}): Promise<PlayOutcome> => {
       if (!deviceId) return "unavailable";
-      if (opts.tracks) {
+      /**
+       * A play is a new queue, every time.
+       *
+       * Keeping the previous list when this one arrives without `tracks` is
+       * what emptied UP NEXT on a playlist: 전체 재생 hands Spotify a context
+       * and no rows, the old list stayed behind, and the panel sliced it for a
+       * track that was never in it. Clearing hands the panel back to Spotify's
+       * own window, which is all we honestly know in that case.
+       */
+      if (opts.tracks?.length) {
         sourceOrderRef.current = opts.tracks;
         setQueue(opts.tracks);
+      } else if (sourceOrderRef.current.length) {
+        sourceOrderRef.current = NO_QUEUE;
+        setQueue(NO_QUEUE);
       }
+      setQueueIndex(-1);
 
       const send = (activate: boolean) =>
         fetch("/api/spotify/play", {
@@ -406,7 +454,17 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
         setError(
           readableError(res.status, data.detail, "재생에 실패했습니다", data.restriction),
         );
-        return "refused";
+        /**
+         * Only a 403 is Spotify having looked at the track and said no.
+         *
+         * Reporting every failure as "refused" broke the contract `PlayOutcome`
+         * states: a 502 from a failed transfer or a 500 from our own route is
+         * the request never having reached the catalogue, and the station drops
+         * a track for each one. Measured in the dev log: 36 of those against 36
+         * real 403s — half the skips the station made were for tracks that
+         * would have played fine.
+         */
+        return res.status === 403 ? "refused" : "unavailable";
       }
       setError(null);
       return "played";
@@ -454,6 +512,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       isPlaying: now !== null && !now.paused,
       nextUp,
       queue,
+      queueIndex,
       shuffle,
       repeatMode,
       /**
@@ -564,6 +623,9 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
         setReady(false);
         setNow(null);
         setNextUp([]);
+        sourceOrderRef.current = NO_QUEUE;
+        setQueue(NO_QUEUE);
+        setQueueIndex(-1);
         setRecent(null);
         setPlaylists(null);
         stationOwnsShuffleRef.current = false;
@@ -577,6 +639,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       now,
       nextUp,
       queue,
+      queueIndex,
       shuffle,
       repeatMode,
       setMode,

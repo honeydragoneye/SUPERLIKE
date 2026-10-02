@@ -3,13 +3,28 @@
 import Link from "next/link";
 import { Icon } from "./ui/icon";
 import { ConnectButton } from "./player/connect-button";
+import { useSearchFocus } from "./search/search-focus";
 
-function IconButton({ name, label }: { name: string; label: string }) {
+function IconButton({
+  name,
+  label,
+  onClick,
+}: {
+  name: string;
+  label: string;
+  onClick?: () => void;
+}) {
   return (
     <button
       type="button"
       aria-label={label}
-      className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper rule"
+      title={label}
+      onClick={onClick}
+      /* the ones with nothing behind them yet stay flat: a hover highlight on
+         a button that does nothing reads as a fault, not an affordance */
+      className={`flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper rule${
+        onClick ? " cursor-pointer transition-colors hover:bg-pink" : ""
+      }`}
     >
       <Icon name={name} size={16} />
     </button>
@@ -17,6 +32,8 @@ function IconButton({ name, label }: { name: string; label: string }) {
 }
 
 export function SiteHeader() {
+  const { focus } = useSearchFocus();
+
   return (
     <header className="flex h-[84px] shrink-0 items-center gap-[18px] overflow-hidden bg-white pl-[20px] pr-[14px] rule">
       <Link
@@ -38,7 +55,7 @@ export function SiteHeader() {
         </span>
       </Link>
 
-      <IconButton name="search" label="검색" />
+      <IconButton name="search" label="검색" onClick={focus} />
       <IconButton name="heart-outline" label="좋아요한 음악" />
       <IconButton name="queue" label="재생 목록" />
 

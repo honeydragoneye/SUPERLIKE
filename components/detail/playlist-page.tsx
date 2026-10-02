@@ -24,6 +24,23 @@ export function PlaylistPage({ id }: { id: string }) {
   const runtime = data?.tracks.reduce((a, t) => a + t.durationMs, 0) ?? 0;
   const first = data?.tracks[0];
 
+  /**
+   * The same rows in the shape the player wants them.
+   *
+   * Handed over with the context so UP NEXT can show the playlist's real
+   * order. Spotify's own `next_tracks` window only ever reports a couple of
+   * entries ahead, which is why the list looked empty after 전체 재생 — the
+   * context was playing fine, the panel just had nothing to list.
+   */
+  const rows =
+    data?.tracks.map((t) => ({
+      uri: t.uri,
+      title: t.name,
+      artist: t.artist,
+      artwork: t.artwork,
+      durationMs: t.durationMs,
+    })) ?? [];
+
   return (
     <DetailShell
       eyebrow="PLAYLIST"
@@ -45,7 +62,7 @@ export function PlaylistPage({ id }: { id: string }) {
         data?.tracks.length ? (
           <button
             type="button"
-            onClick={() => void play({ contextUri: data.uri })}
+            onClick={() => void play({ contextUri: data.uri, tracks: rows })}
             className="shrink-0 whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid"
           >
             전체 재생
@@ -113,7 +130,9 @@ export function PlaylistPage({ id }: { id: string }) {
               <li key={`${t.id}-${t.index}`} className="group relative shrink-0 rule-b">
                 <button
                   type="button"
-                  onClick={() => void play({ contextUri: data.uri, offsetUri: t.uri })}
+                  onClick={() =>
+                    void play({ contextUri: data.uri, offsetUri: t.uri, tracks: rows })
+                  }
                   className="flex h-[46px] w-full cursor-pointer items-center gap-[12px] text-left"
                 >
                   <span className="tnum w-[32px] shrink-0 text-[14px] font-black">

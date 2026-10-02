@@ -4,6 +4,8 @@ import { Noto_Sans_KR } from "next/font/google";
 import { SpotifyProvider } from "@/components/player/spotify-provider";
 import { SearchProvider } from "@/components/search/search-provider";
 import { AppShell } from "@/components/app-shell";
+import { LyricsViewProvider } from "@/components/lyrics/lyrics-view";
+import { SearchFocusProvider } from "@/components/search/search-focus";
 import "./globals.css";
 
 const notoSansKR = Noto_Sans_KR({
@@ -31,7 +33,11 @@ export default function RootLayout({
               prerender of pages that have no query at all, like 404 */}
           <Suspense fallback={<div className="h-screen w-full bg-shell" />}>
             <SearchProvider>
-              <AppShell>{children}</AppShell>
+              <LyricsViewProvider>
+                <SearchFocusProvider>
+                  <AppShell>{children}</AppShell>
+                </SearchFocusProvider>
+              </LyricsViewProvider>
             </SearchProvider>
           </Suspense>
         </SpotifyProvider>

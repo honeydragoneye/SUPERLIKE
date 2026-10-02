@@ -37,7 +37,12 @@ export function ConnectButton() {
       title={connected ? "연결 해제" : "Spotify 연결"}
       className="flex shrink-0 flex-col items-end gap-[2px] whitespace-nowrap text-[8px] tracking-[0.6px]"
     >
-      <span suppressHydrationWarning>
+      {/* green only once the device is actually live: CONNECTING is not yet a
+          connection, and colouring it would promise something not true */}
+      <span
+        className={connected && ready ? "font-black text-spotify" : undefined}
+        suppressHydrationWarning
+      >
         {connected ? (ready ? "CONNECTED" : "CONNECTING…") : "CONNECT"}
       </span>
       <span className="text-muted" suppressHydrationWarning>
