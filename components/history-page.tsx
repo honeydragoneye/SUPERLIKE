@@ -1,6 +1,7 @@
 "use client";
 
 import { useSpotify } from "./player/spotify-provider";
+import { useHydrated } from "./ui/use-hydrated";
 import { DetailShell } from "./detail/detail-shell";
 import { RecentList } from "./ui/recent-list";
 
@@ -11,8 +12,16 @@ import { RecentList } from "./ui/recent-list";
  * — up to fifty, once repeats are collapsed — lives here.
  */
 export function HistoryPage() {
-  const { connected, recent, recentLive, recentError, play } = useSpotify();
-  const tracks = recentLive ? recent : [];
+  const { connected: session, recent, recentLive: live, recentError, play } = useSpotify();
+  /**
+   * The session is the browser's to know, so this screen renders what the
+   * server rendered until React has finished comparing the two. Gated here
+   * rather than in the provider, which sits outside the Suspense boundary and
+   * opens before this subtree is hydrated.
+   */
+  const hydrated = useHydrated();
+  const connected = hydrated && session;
+  const tracks = hydrated && live ? recent : [];
   const playable = tracks.filter((t) => t.uri);
 
   return (

@@ -12,7 +12,13 @@ import {
   similarTracks,
   tagTopTracks,
 } from "@/lib/lastfm/client";
-import { checkInstrumental, matchesFilter, type LyricsFlag } from "@/lib/lrclib/client";
+import { checkInstrumental, type LyricsFlag } from "@/lib/lrclib/client";
+import {
+  NO_FILTER,
+  isFiltered,
+  matchesClean,
+  matchesLyrics,
+} from "@/lib/station/filter";
 import type { Resolved } from "@/lib/spotify/tokens";
 import type {
   StationCandidate,
@@ -109,7 +115,7 @@ export async function POST(request: NextRequest) {
     seed,
     basis,
     need = 10,
-    filter = null,
+    filter = NO_FILTER,
     seenIds = [],
     seenLfm = [],
   } = (await request.json()) as StationQueueRequest;
@@ -183,16 +189,30 @@ export async function POST(request: NextRequest) {
       idSet.add(track.id);
       stage.resolved += 1;
 
-      // no filter, no reason to spend an LRCLIB call
+      /**
+       * 19금 first, because it is free.
+       *
+       * `explicit` rides along with the search that already resolved this
+       * track, so rejecting on it costs nothing; the lyrics verdict below is a
+       * network call to LRCLIB. Judging in that order means the expensive
+       * question is only ever asked about tracks that have already survived
+       * the cheap one.
+       */
+      if (!matchesClean(track.explicit, filter.clean)) {
+        missStreak += 1;
+        continue;
+      }
+
+      // no lyrics tag, no reason to spend an LRCLIB call
       let instrumental: LyricsFlag = null;
-      if (filter !== null) {
+      if (filter.lyrics !== null) {
         instrumental = await checkInstrumental(
           track.name,
           track.artists[0]?.name ?? cand.artist,
           track.duration_ms,
           track.id,
         );
-        if (!matchesFilter(instrumental, filter)) {
+        if (!matchesLyrics(instrumental, filter.lyrics)) {
           missStreak += 1;
           continue;
         }
@@ -208,7 +228,8 @@ export async function POST(request: NextRequest) {
         artwork: track.album.images?.[0]?.url ?? null,
         durationMs: track.duration_ms,
         lfmKey,
-        instrumental: filter === null ? undefined : instrumental,
+        explicit: track.explicit,
+        instrumental: filter.lyrics === null ? undefined : instrumental,
       });
     }
     stage.ms = Date.now() - startedAt;
@@ -326,7 +347,7 @@ export async function POST(request: NextRequest) {
    * neighbours are instrumental too, and closer to the seed than any tag pool.
    */
   const ladder =
-    filter === "instrumental"
+    filter.lyrics === "instrumental"
       ? [rungInstrumental, rungSimilar, rungSeed, rungArtists, rungGenre]
       : [rungSimilar, rungSeed, rungArtists, rungGenre];
 
@@ -339,7 +360,8 @@ export async function POST(request: NextRequest) {
     if (skipped.length) console.warn("[station/queue] skipped", skipped.slice(0, 5));
     // so the next slow build explains itself instead of being guessed at
     console.log(
-      `[station/queue] filter=${filter ?? "none"} kept=${candidates.length}/${need} ` +
+      `[station/queue] filter=${isFiltered(filter) ? `${filter.lyrics ?? "-"}${filter.clean ? "+clean" : ""}` : "none"} ` +
+      `kept=${candidates.length}/${need} ` +
         stages
           .map((st) => `${st.source}:${st.kept}/${st.resolved}/${st.offered}@${st.ms}ms${st.gaveUp ? "(gaveup)" : ""}`)
           .join(" "),

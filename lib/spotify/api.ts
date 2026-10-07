@@ -85,6 +85,8 @@ export type SpotifyTrack = {
   uri: string;
   name: string;
   duration_ms: number;
+  /** always present on a track object; declared so the station can filter on it */
+  explicit: boolean;
   artists: { name: string }[];
   album: {
     name: string;

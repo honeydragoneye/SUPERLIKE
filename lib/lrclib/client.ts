@@ -10,8 +10,8 @@ import { lrclibHttp } from "@/lib/http/throttle";
  * The type and the predicate live in lib/station/filter so the browser can use
  * them without pulling in this module's HTTP layer.
  */
-export { matchesFilter } from "@/lib/station/filter";
-export type { FilterKind, LyricsFlag } from "@/lib/station/filter";
+export { matches, matchesLyrics, matchesClean } from "@/lib/station/filter";
+export type { StationFilter, LyricsKind, LyricsFlag } from "@/lib/station/filter";
 import type { LyricsFlag } from "@/lib/station/filter";
 
 type LrclibHit = {

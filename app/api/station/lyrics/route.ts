@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { checkInstrumental, matchesFilter, type FilterKind } from "@/lib/lrclib/client";
+import { checkInstrumental, matchesLyrics, type LyricsKind } from "@/lib/lrclib/client";
 
 type Ask = {
   id: string;
@@ -16,9 +16,10 @@ type Ask = {
  * the shape that earned 429s in the prototype.
  */
 export async function POST(request: NextRequest) {
+  // only the lyrics tag reaches here: 19금 is decided from data already in hand
   const { tracks = [], filter = null } = (await request.json()) as {
     tracks?: Ask[];
-    filter?: FilterKind;
+    filter?: LyricsKind;
   };
 
   if (!Array.isArray(tracks) || tracks.length === 0) {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     results.push({
       id: t.id,
       instrumental: flag,
-      matches: matchesFilter(flag, filter),
+      matches: matchesLyrics(flag, filter),
     });
   }
 

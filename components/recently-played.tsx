@@ -4,6 +4,7 @@ import Link from "next/link";
 import { RecentList } from "./ui/recent-list";
 import { useRowCapacity } from "./ui/use-row-capacity";
 import { useSpotify } from "./player/spotify-provider";
+import { useHydrated } from "./ui/use-hydrated";
 
 const RANGES = ["TODAY", "THIS WEEK", "ALL"] as const;
 const ACTIVE_RANGE = "TODAY";
@@ -16,8 +17,17 @@ const ROW_H = 47.5;
  * Spotify is connected so the block never collapses during design review.
  */
 export function RecentlyPlayed() {
-  const { connected, recent, recentLive, recentError } = useSpotify();
+  const { connected: session, recent, recentLive: live, recentError } = useSpotify();
   const { ref, capacity } = useRowCapacity(ROW_H);
+  /**
+   * The session is the browser's to know, so this screen renders what the
+   * server rendered until React has finished comparing the two. Gated here
+   * rather than in the provider, which sits outside the Suspense boundary and
+   * opens before this subtree is hydrated.
+   */
+  const hydrated = useHydrated();
+  const connected = hydrated && session;
+  const recentLive = hydrated && live;
   // no stand-in rows: an invented track flashing before the real history lands
   // is worse than an empty list for a beat
   const tracks = recentLive ? recent : [];

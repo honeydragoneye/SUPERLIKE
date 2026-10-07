@@ -1,5 +1,6 @@
 "use client";
 
+import { useHydrated } from "@/components/ui/use-hydrated";
 import { useSpotify } from "./spotify-provider";
 
 /**
@@ -11,14 +12,21 @@ import { useSpotify } from "./spotify-provider";
  * over it. Connection is knowledge only the browser has; the markup should not
  * depend on it.
  *
- * The labels and the tooltip cannot match a server that has no session either.
- * Marking them as expected differences only hid them — React still found the
- * `title` here, which carried no such marker, and threw the header away. They
- * need no marker now: the provider reports nothing until hydration is done, so
- * `connected` is already false for the render the server is compared against.
+ * The labels and the tooltip cannot match a server that has no session either,
+ * so they wait for this component's own hydration rather than being written
+ * early and suppressed.
+ *
+ * The flag has to live here, not in the provider. The provider sits outside the
+ * Suspense boundary this button is inside, so it commits — and its gate opens —
+ * before React gets round to comparing this subtree against the server HTML;
+ * by then its token fetch has already reported a session. Measured both ways:
+ * gated here the header's errors left the log, gated in the provider they came
+ * back on the next full reload.
  */
 export function ConnectButton() {
   const { connected, ready, logout } = useSpotify();
+  const hydrated = useHydrated();
+  const live = hydrated && connected;
 
   return (
     <button
@@ -36,15 +44,15 @@ export function ConnectButton() {
         // eslint-disable-next-line @next/next/no-location-assign-relative-destination
         window.location.href = "/api/spotify/login";
       }}
-      title={connected ? "연결 해제" : "Spotify 연결"}
+      title={live ? "연결 해제" : "Spotify 연결"}
       className="flex shrink-0 flex-col items-end gap-[2px] whitespace-nowrap text-[8px] tracking-[0.6px]"
     >
       {/* green only once the device is actually live: CONNECTING is not yet a
           connection, and colouring it would promise something not true */}
-      <span className={connected && ready ? "font-black text-spotify" : undefined}>
-        {connected ? (ready ? "CONNECTED" : "CONNECTING…") : "CONNECT"}
+      <span className={live && ready ? "font-black text-spotify" : undefined}>
+        {live ? (ready ? "CONNECTED" : "CONNECTING…") : "CONNECT"}
       </span>
-      <span className="text-muted">{connected ? "DISCONNECT" : "SPOTIFY"}</span>
+      <span className="text-muted">{live ? "DISCONNECT" : "SPOTIFY"}</span>
     </button>
   );
 }

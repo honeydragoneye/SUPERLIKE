@@ -1,4 +1,4 @@
-import type { FilterKind } from "@/lib/station/filter";
+import type { StationFilter } from "@/lib/station/filter";
 
 /** A queue entry: a Last.fm suggestion already resolved to a playable track. */
 export type StationCandidate = {
@@ -12,6 +12,8 @@ export type StationCandidate = {
   lfmKey: string;
   /** LRCLIB's verdict, when the filter made us ask; null means unknown */
   instrumental?: boolean | null;
+  /** Spotify's 19금 flag — free with the search that resolved the track */
+  explicit?: boolean;
 };
 
 /** The rungs of the fallback ladder, in the order they are tried. */
@@ -36,7 +38,7 @@ export type StationQueueRequest = {
   /** the track to branch from — the last one played, or the seed on a cold start */
   basis?: { name: string; artist: string };
   need: number;
-  filter: FilterKind;
+  filter: StationFilter;
   seenIds: string[];
   seenLfm: string[];
 };

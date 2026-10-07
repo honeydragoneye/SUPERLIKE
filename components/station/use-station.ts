@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StationCandidate } from "@/lib/station/types";
-import { matchesFilter, type FilterKind } from "@/lib/station/filter";
+import {
+  NO_FILTER,
+  matchesClean,
+  matchesLyrics,
+  sameFilter,
+  type StationFilter,
+} from "@/lib/station/filter";
 
 /** Target length of the upcoming queue. */
 export const QUEUE_TARGET = 10;
@@ -74,12 +80,22 @@ async function fetchLadder(body: Record<string, unknown>): Promise<StationCandid
  */
 async function keepMatching(
   tracks: StationCandidate[],
-  filter: FilterKind,
+  filter: StationFilter,
 ): Promise<StationCandidate[]> {
-  if (filter === null || tracks.length === 0) return tracks;
+  if (tracks.length === 0) return tracks;
 
-  const judged = tracks.filter((t) => t.instrumental !== undefined);
-  const unjudged = tracks.filter((t) => t.instrumental === undefined);
+  /**
+   * 19금 is settled here, for nothing.
+   *
+   * `explicit` already travels on the candidate, so this tag never costs a
+   * request — and dropping on it first shortens the batch the lyrics check
+   * below has to ask about.
+   */
+  const clean = tracks.filter((t) => matchesClean(t.explicit, filter.clean));
+  if (filter.lyrics === null) return clean;
+
+  const judged = clean.filter((t) => t.instrumental !== undefined);
+  const unjudged = clean.filter((t) => t.instrumental === undefined);
 
   let verdicts = new Map<string, boolean | null>();
   if (unjudged.length) {
@@ -93,11 +109,11 @@ async function keepMatching(
           artist: t.artist,
           durationMs: t.durationMs,
         })),
-        filter,
+        filter: filter.lyrics,
       }),
       cache: "no-store",
     });
-    if (!res.ok) return tracks; // a failed check must not empty the queue
+    if (!res.ok) return clean; // a failed check must not empty the queue
     const data = (await res.json()) as {
       results?: { id: string; instrumental: boolean | null }[];
     };
@@ -111,7 +127,7 @@ async function keepMatching(
   ];
   const order = new Map(tracks.map((t, i) => [t.id, i]));
   return scored
-    .filter((t) => matchesFilter(t.instrumental ?? null, filter))
+    .filter((t) => matchesLyrics(t.instrumental ?? null, filter.lyrics))
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
 }
 
@@ -186,8 +202,8 @@ export function useStation({
     [onPlay],
   );
   /** 전체 / 가사 없음 / 가사 있음 — rebuilds what is upcoming, never what plays */
-  const [filter, setFilterState] = useState<FilterKind>(null);
-  const filterRef = useRef<FilterKind>(null);
+  const [filter, setFilterState] = useState<StationFilter>(NO_FILTER);
+  const filterRef = useRef<StationFilter>(NO_FILTER);
   /**
    * Supersedes in-flight builds.
    *
@@ -375,6 +391,19 @@ export function useStation({
 
   const startStation = useCallback(
     async (seed: StationSeed) => {
+      /**
+       * A new station starts with no tags.
+       *
+       * Stopping one cleared them and starting one did not, so picking a new
+       * seed without stopping first carried the previous station's tags into
+       * the build — the first queue came back already filtered, from a choice
+       * made about a different song. The ref is assigned rather than only the
+       * state because `fillQueue` below reads the ref, and a state update would
+       * not have landed by then.
+       */
+      filterRef.current = NO_FILTER;
+      setFilterState(NO_FILTER);
+
       stationRef.current = {
         seed,
         lastPlayed: seed,
@@ -418,14 +447,15 @@ export function useStation({
    * filter. A build already in flight is superseded by the generation counter.
    */
   const setFilter = useCallback(
-    async (next: FilterKind) => {
-      if (next === filterRef.current) return;
+    async (next: StationFilter) => {
+      // an object, so identity would say "changed" on every click
+      if (sameFilter(next, filterRef.current)) return;
       filterRef.current = next;
       setFilterState(next);
       if (!stationRef.current.seed) return;
 
       const run = ++buildRef.current;
-      setBusy(next === null ? "필터 해제 중…" : "필터 적용 중…");
+      setBusy(next.lyrics === null && !next.clean ? "필터 해제 중…" : "필터 적용 중…");
       let kept: StationCandidate[] = [];
       try {
         kept = await keepMatching(queueRef.current, next);
@@ -445,8 +475,8 @@ export function useStation({
     historyRef.current = [];
     setQueue([]);
     setSeed(null);
-    filterRef.current = null;
-    setFilterState(null);
+    filterRef.current = NO_FILTER;
+    setFilterState(NO_FILTER);
   }, []);
 
   /**
