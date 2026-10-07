@@ -85,8 +85,9 @@ export function SearchResults() {
           <span className="w-[32px] shrink-0">#</span>
           <span className="w-[32px] shrink-0" />
           <span className="min-w-px flex-1">TRACK</span>
-          <span className="w-[240px] shrink-0">ALBUM</span>
-          <span className="w-[62px] shrink-0" />
+          {/* one slot per column the rows actually have: a spare spacer here
+              pushed ALBUM 74px left of the album text it labels */}
+          <span className="w-[180px] shrink-0">ALBUM</span>
           <span className="w-[40px] shrink-0 text-right">TIME</span>
         </div>
       )}
@@ -113,16 +114,22 @@ export function SearchResults() {
                     {t.explicit && " · E"}
                   </span>
                 </button>
-                <span className="w-[240px] shrink-0 truncate text-[10px] text-on-bright-muted">
+                {/* a narrower column starts further right; what no longer fits
+                    ends in an ellipsis, and the full name is on the tooltip */}
+                <span
+                  title={t.album}
+                  className="w-[180px] shrink-0 truncate text-[10px] text-on-bright-muted"
+                >
                   {t.album}
                 </span>
                 <span className="tnum w-[40px] shrink-0 text-right text-[10px] text-on-bright">
                   {clock(t.durationMs)}
                 </span>
-                {/* clears the TIME column so it never covers the duration */}
+                {/* sits left of the ALBUM column: 40 (TIME) + 12 + 180 (ALBUM) + 12,
+                    so it ends where that column begins and covers neither */}
                 <StationButton
                   label={t.name}
-                  className="right-[64px]"
+                  className="right-[244px]"
                   seed={async () => ({
                     id: t.id,
                     uri: t.uri,
@@ -158,9 +165,11 @@ export function SearchResults() {
                   {a.albumType}
                 </span>
                 </button>
+                {/* left of the 연도·곡 수 column: 90 (ALBUM) + 12 + 90 + 12.
+                    190 landed inside it, so the button sat on the text */}
                 <StationButton
                   label={a.name}
-                  className="right-[190px]"
+                  className="right-[204px]"
                   seed={() => seedFrom("album", a.id)}
                 />
               </li>

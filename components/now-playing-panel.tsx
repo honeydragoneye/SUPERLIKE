@@ -4,10 +4,15 @@ import Image from "next/image";
 import { Icon, TintedIcon } from "./ui/icon";
 import { QueueItem } from "./ui/queue-item";
 import { usePlaybackPosition, useSpotify } from "./player/spotify-provider";
+import { useLikeNowPlaying } from "./player/use-likes";
+import { useHydrated } from "./ui/use-hydrated";
 import { useRouter } from "next/navigation";
 import { useLyricsView } from "./lyrics/lyrics-view";
 import { clock } from "@/lib/time";
 import type { Track } from "@/lib/data";
+
+/** One empty array for every list the panel holds back during hydration. */
+const NOTHING: never[] = [];
 
 function RoundButton({
   name,
@@ -15,19 +20,31 @@ function RoundButton({
   size,
   icon,
   onClick,
+  pressed,
+  disabled,
 }: {
   name: string;
   label: string;
   size: number;
   icon: number;
   onClick?: () => void;
+  /** a toggle rather than an action: announced, and tinted while on */
+  pressed?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       aria-label={label}
+      aria-pressed={pressed}
+      title={label}
       onClick={onClick}
-      className="flex shrink-0 items-center justify-center rounded-pill bg-[rgba(237,235,228,0.82)] rule"
+      disabled={disabled}
+      className={`flex shrink-0 items-center justify-center rounded-pill rule ${
+        pressed ? "bg-pink" : "bg-[rgba(237,235,228,0.82)]"
+      }${onClick && !disabled ? " cursor-pointer transition-colors" : ""}${
+        disabled ? " opacity-40" : ""
+      }`}
       style={{ width: size, height: size }}
     >
       <Icon name={name} size={icon} />
@@ -44,24 +61,24 @@ function RoundButton({
  */
 export function NowPlayingPanel() {
   const {
-    connected,
-    ready,
-    now,
-    nextUp,
-    queue,
-    queueIndex,
-    stationQueue,
-    stationActive,
-    stationBusy,
-    stationSeed,
+    connected: session,
+    ready: deviceReady,
+    now: playing,
+    nextUp: sdkNext,
+    queue: handedOver,
+    queueIndex: handedIndex,
+    stationQueue: station,
+    stationActive: stationOn,
+    stationBusy: busy,
+    stationSeed: seedLabel,
     stopStation,
     playFromStation,
-    recent,
-    shuffle,
-    repeatMode,
+    recent: history,
+    shuffle: shuffled,
+    repeatMode: repeat,
     toggleShuffle,
     cycleRepeat,
-    error,
+    error: playerError,
     play,
     toggle,
     next,
@@ -74,6 +91,39 @@ export function NowPlayingPanel() {
   // the only subscriber to the per-second position, so the ticker re-renders
   // this panel alone rather than the whole grid
   const positionMs = usePlaybackPosition();
+  const { track: likeTrack, liked, toggleLike } = useLikeNowPlaying();
+
+  /**
+   * Everything this panel displays is knowledge only the browser has — a
+   * session, a device, a queue, what is playing — so until React has finished
+   * comparing this subtree against the server HTML it renders what the server
+   * rendered: nothing.
+   *
+   * Gated here rather than in the provider. The provider sits outside the
+   * Suspense boundary this panel is inside, so its own gate opens before React
+   * gets round to this subtree, and by then its token fetch has already
+   * reported a session — which is how `meta` came to say "최근 재생 기록이
+   * 없습니다" against an HTML that said "Spotify를 연결해 주세요".
+   */
+  const hydrated = useHydrated();
+  const connected = hydrated && session;
+  const ready = hydrated && deviceReady;
+  const now = hydrated ? playing : null;
+  const recent = hydrated ? history : NOTHING;
+  const nextUp = hydrated ? sdkNext : NOTHING;
+  const queue = hydrated ? handedOver : NOTHING;
+  const queueIndex = hydrated ? handedIndex : -1;
+  const stationQueue = hydrated ? station : NOTHING;
+  const stationActive = hydrated && stationOn;
+  const shuffle = hydrated && shuffled;
+  const repeatMode = hydrated ? repeat : 0;
+  const error = hydrated ? playerError : null;
+  // used outside the stationActive guard too, so it needs its own gate
+  const stationBusy = hydrated ? busy : null;
+  const stationSeed = hydrated ? seedLabel : null;
+
+  const likeable = hydrated && likeTrack !== null;
+  const likedNow = likeable && liked;
   const live = now !== null;
   const last = recent[0] ?? null;
 
@@ -372,7 +422,18 @@ export function NowPlayingPanel() {
       </ul>
 
       <div className="flex w-full shrink-0 items-center justify-between">
-        <RoundButton name="heart-filled" label="좋아요" size={36} icon={16} />
+        {/* was pinned to heart-filled, so it read as liked whatever was playing */}
+        <RoundButton
+          name={likedNow ? "heart-filled" : "heart-outline"}
+          label={
+            !likeable ? "재생 중인 곡이 없습니다" : likedNow ? "좋아요 취소" : "좋아요"
+          }
+          size={36}
+          icon={16}
+          pressed={likedNow}
+          disabled={!likeable}
+          onClick={toggleLike}
+        />
         <div className="flex shrink-0 items-center gap-[6px]">
           {/* a word rather than a glyph: there is no icon in the set for this,
               and "가사" is shorter to read than any mark would be to learn */}

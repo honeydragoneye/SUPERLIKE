@@ -5,26 +5,46 @@ import { Icon } from "./ui/icon";
 import { ConnectButton } from "./player/connect-button";
 import { useSearchFocus } from "./search/search-focus";
 
+/**
+ * One of the header's round controls.
+ *
+ * Renders an anchor when it goes somewhere and a button when it does something,
+ * so a destination keeps the behaviour a link is expected to have — middle
+ * click, cmd-click, copy link address — rather than reimplementing navigation
+ * on a button that offers none of it.
+ */
 function IconButton({
   name,
   label,
   onClick,
+  href,
 }: {
   name: string;
   label: string;
   onClick?: () => void;
+  href?: string;
 }) {
+  /* the ones with nothing behind them yet stay flat: a hover highlight on a
+     control that does nothing reads as a fault, not an affordance */
+  const className = `flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper rule${
+    href || onClick ? " cursor-pointer transition-colors hover:bg-pink" : ""
+  }`;
+
+  if (href) {
+    return (
+      <Link href={href} aria-label={label} title={label} className={className}>
+        <Icon name={name} size={16} />
+      </Link>
+    );
+  }
+
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
       onClick={onClick}
-      /* the ones with nothing behind them yet stay flat: a hover highlight on
-         a button that does nothing reads as a fault, not an affordance */
-      className={`flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper rule${
-        onClick ? " cursor-pointer transition-colors hover:bg-pink" : ""
-      }`}
+      className={className}
     >
       <Icon name={name} size={16} />
     </button>
@@ -56,7 +76,9 @@ export function SiteHeader() {
       </Link>
 
       <IconButton name="search" label="검색" onClick={focus} />
-      <IconButton name="heart-outline" label="좋아요한 음악" />
+      {/* the list, not the switch: liking a track is the Now Playing panel's
+          heart, which is beside the track it would act on */}
+      <IconButton name="heart-outline" label="좋아요한 음악" href="/mypage" />
       <IconButton name="queue" label="재생 목록" />
 
       <ConnectButton />

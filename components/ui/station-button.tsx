@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSpotify } from "@/components/player/spotify-provider";
+import { useHydrated } from "./use-hydrated";
 
 /**
  * The pink "start a station from this" control.
@@ -27,7 +28,9 @@ export function StationButton({
 }) {
   const { startStation, stationBusy } = useSpotify();
   const [resolving, setResolving] = useState(false);
-  const busy = resolving || stationBusy !== null;
+  // the label flips to "구성 중", so it has to hold the server's answer first
+  const hydrated = useHydrated();
+  const busy = resolving || (hydrated && stationBusy !== null);
 
   return (
     <button

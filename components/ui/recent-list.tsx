@@ -2,6 +2,7 @@
 
 import { RecentRow } from "./recent-row";
 import { useSpotify } from "@/components/player/spotify-provider";
+import { useHydrated } from "./use-hydrated";
 import type { RecentTrack } from "@/lib/data";
 
 /**
@@ -13,6 +14,7 @@ import type { RecentTrack } from "@/lib/data";
  */
 export function RecentList({ tracks }: { tracks: RecentTrack[] }) {
   const { play, startStation, stationBusy } = useSpotify();
+  const hydrated = useHydrated();
 
   return (
     <ul className="flex w-full flex-col">
@@ -20,7 +22,7 @@ export function RecentList({ tracks }: { tracks: RecentTrack[] }) {
         <RecentRow
           key={track.index}
           track={track}
-          stationBusy={stationBusy !== null}
+          stationBusy={hydrated && stationBusy !== null}
           onPlay={(uri) => void play({ uris: [uri] })}
           onStation={(t) =>
             void startStation({

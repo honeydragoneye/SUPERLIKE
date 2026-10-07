@@ -2,6 +2,7 @@
 
 import { PlaylistCard } from "./ui/playlist-card";
 import { useSpotify } from "./player/spotify-provider";
+import { useHydrated } from "./ui/use-hydrated";
 
 /**
  * The user's own stations and playlists.
@@ -9,12 +10,34 @@ import { useSpotify } from "./player/spotify-provider";
  * Sits on the same near-white as the history block, separated by rules top and
  * bottom rather than a colour field — matching Superlike_V1.1.
  */
-export function MyPlaylist() {
-  const { connected, playlists, playlistTotal, playlistsLoaded, playlistError, play } =
-    useSpotify();
+/** One empty array, so a blank render costs no re-render. */
+const NOTHING: never[] = [];
 
-  const status = playlistError
-    ? playlistError
+export function MyPlaylist() {
+  const {
+    connected: session,
+    playlists: mine,
+    playlistTotal: total,
+    playlistsLoaded: loaded,
+    playlistError,
+    play,
+  } = useSpotify();
+
+  /**
+   * Browser-only knowledge, held back until React has finished comparing this
+   * subtree against the server HTML. Gated here rather than in the provider,
+   * which sits outside the Suspense boundary and opens before this is hydrated.
+   */
+  const hydrated = useHydrated();
+  const connected = hydrated && session;
+  const playlists = hydrated ? mine : NOTHING;
+  const playlistTotal = hydrated ? total : 0;
+  const playlistsLoaded = hydrated && loaded;
+
+  const error = hydrated ? playlistError : null;
+
+  const status = error
+    ? error
     : !connected
       ? "Spotify를 연결해 주세요"
       : !playlistsLoaded

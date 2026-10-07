@@ -1,6 +1,7 @@
 "use client";
 
 import { useSpotify } from "@/components/player/spotify-provider";
+import { useHydrated } from "@/components/ui/use-hydrated";
 import {
   NO_FILTER,
   isFiltered,
@@ -27,6 +28,9 @@ const LYRICS_OF: Record<string, LyricsKind> = {
   "가사 있음": "lyrics",
 };
 
+/** One empty array, so a blank render costs no re-render. */
+const NOTHING: never[] = [];
+
 const PILL =
   "shrink-0 rounded-pill px-[14px] py-[8px] text-[10px] tracking-[0.6px] transition-colors rule disabled:opacity-40";
 
@@ -38,8 +42,24 @@ const PILL =
  * built around. The rebuild happens in useStation; this is only the switch.
  */
 export function TagFilter() {
-  const { stationActive, stationFilter, setStationFilter, stationBusy, stationQueue } =
-    useSpotify();
+  const {
+    stationActive: running,
+    stationFilter: selected,
+    setStationFilter,
+    stationBusy: busy,
+    stationQueue: upcoming,
+  } = useSpotify();
+
+  /**
+   * Browser-only knowledge, held back until React has finished comparing this
+   * subtree against the server HTML. Gated here rather than in the provider,
+   * which sits outside the Suspense boundary and opens before this is hydrated.
+   */
+  const hydrated = useHydrated();
+  const stationActive = hydrated && running;
+  const stationFilter = hydrated ? selected : NO_FILTER;
+  const stationBusy = hydrated ? busy : null;
+  const stationQueue = hydrated ? upcoming : NOTHING;
 
   const locked = !stationActive || stationBusy !== null;
   const on = (t: (typeof TAGS)[number]) =>

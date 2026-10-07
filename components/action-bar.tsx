@@ -5,10 +5,34 @@ import { useSpotify } from "./player/spotify-provider";
 import { SearchField } from "./search/search-field";
 import { useWeeklyListening } from "./player/use-listening";
 import { formatSpan } from "@/lib/listening";
+import { useHydrated } from "./ui/use-hydrated";
+
+/** One empty array, so a blank render costs no re-render. */
+const NOTHING: never[] = [];
 
 export function ActionBar() {
-  const { recent, ready, now, isPlaying, play, toggle } = useSpotify();
+  const {
+    recent: history,
+    ready: deviceReady,
+    now: playing,
+    isPlaying: nowPlaying,
+    play,
+    toggle,
+  } = useSpotify();
   const weekMs = useWeeklyListening();
+
+  /**
+   * The session, the device and what is playing are the browser's to know, so
+   * this renders what the server rendered until React has finished comparing
+   * the two. Gated here rather than in the provider, which sits outside the
+   * Suspense boundary and opens before this subtree is hydrated.
+   */
+  const hydrated = useHydrated();
+  const recent = hydrated ? history : NOTHING;
+  const ready = hydrated && deviceReady;
+  const now = hydrated ? playing : null;
+  const isPlaying = hydrated && nowPlaying;
+
   const playable = recent.filter((t) => t.uri);
   const uris = playable.map((t) => t.uri);
   // pressing this while something is loaded pauses/resumes it, exactly like the

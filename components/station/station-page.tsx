@@ -3,6 +3,7 @@
 import Image from "next/image";
 import type { StationCandidate } from "@/lib/station/types";
 import { useSpotify } from "@/components/player/spotify-provider";
+import { useHydrated } from "@/components/ui/use-hydrated";
 import { Icon } from "@/components/ui/icon";
 import { clock } from "@/lib/time";
 import { useRouter } from "next/navigation";
@@ -73,21 +74,32 @@ function StationRow({
  * from, and every track lined up behind the one playing. Picking a row jumps
  * there and drops what it skipped, the same rule UP NEXT follows.
  */
+/** One empty array, so a blank render costs no re-render. */
+const NOTHING: never[] = [];
+
 export function StationPage() {
   const {
-    stationQueue,
+    stationQueue: upcoming,
     stationSeedTrack,
-    stationBusy,
-    stationActive,
-    stopStation,
+    stationBusy: busy,
+    stationActive: running,
     playFromStation,
-    shuffle,
-    toggleShuffle,
-    now,
+    now: playing,
   } = useSpotify();
   const router = useRouter();
 
-  const seed = stationSeedTrack;
+  /**
+   * The session, the device and what is playing are the browser's to know, so
+   * this renders what the server rendered until React has finished comparing
+   * the two. Gated here rather than in the provider, which sits outside the
+   * Suspense boundary and opens before this subtree is hydrated.
+   */
+  const hydrated = useHydrated();
+  const stationQueue = hydrated ? upcoming : NOTHING;
+  const stationBusy = hydrated ? busy : null;
+  const stationActive = hydrated && running;
+  const now = hydrated ? playing : null;
+  const seed = hydrated ? stationSeedTrack : null;
 
   const status = stationBusy
     ? stationBusy
@@ -98,10 +110,10 @@ export function StationPage() {
   return (
     <section className="flex min-h-full flex-1 flex-col gap-[10px] bg-chart p-[16px]">
       <div className="flex w-full shrink-0 items-start justify-between gap-[10px]">
-        {/* "<곡>의 Station" over the artist line, as the Figma frame titles it */}
+        {/* "<곡>의 스테이션" over the artist line, as the Figma frame titles it */}
         <div className="flex min-w-0 shrink flex-col gap-px">
           <h2 className="truncate text-[26px] font-black tracking-[-1px]">
-            {seed ? `${seed.name}의 Station` : "STATION"}
+            {seed ? `${seed.name}의 스테이션` : "스테이션"}
           </h2>
           <p className="truncate text-[8px] tracking-[0.7px]">
             {seed?.artist ?? "재생 중인 스테이션 없음"}
@@ -109,28 +121,8 @@ export function StationPage() {
         </div>
 
         <div className="flex shrink-0 items-center gap-[6px]">
-          <button
-            type="button"
-            onClick={() => void toggleShuffle()}
-            aria-pressed={shuffle}
-            title={shuffle ? "셔플 끄기" : "대기열 섞기"}
-            className={`shrink-0 whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors rule ${
-              shuffle ? "bg-ink text-paper" : "bg-gold text-ink"
-            }`}
-          >
-            SHUFFLE {shuffle ? "ON" : "OFF"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              stopStation();
-              router.push("/");
-            }}
-            title="스테이션 종료"
-            className="shrink-0 whitespace-nowrap rounded-pill bg-pink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid transition-colors hover:bg-ink rule"
-          >
-            STOP
-          </button>
+          {/* shuffle and stop live on the Now Playing panel, which is mounted on
+              every screen — a second copy here only asked the same question twice */}
           <button
             type="button"
             onClick={() => router.back()}
