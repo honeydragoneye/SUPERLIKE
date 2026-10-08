@@ -5,6 +5,7 @@ import type { RecentTrack } from "@/lib/data";
 import { clock } from "@/lib/time";
 import { RelativeTime } from "./relative-time";
 import { Icon } from "./icon";
+import { LoadingDots } from "./loading-dots";
 
 /** One entry in 최근 재생 목록: order, artwork, title/artist, when, length. */
 export function RecentRow({
@@ -12,12 +13,15 @@ export function RecentRow({
   onPlay,
   onStation,
   stationBusy = false,
+  plays,
 }: {
   track: RecentTrack;
   onPlay?: (uri: string) => void;
   onStation?: (track: RecentTrack) => void;
   /** a station is being built right now, so a second click would be ignored */
   stationBusy?: boolean;
+  /** times played this period; shown instead of the timestamp when given */
+  plays?: number;
 }) {
   const playable = Boolean(track.uri && onPlay);
 
@@ -56,8 +60,10 @@ export function RecentRow({
           <span className="truncate text-[9px] tracking-[0.5px]">{track.artist}</span>
         </span>
 
+        {/* a ranking answers "how often", a log answers "when" — the column is
+            the same width either way so the rows stay aligned between them */}
         <span className="tnum w-[72px] shrink-0 text-right text-[10px]">
-          <RelativeTime iso={track.playedAt} />
+          {plays === undefined ? <RelativeTime iso={track.playedAt} /> : `${plays}회`}
         </span>
         <span className="tnum w-[40px] shrink-0 text-right text-[10px]">
           {clock(track.durationMs)}
@@ -76,9 +82,16 @@ export function RecentRow({
               ? "스테이션 구성 중…"
               : `${track.title} 기준으로 스테이션 시작`
           }
-          className="absolute right-[136px] top-1/2 -translate-y-1/2 rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-[opacity,background-color] group-hover:opacity-100 enabled:hover:bg-ink disabled:opacity-40 disabled:group-hover:opacity-40"
+          className="absolute right-[136px] top-1/2 flex -translate-y-1/2 items-center gap-[5px] rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-[opacity,background-color] group-hover:opacity-100 enabled:hover:bg-ink disabled:opacity-40 disabled:group-hover:opacity-40"
         >
-          {stationBusy ? "구성 중" : "STATION"}
+          {stationBusy ? (
+            <>
+              구성 중
+              <LoadingDots size={3} label="스테이션 구성 중" />
+            </>
+          ) : (
+            "STATION"
+          )}
         </button>
       )}
     </li>

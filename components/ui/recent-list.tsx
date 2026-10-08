@@ -12,7 +12,14 @@ import type { RecentTrack } from "@/lib/data";
  * which shows them all — the handlers are identical, so they live here rather
  * than being written twice and drifting.
  */
-export function RecentList({ tracks }: { tracks: RecentTrack[] }) {
+export function RecentList({
+  tracks,
+  plays,
+}: {
+  tracks: RecentTrack[];
+  /** track id → times played; given only by the view that ranks them */
+  plays?: Record<string, number>;
+}) {
   const { play, startStation, stationBusy } = useSpotify();
   const hydrated = useHydrated();
 
@@ -23,6 +30,7 @@ export function RecentList({ tracks }: { tracks: RecentTrack[] }) {
           key={track.index}
           track={track}
           stationBusy={hydrated && stationBusy !== null}
+          plays={plays ? (plays[track.uri.split(":").pop() ?? ""] ?? 0) : undefined}
           onPlay={(uri) => void play({ uris: [uri] })}
           onStation={(t) =>
             void startStation({
