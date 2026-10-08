@@ -42,10 +42,22 @@ const PLACE_WORDS = new Set([
 const NON_GENRE_TAGS = new Set([
   "seen live", "favorites", "favourites", "favorite songs", "my favorites",
   "love", "beautiful", "awesome", "cool", "catchy", "masterpiece",
+  "good", "great", "nice", "best", "amazing", "fun", "perfect", "epic",
   "male vocalists", "female vocalists", "male vocalist", "female vocalist",
+  // a mood, not a sound — and the one the Gemini step will answer properly
+  "chill", "sad", "happy", "melancholy", "energetic",
+  // what you do with music, or that it is music at all
+  "music", "band", "bands", "artist", "song", "songs", "album", "albums",
+  "listen", "check out", "to listen", "listened", "want to listen",
   "60s", "70s", "80s", "90s", "00s", "10s", "20s",
   "1960s", "1970s", "1980s", "1990s", "2000s", "2010s", "2020s",
 ]);
+
+/**
+ * Tags that describe the listening, not the record: "under 2000 listeners",
+ * "over 2 hours". A prefix rule because the numbers are unbounded.
+ */
+const META_PREFIX = /^(under|over|less than|more than|at least)\b/;
 
 /**
  * One spelling per genre.
@@ -81,11 +93,27 @@ export function canonicalTag(tag: string): string {
   return TAG_ALIAS[key] ?? key;
 }
 
-/** True when a tag names a sound rather than an origin or a shelf. */
+/** True when a tag names a sound rather than an origin, a shelf or a shrug. */
 export function isGenreTag(tag: string): boolean {
   const key = tag.trim().toLowerCase();
   if (!key) return false;
   if (NON_GENRE_TAGS.has(key)) return false;
+  if (META_PREFIX.test(key)) return false;
+
+  const bare = key.replace(/[^\p{L}\p{N}]+/gu, "");
+  /**
+   * A single character says nothing — "a" alone carries 19,813 taggings on
+   * Last.fm and arrives as a pill meaning nothing at all. Two is the floor
+   * because "oi" is a real one.
+   */
+  if (bare.length < 2) return false;
+  /**
+   * A bare number is a year or a count. The decade tags were listed one by one
+   * above and the individual years were not, so 30 of them — 1994, 2012, 2020 —
+   * came through as genres.
+   */
+  if (/^\d+$/.test(bare)) return false;
+
   // only a tag that is *nothing but* place names is an origin
   return !key.split(/[\s-]+/).every((word) => PLACE_WORDS.has(word));
 }
