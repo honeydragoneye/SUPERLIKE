@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSpotify } from "@/components/player/spotify-provider";
+import { LoadingDots } from "./loading-dots";
 import { useHydrated } from "./use-hydrated";
 
 /**
@@ -47,9 +48,16 @@ export function StationButton({
           setResolving(false);
         }
       }}
-      className={`absolute top-1/2 -translate-y-1/2 rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-[opacity,background-color] group-hover:opacity-100 enabled:hover:bg-ink disabled:opacity-40 disabled:group-hover:opacity-40 ${className}`}
+      className={`absolute top-1/2 flex -translate-y-1/2 items-center gap-[5px] rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-[opacity,background-color] group-hover:opacity-100 enabled:hover:bg-ink disabled:opacity-40 disabled:group-hover:opacity-40 ${className}`}
     >
-      {busy ? "구성 중" : "STATION"}
+      {busy ? (
+        <>
+          구성 중
+          <LoadingDots size={3} label="스테이션 구성 중" />
+        </>
+      ) : (
+        "STATION"
+      )}
     </button>
   );
 }

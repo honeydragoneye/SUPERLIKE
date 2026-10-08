@@ -4,6 +4,7 @@ import Image from "next/image";
 import type { StationCandidate } from "@/lib/station/types";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useHydrated } from "@/components/ui/use-hydrated";
+import { LoadingDots } from "@/components/ui/loading-dots";
 import { Icon } from "@/components/ui/icon";
 import { clock } from "@/lib/time";
 import { useRouter } from "next/navigation";
@@ -182,7 +183,10 @@ export function StationPage() {
         <span className="w-[40px] shrink-0 text-right">TIME</span>
       </div>
 
-      <ul className="flex w-full flex-1 flex-col">
+      {/* hugs its rows: with `flex-1` an empty queue swallowed the rest of the
+          column and pushed the line below it to the foot of the screen, which
+          is exactly where it is not wanted while the queue is being built */}
+      <ul className="flex w-full shrink-0 flex-col">
         {stationQueue.map((track, i) => (
           <StationRow
             key={track.id}
@@ -194,8 +198,17 @@ export function StationPage() {
         ))}
       </ul>
 
+      {/* directly under the rows it is about to add, in the same line the
+          detail screens use while they wait */}
+      {stationBusy && (
+        <p className="flex shrink-0 items-center gap-[8px] py-[14px] text-[10px] tracking-[0.5px] text-on-bright-muted">
+          {stationBusy}
+          <LoadingDots size={4} label={stationBusy} />
+        </p>
+      )}
+
       {!stationActive && (
-        <p className="shrink-0 text-[9px] tracking-[0.5px]">
+        <p className="mt-auto shrink-0 text-[9px] tracking-[0.5px]">
           실행 중인 스테이션이 없습니다. 곡 위에 커서를 올리고 STATION을 눌러
           시작하세요.
         </p>

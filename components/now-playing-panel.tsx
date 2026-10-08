@@ -6,6 +6,7 @@ import { QueueItem } from "./ui/queue-item";
 import { usePlaybackPosition, useSpotify } from "./player/spotify-provider";
 import { useLikeNowPlaying } from "./player/use-likes";
 import { useHydrated } from "./ui/use-hydrated";
+import { LoadingDots } from "./ui/loading-dots";
 import { useRouter } from "next/navigation";
 import { useLyricsView } from "./lyrics/lyrics-view";
 import { clock } from "@/lib/time";
@@ -371,9 +372,17 @@ export function NowPlayingPanel() {
               aria-hidden
             />
             <span className="flex min-w-0 flex-1 flex-col gap-px">
-              <span className="text-[8px] tracking-[0.8px] text-on-dark-muted">
-                {stationBusy ??
-                  (stationQueue.length ? "STATION 재생 중" : "유사곡을 찾지 못했습니다")}
+              <span className="flex items-center gap-[8px] text-[10px] tracking-[0.5px] text-on-dark-muted">
+                {stationBusy ? (
+                  <>
+                    {stationBusy}
+                    <LoadingDots size={4} label={stationBusy} />
+                  </>
+                ) : stationQueue.length ? (
+                  "STATION 재생 중"
+                ) : (
+                  "유사곡을 찾지 못했습니다"
+                )}
               </span>
               <span className="truncate text-[9px] text-on-dark">{stationSeed}</span>
             </span>
@@ -402,12 +411,17 @@ export function NowPlayingPanel() {
 
       <div className="flex w-full shrink-0 items-center justify-between whitespace-nowrap">
         <p className="text-[10px] tracking-[1px] text-on-dark">UP NEXT</p>
-        <p className="text-[8px] tracking-[0.5px] text-on-dark-muted">
-          {upNext.length
-            ? `${upNext.length} TRACKS · ${stationActive ? "STATION" : `SHUFFLE ${shuffle ? "ON" : "OFF"}`}`
-            : stationBusy
-              ? "채우는 중…"
-              : "대기열 없음"}
+        <p className="flex items-center gap-[8px] text-[10px] tracking-[0.5px] text-on-dark-muted">
+          {upNext.length ? (
+            `${upNext.length} TRACKS · ${stationActive ? "STATION" : `SHUFFLE ${shuffle ? "ON" : "OFF"}`}`
+          ) : stationBusy ? (
+            <>
+              채우는 중
+              <LoadingDots size={4} label="채우는 중" />
+            </>
+          ) : (
+            "대기열 없음"
+          )}
         </p>
       </div>
 
