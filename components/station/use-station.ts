@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { StationCandidate } from "@/lib/station/types";
 import {
   NO_FILTER,
+  isFiltered,
   matchesClean,
   matchesLyrics,
   sameFilter,
@@ -58,16 +59,18 @@ const emptyState = (): StationState => ({
   seenLfm: new Set(),
 });
 
-async function fetchLadder(body: Record<string, unknown>): Promise<StationCandidate[]> {
+async function fetchLadder(
+  body: Record<string, unknown>,
+): Promise<{ candidates: StationCandidate[]; tags: string[] }> {
   const res = await fetch("/api/station/queue", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
     cache: "no-store",
   });
-  if (!res.ok) return [];
-  const data = (await res.json()) as { candidates?: StationCandidate[] };
-  return data.candidates ?? [];
+  if (!res.ok) return { candidates: [], tags: [] };
+  const data = (await res.json()) as { candidates?: StationCandidate[]; tags?: string[] };
+  return { candidates: data.candidates ?? [], tags: data.tags ?? [] };
 }
 
 /**
@@ -202,6 +205,8 @@ export function useStation({
     [onPlay],
   );
   /** 전체 / 가사 없음 / 가사 있음 — rebuilds what is upcoming, never what plays */
+  /** the seed artist's genres, for the panel; empty when Last.fm has none */
+  const [tags, setTags] = useState<string[]>([]);
   const [filter, setFilterState] = useState<StationFilter>(NO_FILTER);
   const filterRef = useRef<StationFilter>(NO_FILTER);
   /**
@@ -230,24 +235,28 @@ export function useStation({
     const station = stationRef.current;
     if (!station.seed || fillingRef.current) return [];
     fillingRef.current = true;
-    setBusy(initial ? "스테이션 구성 중…" : "큐 리필 중…");
+    setBusy(initial ? "스테이션 구성 중" : "큐 리필 중");
 
     const run = ++buildRef.current;
     try {
       const basis = initial ? station.seed : (station.lastPlayed ?? station.seed);
       // the ladder lives on the server: one request walks similar -> seed ->
       // genre -> instrumental, stopping as soon as the queue is topped up
-      const found = await fetchLadder({
+      const { candidates: found, tags: seedGenres } = await fetchLadder({
         seed: { id: station.seed.id, name: station.seed.name, artist: station.seed.artist },
         basis: { name: basis.name, artist: basis.artist },
         need: Math.max(1, QUEUE_TARGET - have),
         filter: filterRef.current,
+        // the seed does not change while a station runs, so neither do its tags
+        wantTags: initial,
         seenIds: [...station.seenIds],
         seenLfm: [...station.seenLfm],
       });
 
       // a newer build (a filter change) started while this one was in flight
       if (run !== buildRef.current) return [];
+
+      if (initial) setTags(seedGenres);
 
       found.forEach((c) => {
         station.seenIds.add(c.id);
@@ -403,6 +412,7 @@ export function useStation({
        */
       filterRef.current = NO_FILTER;
       setFilterState(NO_FILTER);
+      setTags([]);
 
       stationRef.current = {
         seed,
@@ -450,15 +460,25 @@ export function useStation({
     async (next: StationFilter) => {
       // an object, so identity would say "changed" on every click
       if (sameFilter(next, filterRef.current)) return;
+      const genreChanged = next.genre !== filterRef.current.genre;
       filterRef.current = next;
       setFilterState(next);
       if (!stationRef.current.seed) return;
 
       const run = ++buildRef.current;
-      setBusy(next.lyrics === null && !next.clean ? "필터 해제 중…" : "필터 적용 중…");
+      setBusy(isFiltered(next) ? "필터 적용 중" : "필터 해제 중");
       let kept: StationCandidate[] = [];
       try {
-        kept = await keepMatching(queueRef.current, next);
+        /**
+         * A genre change starts the queue over.
+         *
+         * The other tags re-judge what is already queued — the verdicts travel
+         * on the candidates — but nothing on a candidate says which genres it
+         * belongs to, so there is nothing to re-judge against. Keeping the old
+         * list would leave a SHOEGAZE queue full of tracks chosen before the
+         * word meant anything.
+         */
+        kept = genreChanged ? [] : await keepMatching(queueRef.current, next);
         if (run !== buildRef.current) return;
         setQueue(kept);
         queueRef.current = kept;
@@ -475,6 +495,7 @@ export function useStation({
     historyRef.current = [];
     setQueue([]);
     setSeed(null);
+    setTags([]);
     filterRef.current = NO_FILTER;
     setFilterState(NO_FILTER);
   }, []);
@@ -522,6 +543,7 @@ export function useStation({
     setQueue,
     seed,
     seedLabel,
+    tags,
     busy,
     filter,
     setFilter,

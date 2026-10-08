@@ -116,6 +116,7 @@ export async function POST(request: NextRequest) {
     basis,
     need = 10,
     filter = NO_FILTER,
+    wantTags = false,
     seenIds = [],
     seenLfm = [],
   } = (await request.json()) as StationQueueRequest;
@@ -304,7 +305,13 @@ export async function POST(request: NextRequest) {
    */
   async function rungGenre(): Promise<void> {
     const pool: Names = [];
-    for (const tag of (await seedTags()).slice(0, 3)) {
+    /**
+     * A chosen genre replaces the seed's own tags rather than joining them:
+     * picking SHOEGAZE should build a shoegaze queue, not a queue that is one
+     * third shoegaze because two other tags came along.
+     */
+    const tags = filter.genre ? [filter.genre] : (await seedTags()).slice(0, 3);
+    for (const tag of tags) {
       pool.push(...(await tagTopTracks(tag, 30)));
       if (pool.length >= need * NAMES_PER_WANTED) break;
     }
@@ -347,9 +354,11 @@ export async function POST(request: NextRequest) {
    * neighbours are instrumental too, and closer to the seed than any tag pool.
    */
   const ladder =
-    filter.lyrics === "instrumental"
-      ? [rungInstrumental, rungSimilar, rungSeed, rungArtists, rungGenre]
-      : [rungSimilar, rungSeed, rungArtists, rungGenre];
+    filter.genre !== null
+      ? [rungGenre, rungSimilar, rungSeed, rungArtists]
+      : filter.lyrics === "instrumental"
+        ? [rungInstrumental, rungSimilar, rungSeed, rungArtists, rungGenre]
+        : [rungSimilar, rungSeed, rungArtists, rungGenre];
 
   try {
     for (const rung of ladder) {
@@ -360,7 +369,7 @@ export async function POST(request: NextRequest) {
     if (skipped.length) console.warn("[station/queue] skipped", skipped.slice(0, 5));
     // so the next slow build explains itself instead of being guessed at
     console.log(
-      `[station/queue] filter=${isFiltered(filter) ? `${filter.lyrics ?? "-"}${filter.clean ? "+clean" : ""}` : "none"} ` +
+      `[station/queue] filter=${isFiltered(filter) ? `${filter.lyrics ?? "-"}${filter.clean ? "+clean" : ""}${filter.genre ? `+${filter.genre}` : ""}` : "none"} ` +
       `kept=${candidates.length}/${need} ` +
         stages
           .map((st) => `${st.source}:${st.kept}/${st.resolved}/${st.offered}@${st.ms}ms${st.gaveUp ? "(gaveup)" : ""}`)
@@ -369,6 +378,12 @@ export async function POST(request: NextRequest) {
 
     const body: StationQueueResponse = {
       candidates,
+      /**
+       * Only on the first build of a station. The seed does not change while
+       * one runs, so the panel's pills do not either — asking again on every
+       * refill would spend a Last.fm call to be told the same thing.
+       */
+      tags: wantTags ? await seedTags() : [],
       stages,
       exhausted: candidates.length < need,
       lastfmError,

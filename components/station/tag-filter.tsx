@@ -2,6 +2,7 @@
 
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useHydrated } from "@/components/ui/use-hydrated";
+import { LoadingDots } from "@/components/ui/loading-dots";
 import {
   NO_FILTER,
   isFiltered,
@@ -48,6 +49,7 @@ export function TagFilter() {
     setStationFilter,
     stationBusy: busy,
     stationQueue: upcoming,
+    stationTags: genres,
   } = useSpotify();
 
   /**
@@ -60,6 +62,7 @@ export function TagFilter() {
   const stationFilter = hydrated ? selected : NO_FILTER;
   const stationBusy = hydrated ? busy : null;
   const stationQueue = hydrated ? upcoming : NOTHING;
+  const stationTags = hydrated ? genres : NOTHING;
 
   const locked = !stationActive || stationBusy !== null;
   const on = (t: (typeof TAGS)[number]) =>
@@ -111,13 +114,51 @@ export function TagFilter() {
             {t.label}
           </button>
         ))}
+
+        {/* the seed artist's own genres, so a station offers what it is made
+            of rather than a fixed vocabulary. Nothing is shown when Last.fm
+            has no tags for them — an empty slot would say less than nothing */}
+        {stationTags.map((tag) => {
+          const chosen = stationFilter.genre === tag;
+          return (
+            <button
+              key={tag}
+              type="button"
+              aria-pressed={chosen}
+              title={
+                stationActive
+                  ? `${tag} 곡으로 다음 목록 만들기`
+                  : "스테이션을 먼저 시작해 주세요"
+              }
+              disabled={locked}
+              onClick={() =>
+                void setStationFilter({
+                  ...stationFilter,
+                  genre: chosen ? null : tag,
+                })
+              }
+              className={`${PILL} ${
+                chosen
+                  ? "bg-ink text-paper-solid"
+                  : "bg-paper-solid text-ink enabled:hover:bg-gold"
+              }`}
+            >
+              {tag.toUpperCase()}
+            </button>
+          );
+        })}
       </div>
 
-      <p className="w-full shrink-0 text-[9px] leading-[13px] text-on-bright-muted">
+      {/* same measure as the detail screens' 불러오는 중 line, so a wait looks
+          the same wherever it happens */}
+      <p className="flex w-full shrink-0 items-center gap-[8px] text-[10px] leading-[14px] tracking-[0.5px] text-on-bright-muted">
         {!stationActive
           ? "스테이션이 실행 중일 때 사용할 수 있습니다."
           : stationBusy
-            ? stationBusy
+            ? <>
+                {stationBusy}
+                <LoadingDots size={4} label={stationBusy} />
+              </>
             : isFiltered(stationFilter)
               ? `조건에 맞는 ${stationQueue.length}곡 대기 중`
               : `${stationQueue.length}곡 대기 중`}

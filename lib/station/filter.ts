@@ -25,18 +25,28 @@ export type StationFilter = {
   lyrics: LyricsKind;
   /** 19금 제외 — drop what Spotify marks explicit */
   clean: boolean;
+  /**
+   * A Last.fm genre to build from, not a test to pass.
+   *
+   * The other two are answered per track — Spotify sends `explicit`, LRCLIB
+   * answers for lyrics — so they can keep or drop what is already queued. A
+   * genre cannot: nothing on a candidate says which genres it belongs to, and
+   * asking Last.fm would cost a request per artist. So this steers where the
+   * ladder draws from instead, and `matches` below ignores it on purpose.
+   */
+  genre: string | null;
 };
 
 /** Nothing selected. A shared instance, so a reset is identity-stable. */
-export const NO_FILTER: StationFilter = { lyrics: null, clean: false };
+export const NO_FILTER: StationFilter = { lyrics: null, clean: false, genre: null };
 
 /** Whether anything is actually being filtered — 해제 returns here. */
 export function isFiltered(filter: StationFilter): boolean {
-  return filter.lyrics !== null || filter.clean;
+  return filter.lyrics !== null || filter.clean || filter.genre !== null;
 }
 
 export function sameFilter(a: StationFilter, b: StationFilter): boolean {
-  return a.lyrics === b.lyrics && a.clean === b.clean;
+  return a.lyrics === b.lyrics && a.clean === b.clean && a.genre === b.genre;
 }
 
 /** What a candidate has to carry to be judged against a filter. */
@@ -65,7 +75,11 @@ export function matchesClean(explicit: boolean | undefined, clean: boolean): boo
   return explicit === false;
 }
 
-/** Every dimension, cheapest first: `clean` is free, lyrics costs a request. */
+/**
+ * Every dimension a candidate can be judged on, cheapest first: `clean` is
+ * free, lyrics costs a request. `genre` is absent because a candidate carries
+ * no genre to test — it is applied when the queue is built, not filtered.
+ */
 export function matches(track: Judgeable, filter: StationFilter): boolean {
   return (
     matchesClean(track.explicit, filter.clean) &&

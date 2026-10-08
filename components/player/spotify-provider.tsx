@@ -87,6 +87,8 @@ type Ctx = {
   stationSeedTrack: StationSeed | null;
   stationBusy: string | null;
   stationActive: boolean;
+  /** genre tags of the seed artist, for the panel; empty when it has none */
+  stationTags: string[];
   /** the station's tags — changing them rebuilds up-next only */
   stationFilter: StationFilter;
   setStationFilter: (filter: StationFilter) => Promise<void>;
@@ -552,6 +554,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       stationSeedTrack: station.seed,
       stationBusy: station.busy,
       stationActive: station.isActive,
+      stationTags: station.tags,
       stationFilter: station.filter,
       setStationFilter: station.setFilter,
       startStation: async (seed) => {

@@ -39,12 +39,16 @@ export type StationQueueRequest = {
   basis?: { name: string; artist: string };
   need: number;
   filter: StationFilter;
+  /** the seed's genre tags, for the panel — asked for once, not on every refill */
+  wantTags?: boolean;
   seenIds: string[];
   seenLfm: string[];
 };
 
 export type StationQueueResponse = {
   candidates: StationCandidate[];
+  /** genre tags of the seed artist; empty when Last.fm has none for them */
+  tags: string[];
   stages: StationStage[];
   /** true when every rung ran and the queue still came up short */
   exhausted: boolean;
