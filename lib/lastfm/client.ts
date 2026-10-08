@@ -1,4 +1,7 @@
 import { RateLimitedError, lastfmHttp } from "@/lib/http/throttle";
+import { canonicalTag, isGenreTag, isOwnName } from "./tags";
+
+export { canonicalTag, isGenreTag, isOwnName } from "./tags";
 
 const BASE = "https://ws.audioscrobbler.com/2.0/";
 
@@ -97,30 +100,6 @@ function toCandidate(t: Record<string, unknown>): LfmCandidate {
   };
 }
 
-/**
- * Tags that say where a record is from, not what it sounds like.
- *
- * "Korean" is the top tag on The Black Skirts at weight 100, ahead of "indie"
- * (86) and "korean indie" (50). Its top tracks are the most-played Korean songs
- * on Last.fm — Gee, The Boys, Run Devil Run — so a Korean indie seed built a
- * queue of Girls' Generation. Nationality, language, decade and personal
- * shelving tags all fail the same way.
- */
-const NON_GENRE_TAGS = new Set([
-  "korean", "japanese", "chinese", "spanish", "french", "german", "swedish",
-  "british", "american", "english", "uk", "usa", "japan", "korea",
-  "seen live", "favorites", "favourites", "favorite songs", "my favorites",
-  "love", "beautiful", "awesome", "cool", "catchy", "masterpiece",
-  "male vocalists", "female vocalists", "male vocalist", "female vocalist",
-  "60s", "70s", "80s", "90s", "00s", "10s", "20s",
-  "1960s", "1970s", "1980s", "1990s", "2000s", "2010s", "2020s",
-]);
-
-/** True when a tag names a sound rather than an origin or a shelf. */
-export function isGenreTag(tag: string): boolean {
-  return !NON_GENRE_TAGS.has(tag.trim().toLowerCase());
-}
-
 /** Artists Last.fm considers close to this one, strongest first. */
 export async function similarArtists(
   artistName: string,
@@ -205,10 +184,16 @@ export async function artistTopTags(artistName: string, limit = 3): Promise<stri
       endpoint("artist.gettoptags", { artist }),
     );
     if (fatal(data)) return [];
-    const tags = asList(data?.toptags?.tag)
-      .map((t) => String(t.name ?? "").toLowerCase())
-      .filter(Boolean)
-      .filter(isGenreTag);
+    const tags = [
+      ...new Set(
+        asList(data?.toptags?.tag)
+          .map((t) => canonicalTag(String(t.name ?? "")))
+          .filter(Boolean)
+          .filter(isGenreTag)
+          // an artist's own name is not a genre, however many people tag it
+          .filter((t) => !isOwnName(t, artists)),
+      ),
+    ];
     if (tags.length > 0) return tags.slice(0, limit);
   }
   return [];
