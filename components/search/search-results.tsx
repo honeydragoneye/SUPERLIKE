@@ -4,8 +4,10 @@ import Image from "next/image";
 import { clock } from "@/lib/time";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { StationButton, seedFrom } from "@/components/ui/station-button";
+import { LoadingDots } from "@/components/ui/loading-dots";
 import { useSearch, type SearchTab } from "./search-provider";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
 
 const TABS: { key: SearchTab; label: string }[] = [
   { key: "track", label: "곡" },
@@ -32,9 +34,32 @@ function Thumb({ src, size = 32 }: { src: string | null; size?: number }) {
  * whole Discover column — the arrangement from Superlike_V1.2 — search.
  */
 export function SearchResults() {
-  const { query, results, loading, error, tab, setTab, total } = useSearch();
+  const { query, results, loading, error, tab, setTab, total, loadMore, loadingMore, hasMore } =
+    useSearch();
   const router = useRouter();
   const { play } = useSpotify();
+
+  /**
+   * Fetches the next page when the foot of the list comes into view.
+   *
+   * `rootMargin` starts it a screen early so the rows are usually there before
+   * the reader arrives. The guards live in the provider — one request at a
+   * time, and none at all once Spotify has run out — so this only has to
+   * report that the bottom was reached.
+   */
+  const moreRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = moreRef.current;
+    if (!node || !hasMore) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadMore();
+      },
+      { rootMargin: "600px" },
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, [hasMore, loadMore, tab, results]);
 
   const counts: Record<SearchTab, number> = {
     track: results.tracks.length,
@@ -54,7 +79,7 @@ export function SearchResults() {
             {error
               ? error
               : loading
-                ? `"${query}" 검색 중…`
+                ? `"${query}" 검색 중`
                 : `"${query}" · 결과 ${total}건`}
           </p>
         </div>
@@ -241,6 +266,21 @@ export function SearchResults() {
           </ul>
         )}
 
+        {/*
+          The foot of the list, which is both the thing that asks for the next
+          page and the thing that says it is coming. One sentinel rather than a
+          button: the page already scrolls, and a reader who has reached the
+          bottom has said what they want.
+        */}
+        <div ref={moreRef} aria-hidden className="h-px w-full" />
+
+        {(loading || loadingMore) && (
+          <p className="flex items-center justify-center gap-[8px] py-[20px] text-[10px] text-on-bright-muted">
+            {loading ? "검색 중" : "더 불러오는 중"}
+            <LoadingDots size={4} label={loading ? "검색 중" : "더 불러오는 중"} />
+          </p>
+        )}
+
         {!loading && !error && counts[tab] === 0 && (
           <p className="pt-[24px] text-center text-[10px] text-on-bright-muted">
             결과가 없습니다
@@ -248,14 +288,6 @@ export function SearchResults() {
         )}
       </div>
 
-      <div className="flex w-full shrink-0 items-center justify-between whitespace-nowrap">
-        <span className="rounded-pill bg-ink px-[14px] py-[7px] text-[8px] tracking-[0.8px] text-paper-solid">
-          {counts[tab]}건 표시
-        </span>
-        <p className="text-[9px] tracking-[0.6px] text-on-bright-muted">
-          10건씩 표시 · Spotify 검색 상한
-        </p>
-      </div>
     </section>
   );
 }

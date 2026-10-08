@@ -1,3 +1,11 @@
+/**
+ * How many results one search request returns.
+ *
+ * Measured against this app's own credentials: Spotify rejects a limit of 20
+ * and above, so a longer list has to be paged rather than asked for at once.
+ */
+export const SEARCH_PAGE = 10;
+
 export type Track = {
   index: string;
   title: string;

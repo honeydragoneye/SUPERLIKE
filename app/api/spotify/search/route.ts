@@ -7,6 +7,7 @@ import {
   flushToken,
   spotifyGet,
 } from "@/lib/spotify/api";
+import { SEARCH_PAGE } from "@/lib/data";
 import type {
   Playlist,
   SearchAlbum,
@@ -16,7 +17,7 @@ import type {
 } from "@/lib/data";
 
 /** Measured ceiling for this app's credentials: 20 and above are rejected. */
-const MAX_LIMIT = 10;
+const MAX_LIMIT = SEARCH_PAGE;
 
 type Img = { url: string; width: number | null };
 
