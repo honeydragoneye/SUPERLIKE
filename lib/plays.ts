@@ -56,6 +56,7 @@ function weekStart(now: Date): Date {
 let log: Log | null = null;
 let today: Record<string, number> = {};
 let week: Record<string, number> = {};
+let total: Record<string, number> = {};
 const listeners = new Set<() => void>();
 
 const NONE: Record<string, number> = {};
@@ -107,6 +108,11 @@ function fold(current: Log): void {
   const day = current[dayKey(now)];
   today = day ? { ...day } : NONE;
   week = foldSince(current, weekStart(now), now);
+  const all: Record<string, number> = {};
+  for (const counts of Object.values(current)) {
+    for (const [id, n] of Object.entries(counts)) all[id] = (all[id] ?? 0) + n;
+  }
+  total = all;
 }
 
 function ensure(): Log {
@@ -147,6 +153,12 @@ export function todaySnapshot(): Record<string, number> {
 export function weekSnapshot(): Record<string, number> {
   ensure();
   return week;
+}
+
+/** Plays per track id, across every day kept. */
+export function totalSnapshot(): Record<string, number> {
+  ensure();
+  return total;
 }
 
 /** Nothing counted, as far as a server that cannot see this browser is aware. */

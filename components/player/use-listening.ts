@@ -8,6 +8,7 @@ import {
   serverSnapshot as noPlays,
   subscribe as subscribePlays,
   todaySnapshot,
+  totalSnapshot,
   weekSnapshot as weekPlays,
 } from "@/lib/plays";
 import { useSpotify } from "./spotify-provider";
@@ -113,4 +114,9 @@ export function usePlaysToday(): Record<string, number> {
 /** The same, since Monday. */
 export function usePlaysThisWeek(): Record<string, number> {
   return useSyncExternalStore(subscribePlays, weekPlays, noPlays);
+}
+
+/** The same, across every day the store keeps. */
+export function usePlaysTotal(): Record<string, number> {
+  return useSyncExternalStore(subscribePlays, totalSnapshot, noPlays);
 }

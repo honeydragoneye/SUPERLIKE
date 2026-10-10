@@ -40,6 +40,15 @@ export type Playlist = {
   collaborative: boolean;
 };
 
+/** The signed-in account, from /me — what 마이페이지 heads the screen with. */
+export type Profile = {
+  id: string;
+  name: string;
+  avatar: string | null;
+  /** Spotify's own word for the plan: "premium", "free", … */
+  product: string | null;
+};
+
 /** Sleeve colours, cycled when a playlist has no cover art of its own. */
 export const SLEEVE_TONES = ["mint", "gold", "pink", "violet"] as const;
 export type SleeveTone = (typeof SLEEVE_TONES)[number];
