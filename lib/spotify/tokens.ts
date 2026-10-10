@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 import { COOKIE, clientId } from "./config";
 import { spotifyHttp } from "@/lib/http/throttle";
+import { createRefreshOnce } from "./refresh-once";
 
 export type TokenSet = {
   access_token: string;
@@ -93,6 +94,16 @@ export type Resolved =
   /** caller must persist `tokens` onto its response */
   | { status: "refreshed"; accessToken: string; expiresAt: number; tokens: TokenSet };
 
+/**
+ * Held on `globalThis` rather than in module scope: route handlers are bundled
+ * apart, and a copy of this per route would let two routes spend the same
+ * refresh token — the exact collision it exists to prevent.
+ */
+const shared = globalThis as typeof globalThis & {
+  __superlikeRefreshOnce?: ReturnType<typeof createRefreshOnce<TokenSet>>;
+};
+const refreshOnce = (shared.__superlikeRefreshOnce ??= createRefreshOnce<TokenSet>());
+
 /** Current access token, refreshing when it is close to expiry. */
 export async function resolveAccessToken(): Promise<Resolved> {
   const jar = await cookies();
@@ -105,7 +116,7 @@ export async function resolveAccessToken(): Promise<Resolved> {
   }
   if (!refreshToken) return { status: "none" };
 
-  const next = await refresh(refreshToken);
+  const next = await refreshOnce(refreshToken, () => refresh(refreshToken));
   return {
     status: "refreshed",
     accessToken: next.access_token,
