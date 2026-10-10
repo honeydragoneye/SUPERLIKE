@@ -30,6 +30,9 @@ const SDK_SRC = "https://sdk.scdn.co/spotify-player.js";
  */
 const NO_QUEUE: QueueTrack[] = [];
 
+/** How long after a track change the history is re-read. */
+const RECENT_SETTLE_MS = 3_000;
+
 
 export type QueueTrack = {
   uri: string;
@@ -348,6 +351,26 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
   const refreshRecent = useCallback(async () => {
     setRecentNonce((n) => n + 1);
   }, []);
+
+  /**
+   * A track changing means one has just finished, and Spotify writes a play
+   * into the history when it ends — so that is the moment the list goes stale.
+   * It was only ever read on load before, which left a listener looking at the
+   * history as of whenever they last opened the page.
+   *
+   * The wait gives Spotify time to record the play, and doubles as a debounce:
+   * skipping through ten tracks cancels nine of these and asks once.
+   */
+  const lastUriRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!connected) return;
+    const previous = lastUriRef.current;
+    lastUriRef.current = trackUri;
+    // the first track of a session finishes nothing; the load already asked
+    if (previous === null || previous === trackUri) return;
+    const id = setTimeout(() => setRecentNonce((n) => n + 1), RECENT_SETTLE_MS);
+    return () => clearTimeout(id);
+  }, [connected, trackUri]);
 
   useEffect(() => {
     if (!connected) return;
