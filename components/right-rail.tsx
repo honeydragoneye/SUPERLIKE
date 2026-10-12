@@ -26,20 +26,25 @@ function EditorsPick() {
         EDITOR&apos;S PICK
       </p>
       <h2 className="absolute bottom-[60px] left-[14px] whitespace-nowrap text-[32px] font-black leading-[32px] tracking-[-1.2px] text-on-dark">
-        CITY POP
-        <br />
-        REVIVAL
+        <Link href="/editors-pick" className="transition-colors hover:text-pink-bright">
+          CITY POP
+          <br />
+          REVIVAL
+        </Link>
       </h2>
       <p className="absolute bottom-[28px] left-[14px] whitespace-nowrap text-[9px] tracking-[0.3px] text-on-dark-muted">
         42 TRACKS · 2H 18M · 큐레이터 노트 포함
       </p>
-      <button
-        type="button"
-        aria-label="CITY POP REVIVAL 재생"
-        className="absolute bottom-[14px] right-[14px] flex size-[46px] items-center justify-center rounded-pill bg-pink"
+      {/* opens the pick rather than playing it: there is no playlist behind
+          the block yet, so the only honest thing a press can do is go and look */}
+      <Link
+        href="/editors-pick"
+        aria-label="에디터스 픽 열기"
+        title="에디터스 픽 열기"
+        className="absolute bottom-[14px] right-[14px] flex size-[46px] items-center justify-center rounded-pill bg-pink transition-colors hover:bg-gold"
       >
         <Icon name="play-md" size={17} />
-      </button>
+      </Link>
     </section>
   );
 }
@@ -89,7 +94,9 @@ function ArtistOfTheWeek() {
 
       <div className="flex h-[41px] w-full shrink-0 flex-col gap-[2px]">
         <h2 className="whitespace-nowrap text-[21px] font-black leading-[27px] tracking-[-0.7px]">
-          LUNA DRIFT
+          <Link href="/weekly-artist" className="transition-colors hover:text-pink-bright">
+            LUNA DRIFT
+          </Link>
         </h2>
         <p className="w-full text-[9px] leading-[12px] text-muted">
           서울 기반 4인조. 시티팝과 앰비언트를 오간다.

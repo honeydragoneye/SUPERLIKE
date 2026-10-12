@@ -38,9 +38,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const railless =
     pathname.startsWith("/mypage") ||
     pathname.startsWith("/playlist") ||
-    /* the rail is what sent you here: showing STAY CONNECTED beside the
-       signup screen would offer the same button twice */
-    pathname.startsWith("/subscribe");
+    /* the rail is what sent you to these three: showing its block beside the
+       screen it opens would offer the same button twice */
+    pathname.startsWith("/subscribe") ||
+    pathname.startsWith("/editors-pick") ||
+    pathname.startsWith("/weekly-artist");
   const rail = !railless;
   /**
    * Lyrics take a column to the left of the page, next to the player they
