@@ -7,7 +7,10 @@ import {
   isFiltered,
   matchesClean,
   matchesLyrics,
+  matchesMood,
   sameFilter,
+  type LyricsKind,
+  type MoodKey,
   type StationFilter,
 } from "@/lib/station/filter";
 
@@ -50,6 +53,8 @@ export type StationState = {
   seenIds: Set<string>;
   /** Last.fm "name|artist" keys, deduped before the Spotify lookup costs a call */
   seenLfm: Set<string>;
+  /** how far down the chosen genre's chart the queue has got; 1 is the top */
+  genrePage: number;
 };
 
 const emptyState = (): StationState => ({
@@ -57,20 +62,41 @@ const emptyState = (): StationState => ({
   lastPlayed: null,
   seenIds: new Set(),
   seenLfm: new Set(),
+  genrePage: 1,
 });
 
 async function fetchLadder(
   body: Record<string, unknown>,
-): Promise<{ candidates: StationCandidate[]; tags: string[] }> {
+): Promise<{
+  candidates: StationCandidate[];
+  tags: string[];
+  moodError: string | null;
+  moodMs: number;
+  genrePage: number | null;
+}> {
   const res = await fetch("/api/station/queue", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
     cache: "no-store",
   });
-  if (!res.ok) return { candidates: [], tags: [] };
-  const data = (await res.json()) as { candidates?: StationCandidate[]; tags?: string[] };
-  return { candidates: data.candidates ?? [], tags: data.tags ?? [] };
+  if (!res.ok) {
+    return { candidates: [], tags: [], moodError: null, moodMs: 0, genrePage: null };
+  }
+  const data = (await res.json()) as {
+    candidates?: StationCandidate[];
+    tags?: string[];
+    moodError?: string | null;
+    moodMs?: number;
+    genrePage?: number;
+  };
+  return {
+    candidates: data.candidates ?? [],
+    tags: data.tags ?? [],
+    moodError: data.moodError ?? null,
+    moodMs: data.moodMs ?? 0,
+    genrePage: data.genrePage ?? null,
+  };
 }
 
 /**
@@ -84,8 +110,8 @@ async function fetchLadder(
 async function keepMatching(
   tracks: StationCandidate[],
   filter: StationFilter,
-): Promise<StationCandidate[]> {
-  if (tracks.length === 0) return tracks;
+): Promise<{ kept: StationCandidate[]; moodError: string | null; moodMs: number }> {
+  if (tracks.length === 0) return { kept: tracks, moodError: null, moodMs: 0 };
 
   /**
    * 19금 is settled here, for nothing.
@@ -95,7 +121,15 @@ async function keepMatching(
    * below has to ask about.
    */
   const clean = tracks.filter((t) => matchesClean(t.explicit, filter.clean));
-  if (filter.lyrics === null) return clean;
+  return keepMood(await keepLyrics(clean, filter.lyrics), filter.mood);
+}
+
+/** The lyrics tag: one LRCLIB check per track that has never had one. */
+async function keepLyrics(
+  clean: StationCandidate[],
+  kind: LyricsKind,
+): Promise<StationCandidate[]> {
+  if (kind === null || clean.length === 0) return clean;
 
   const judged = clean.filter((t) => t.instrumental !== undefined);
   const unjudged = clean.filter((t) => t.instrumental === undefined);
@@ -112,7 +146,7 @@ async function keepMatching(
           artist: t.artist,
           durationMs: t.durationMs,
         })),
-        filter: filter.lyrics,
+        filter: kind,
       }),
       cache: "no-store",
     });
@@ -128,10 +162,64 @@ async function keepMatching(
     ...judged,
     ...unjudged.map((t) => ({ ...t, instrumental: verdicts.get(t.id) ?? null })),
   ];
-  const order = new Map(tracks.map((t, i) => [t.id, i]));
+  const order = new Map(clean.map((t, i) => [t.id, i]));
   return scored
-    .filter((t) => matchesLyrics(t.instrumental ?? null, filter.lyrics))
+    .filter((t) => matchesLyrics(t.instrumental ?? null, kind))
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+}
+
+/**
+ * The mood tag: one Gemini request for every track that has never had a
+ * verdict, however many there are.
+ *
+ * Where a failed lyrics check keeps the queue, a failed mood check empties it.
+ * LRCLIB failing is a blip on a per-track call; Gemini failing is the whole
+ * batch unanswered, and keeping it would leave a queue labelled 경쾌 that
+ * nobody judged. The error travels back so the panel can say so.
+ */
+async function keepMood(
+  tracks: StationCandidate[],
+  mood: MoodKey | null,
+): Promise<{ kept: StationCandidate[]; moodError: string | null; moodMs: number }> {
+  if (mood === null || tracks.length === 0) {
+    return { kept: tracks, moodError: null, moodMs: 0 };
+  }
+
+  const unjudged = tracks.filter((t) => t.moods === undefined);
+  let verdicts = new Map<string, MoodKey[]>();
+  let moodError: string | null = null;
+  let moodMs = 0;
+  if (unjudged.length) {
+    try {
+      const res = await fetch("/api/station/moods", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tracks: unjudged.map((t) => ({ id: t.id, name: t.name, artist: t.artist })),
+        }),
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const data = (await res.json()) as {
+        results?: { id: string; moods: MoodKey[] }[];
+        ms?: number;
+        error?: string | null;
+      };
+      verdicts = new Map((data.results ?? []).map((r) => [r.id, r.moods]));
+      moodError = data.error ?? null;
+      moodMs = data.ms ?? 0;
+    } catch {
+      moodError = "분위기 판정에 실패했습니다";
+    }
+  }
+
+  // an unanswered track keeps `moods` absent, so the next switch asks again
+  const kept = tracks
+    .map((t) =>
+      t.moods === undefined && verdicts.has(t.id) ? { ...t, moods: verdicts.get(t.id) } : t,
+    )
+    .filter((t) => matchesMood(t.moods, mood));
+  return { kept, moodError, moodMs };
 }
 
 /**
@@ -208,6 +296,10 @@ export function useStation({
   /** the seed artist's genres, for the panel; empty when Last.fm has none */
   const [tags, setTags] = useState<string[]>([]);
   const [filter, setFilterState] = useState<StationFilter>(NO_FILTER);
+  /** why a mood tag has nothing to show, when the reason is Gemini and not the music */
+  const [moodError, setMoodError] = useState<string | null>(null);
+  /** how long the last build waited on Gemini; null when it asked nothing */
+  const [moodMs, setMoodMs] = useState<number | null>(null);
   const filterRef = useRef<StationFilter>(NO_FILTER);
   /**
    * Supersedes in-flight builds.
@@ -229,9 +321,12 @@ export function useStation({
    * `have` is how long the queue is *now*, which only the caller knows: it has
    * just handed the new list to setQueue, and queueRef does not catch up until
    * React commits. Reading the ref here asked for one track too few.
+   *
+   * `waited` is what the caller has already spent on Gemini for this same
+   * change of tags, so the panel reports one wait rather than the last half.
    */
   const fillQueue = useCallback(
-    async (initial: boolean, have: number): Promise<StationCandidate[]> => {
+    async (initial: boolean, have: number, waited = 0): Promise<StationCandidate[]> => {
     const station = stationRef.current;
     if (!station.seed || fillingRef.current) return [];
     fillingRef.current = true;
@@ -242,13 +337,20 @@ export function useStation({
       const basis = initial ? station.seed : (station.lastPlayed ?? station.seed);
       // the ladder lives on the server: one request walks similar -> seed ->
       // genre -> instrumental, stopping as soon as the queue is topped up
-      const { candidates: found, tags: seedGenres } = await fetchLadder({
+      const {
+        candidates: found,
+        tags: seedGenres,
+        moodError: moodFailure,
+        moodMs: asked,
+        genrePage: reached,
+      } = await fetchLadder({
         seed: { id: station.seed.id, name: station.seed.name, artist: station.seed.artist },
         basis: { name: basis.name, artist: basis.artist },
         need: Math.max(1, QUEUE_TARGET - have),
         filter: filterRef.current,
         // the seed does not change while a station runs, so neither do its tags
         wantTags: initial,
+        genrePage: station.genrePage,
         seenIds: [...station.seenIds],
         seenLfm: [...station.seenLfm],
       });
@@ -257,6 +359,9 @@ export function useStation({
       if (run !== buildRef.current) return [];
 
       if (initial) setTags(seedGenres);
+      if (reached !== null) station.genrePage = reached;
+      setMoodError(moodFailure);
+      setMoodMs(waited + asked > 0 ? waited + asked : null);
 
       found.forEach((c) => {
         station.seenIds.add(c.id);
@@ -413,12 +518,15 @@ export function useStation({
       filterRef.current = NO_FILTER;
       setFilterState(NO_FILTER);
       setTags([]);
+      setMoodError(null);
+      setMoodMs(null);
 
       stationRef.current = {
         seed,
         lastPlayed: seed,
         seenIds: new Set([seed.id]),
         seenLfm: new Set(),
+        genrePage: 1,
       };
       setQueue([]);
       historyRef.current = [
@@ -463,11 +571,23 @@ export function useStation({
       const genreChanged = next.genre !== filterRef.current.genre;
       filterRef.current = next;
       setFilterState(next);
+      setMoodError(null);
+      setMoodMs(null);
       if (!stationRef.current.seed) return;
+      /**
+       * Any change of tags starts the genre's chart from the top.
+       *
+       * A new genre plainly does. So does a new mood or lyrics tag: the pages
+       * already walked were walked under the old one, and what it turned away
+       * may be exactly what the new one wants.
+       */
+      stationRef.current.genrePage = 1;
 
       const run = ++buildRef.current;
       setBusy(isFiltered(next) ? "필터 적용 중" : "필터 해제 중");
       let kept: StationCandidate[] = [];
+      let moodFailed = false;
+      let waited = 0;
       try {
         /**
          * A genre change starts the queue over.
@@ -478,14 +598,28 @@ export function useStation({
          * list would leave a SHOEGAZE queue full of tracks chosen before the
          * word meant anything.
          */
-        kept = genreChanged ? [] : await keepMatching(queueRef.current, next);
+        const judged = genreChanged
+          ? { kept: [], moodError: null, moodMs: 0 }
+          : await keepMatching(queueRef.current, next);
         if (run !== buildRef.current) return;
+        kept = judged.kept;
+        moodFailed = judged.moodError !== null;
+        waited = judged.moodMs;
+        setMoodError(judged.moodError);
+        setMoodMs(waited > 0 ? waited : null);
         setQueue(kept);
         queueRef.current = kept;
       } finally {
         if (run === buildRef.current) setBusy(null);
       }
-      if (run === buildRef.current) await fillQueue(false, kept.length);
+      /**
+       * With Gemini down the ladder has nothing to offer either: it would
+       * resolve a batch, be refused the same way, and overwrite this error
+       * with its own after a few seconds of looking busy.
+       */
+      if (run === buildRef.current && !moodFailed) {
+        await fillQueue(false, kept.length, waited);
+      }
     },
     [fillQueue],
   );
@@ -496,6 +630,8 @@ export function useStation({
     setQueue([]);
     setSeed(null);
     setTags([]);
+    setMoodError(null);
+    setMoodMs(null);
     filterRef.current = NO_FILTER;
     setFilterState(NO_FILTER);
   }, []);
@@ -547,6 +683,8 @@ export function useStation({
     busy,
     filter,
     setFilter,
+    moodError,
+    moodMs,
     isActive: seed !== null,
     station: stationRef,
     startStation,

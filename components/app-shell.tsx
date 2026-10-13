@@ -58,7 +58,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useRecordListening();
 
   return (
-    <main className="flex h-screen min-w-[1512px] flex-col overflow-hidden bg-shell p-[20px]">
+    /*
+      Home has a floor, the height of the Figma frame it was drawn in. Its
+      blocks size themselves to the window and show what fits, which works
+      until the window is shorter than the design: the rail's three blocks stop
+      shrinking at their own minimums and the last one was cut off with no way
+      to reach it. Below the floor the shell stops shrinking and the document
+      scrolls instead, the same bargain min-w already makes sideways.
+
+      Only home, because every other screen already scrolls its own column —
+      a floor there would put a scrolling list inside a scrolling page.
+    */
+    <main
+      className={`flex h-screen min-w-[1512px] flex-col overflow-hidden bg-shell p-[20px] ${
+        home ? "min-h-[982px]" : ""
+      }`}
+    >
       <Ticker />
       <div className="h-[8px] shrink-0" aria-hidden />
       <SiteHeader />

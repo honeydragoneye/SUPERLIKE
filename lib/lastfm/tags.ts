@@ -49,6 +49,9 @@ const NON_GENRE_TAGS = new Set([
   // what you do with music, or that it is music at all
   "music", "band", "bands", "artist", "song", "songs", "album", "albums",
   "listen", "check out", "to listen", "listened", "want to listen",
+  // where the artist was seen, not what they sound like: "nickelodeon" came up
+  // as a pill, and picking it builds a queue of that channel's cast
+  "nickelodeon", "disney", "disney channel",
   "60s", "70s", "80s", "90s", "00s", "10s", "20s",
   "1960s", "1970s", "1980s", "1990s", "2000s", "2010s", "2020s",
 ]);

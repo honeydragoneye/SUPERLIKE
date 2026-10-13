@@ -21,6 +21,13 @@ export type ThrottleOptions = {
   timeoutMs?: number;
   /** merged into every request (LRCLIB wants a User-Agent) */
   headers?: Record<string, string>;
+  /**
+   * Pace when requests start, but let them run side by side.
+   *
+   * Off by default: the APIs above count a burst against a rolling window, and
+   * one at a time is what keeps this process under it.
+   */
+  overlap?: boolean;
 };
 
 export class RateLimitedError extends Error {
@@ -53,6 +60,7 @@ export function createThrottled(options: ThrottleOptions) {
     maxRetries = 3,
     timeoutMs = 10_000,
     headers: baseHeaders,
+    overlap = false,
   } = options;
 
   /**
@@ -68,14 +76,14 @@ export function createThrottled(options: ThrottleOptions) {
 
   /** Wait our turn, then start the request. */
   function paced<T>(run: () => Promise<T>): Promise<T> {
-    const result = chain.then(async () => {
+    const started = chain.then(async () => {
       const gap = minGapMs - (Date.now() - lastStart);
       if (gap > 0) await sleep(gap);
       lastStart = Date.now();
-      return run();
     });
+    const result = started.then(run);
     // a failed request must not break the queue for everyone behind it
-    chain = result.catch(() => undefined);
+    chain = overlap ? started : result.catch(() => undefined);
     return result;
   }
 
@@ -158,4 +166,26 @@ export const lrclibHttp = createThrottled({
   retryOn5xx: true,
   maxRetries: 2,
   headers: { "User-Agent": "Superlike/1.0 (graduation project)" },
+});
+/**
+ * Gemini's requests overlap, which the others' do not.
+ *
+ * They went one after the other at first, and on a slow afternoon that was the
+ * whole wait: three requests at 7.9s, 8.5s and 6.7s made a 28 second tag change
+ * of which Spotify and Last.fm were five. The time is Google's time to a first
+ * byte — measured 7–13s to start and 1–3s to finish, with no thinking tokens —
+ * so nothing sent differently shortens one request; only not queueing them
+ * does. The gap still spaces the starts.
+ *
+ * The timeout is long because the answer time is not stable: fifteen tracks
+ * measured 1.3–2.6s one morning and 7–13s the same afternoon, on the same
+ * model, with a two-track request taking as long as a twenty-track one. A
+ * timeout sized for the morning would have failed every request after lunch.
+ */
+export const geminiHttp = createThrottled({
+  minGapMs: 300,
+  retryOn429: true,
+  maxRetries: 2,
+  timeoutMs: 30_000,
+  overlap: true,
 });

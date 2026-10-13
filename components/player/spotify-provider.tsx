@@ -95,6 +95,10 @@ type Ctx = {
   /** the station's tags — changing them rebuilds up-next only */
   stationFilter: StationFilter;
   setStationFilter: (filter: StationFilter) => Promise<void>;
+  /** set when a mood tag is on and Gemini could not judge the queue */
+  stationMoodError: string | null;
+  /** how long the last queue build waited on Gemini, for the panel */
+  stationMoodMs: number | null;
   startStation: (seed: StationSeed) => Promise<void>;
   stopStation: () => void;
   playFromStation: (track: StationCandidate) => Promise<void>;
@@ -580,6 +584,8 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       stationTags: station.tags,
       stationFilter: station.filter,
       setStationFilter: station.setFilter,
+      stationMoodError: station.moodError,
+      stationMoodMs: station.moodMs,
       startStation: async (seed) => {
         /**
          * A station owns shuffle for its whole life, not just once the user

@@ -1,4 +1,4 @@
-import type { StationFilter } from "@/lib/station/filter";
+import type { MoodKey, StationFilter } from "@/lib/station/filter";
 
 /** A queue entry: a Last.fm suggestion already resolved to a playable track. */
 export type StationCandidate = {
@@ -14,18 +14,28 @@ export type StationCandidate = {
   instrumental?: boolean | null;
   /** Spotify's 19금 flag — free with the search that resolved the track */
   explicit?: boolean;
+  /** Gemini's verdict, when one has been given; absent means never answered */
+  moods?: MoodKey[];
 };
 
 /** The rungs of the fallback ladder, in the order they are tried. */
-export type StationSource = "similar" | "seed" | "artists" | "genre" | "instrumental";
+export type StationSource = 
+  | "similar"
+  | "seed"
+  | "artists"
+  | "genre"
+  | "instrumental"
+  | "mood";
 
 export type StationStage = {
   source: StationSource;
   /** Last.fm name pairs this rung offered */
   offered: number;
+  /** under a mood tag, how many Gemini said carry it — the only ones looked up */
+  fits?: number;
   /** of those, how many resolved to a playable Spotify track */
   resolved: number;
-  /** of those, how many survived the lyrics filter */
+  /** of those, how many survived the filter */
   kept: number;
   /** wall time this rung spent */
   ms: number;
@@ -41,6 +51,8 @@ export type StationQueueRequest = {
   filter: StationFilter;
   /** the seed's genre tags, for the panel — asked for once, not on every refill */
   wantTags?: boolean;
+  /** which page of a chosen genre's chart to start from; 1 when absent */
+  genrePage?: number;
   seenIds: string[];
   seenLfm: string[];
 };
@@ -53,4 +65,10 @@ export type StationQueueResponse = {
   /** true when every rung ran and the queue still came up short */
   exhausted: boolean;
   lastfmError: string | null;
+  /** set when a mood tag was on and Gemini could not be asked */
+  moodError: string | null;
+  /** time this build spent waiting on Gemini; 0 without a mood tag */
+  moodMs: number;
+  /** the page of a chosen genre's chart the next build should start from */
+  genrePage: number;
 };

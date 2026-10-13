@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { LoadingDots } from "@/components/ui/loading-dots";
@@ -9,6 +10,7 @@ import {
   type LyricsKind,
   type StationFilter,
 } from "@/lib/station/filter";
+import { MOODS } from "@/lib/station/moods";
 
 /**
  * One flat list rather than a group per dimension.
@@ -35,6 +37,31 @@ const NOTHING: never[] = [];
 const PILL =
   "shrink-0 rounded-pill px-[14px] py-[8px] text-[10px] tracking-[0.6px] transition-colors rule disabled:opacity-40";
 
+/** "7sec" until a minute has passed, "1min 1sec" after. */
+function clock(seconds: number): string {
+  const min = Math.floor(seconds / 60);
+  return min ? `${min}min ${seconds % 60}sec` : `${seconds}sec`;
+}
+
+/**
+ * Time since this was put on screen.
+ *
+ * Mounted for as long as a build is running, so it counts one wait: 필터 적용 중
+ * and the 큐 리필 중 that follows it are the same element and the same clock.
+ */
+function Elapsed() {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const startedAt = Date.now();
+    const timer = setInterval(
+      () => setSeconds(Math.floor((Date.now() - startedAt) / 1000)),
+      250,
+    );
+    return () => clearInterval(timer);
+  }, []);
+  return <span className="tabular-nums">{clock(seconds)}</span>;
+}
+
 /**
  * The station's tags.
  *
@@ -50,6 +77,8 @@ export function TagFilter() {
     stationBusy: busy,
     stationQueue: upcoming,
     stationTags: genres,
+    stationMoodError: moodFailure,
+    stationMoodMs: moodWait,
   } = useSpotify();
 
   /**
@@ -63,6 +92,8 @@ export function TagFilter() {
   const stationBusy = hydrated ? busy : null;
   const stationQueue = hydrated ? upcoming : NOTHING;
   const stationTags = hydrated ? genres : NOTHING;
+  const moodError = hydrated ? moodFailure : null;
+  const moodMs = hydrated ? moodWait : null;
 
   const locked = !stationActive || stationBusy !== null;
   const on = (t: (typeof TAGS)[number]) =>
@@ -115,6 +146,31 @@ export function TagFilter() {
           </button>
         ))}
 
+        {/* one value of one field, like the lyrics pair: picking a mood
+            releases the one that was on */}
+        {MOODS.map((m) => {
+          const chosen = stationFilter.mood === m.key;
+          return (
+            <button
+              key={m.key}
+              type="button"
+              aria-pressed={chosen}
+              title={stationActive ? m.hint : "스테이션을 먼저 시작해 주세요"}
+              disabled={locked}
+              onClick={() =>
+                void setStationFilter({ ...stationFilter, mood: chosen ? null : m.key })
+              }
+              className={`${PILL} ${
+                chosen
+                  ? "bg-ink text-paper-solid"
+                  : "bg-paper-solid text-ink enabled:hover:bg-gold"
+              }`}
+            >
+              {m.label}
+            </button>
+          );
+        })}
+
         {/* the seed artist's own genres, so a station offers what it is made
             of rather than a fixed vocabulary. Nothing is shown when Last.fm
             has no tags for them — an empty slot would say less than nothing */}
@@ -158,6 +214,9 @@ export function TagFilter() {
             ? <>
                 {stationBusy}
                 <LoadingDots size={4} label={stationBusy} />
+                {/* only where the wait can be long: a mood build asks Gemini
+                    and may walk every rung */}
+                {stationFilter.mood !== null && <Elapsed />}
               </>
             : isFiltered(stationFilter)
               ? `조건에 맞는 ${stationQueue.length}곡 대기 중`
@@ -169,6 +228,19 @@ export function TagFilter() {
       {stationActive && stationFilter.lyrics !== null && (
         <p className="w-full shrink-0 text-[8px] leading-[12px] text-on-bright-muted">
           가사 정보를 확인할 수 없는 곡은 제외됩니다.
+        </p>
+      )}
+
+      {/* the one tag that is an estimate: Gemini reads a title and an artist,
+          it does not hear the song. A failure gets its own line, because an
+          empty queue otherwise reads as "nothing here is 경쾌" */}
+      {stationActive && stationFilter.mood !== null && (
+        <p className="w-full shrink-0 text-[8px] leading-[12px] text-on-bright-muted">
+          {moodError
+            ? `${moodError}. 분위기 태그를 껐다가 잠시 후 다시 켜 주세요.`
+            : "분위기는 Gemini가 제목과 아티스트로 추정합니다. 판정하지 못한 곡은 제외됩니다."}
+          {!moodError && !stationBusy && moodMs !== null &&
+            ` 방금 Gemini 응답 대기 ${clock(Math.round(moodMs / 1000))}.`}
         </p>
       )}
     </section>

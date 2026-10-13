@@ -14,6 +14,12 @@ export type LyricsFlag = true | false | null;
 export type LyricsKind = "instrumental" | "lyrics" | null;
 
 /**
+ * The mood tags. One at a time, like the lyrics pair: a queue that is both
+ * 우울·슬픔 and 경쾌 is a queue of nothing.
+ */
+export type MoodKey = "blue" | "upbeat" | "rhythmic";
+
+/**
  * Every tag at once.
  *
  * One field per dimension rather than a list of tag names, so a contradiction
@@ -35,24 +41,49 @@ export type StationFilter = {
    * ladder draws from instead, and `matches` below ignores it on purpose.
    */
   genre: string | null;
+  /**
+   * Gemini's reading of the track, from its title and artist.
+   *
+   * Answered per track like lyrics, so it can re-judge what is already queued —
+   * but it is an estimate where the other two are facts: the model has not
+   * heard the song. See lib/station/moods for what each key means.
+   */
+  mood: MoodKey | null;
 };
 
 /** Nothing selected. A shared instance, so a reset is identity-stable. */
-export const NO_FILTER: StationFilter = { lyrics: null, clean: false, genre: null };
+export const NO_FILTER: StationFilter = {
+  lyrics: null,
+  clean: false,
+  genre: null,
+  mood: null,
+};
 
 /** Whether anything is actually being filtered — 해제 returns here. */
 export function isFiltered(filter: StationFilter): boolean {
-  return filter.lyrics !== null || filter.clean || filter.genre !== null;
+  return (
+    filter.lyrics !== null ||
+    filter.clean ||
+    filter.genre !== null ||
+    filter.mood !== null
+  );
 }
 
 export function sameFilter(a: StationFilter, b: StationFilter): boolean {
-  return a.lyrics === b.lyrics && a.clean === b.clean && a.genre === b.genre;
+  return (
+    a.lyrics === b.lyrics &&
+    a.clean === b.clean &&
+    a.genre === b.genre &&
+    a.mood === b.mood
+  );
 }
 
 /** What a candidate has to carry to be judged against a filter. */
 export type Judgeable = {
   instrumental?: LyricsFlag;
   explicit?: boolean;
+  /** absent until Gemini has answered for this track */
+  moods?: readonly MoodKey[];
 };
 
 /** Unknown never satisfies a filter — absence of data is not evidence. */
@@ -76,13 +107,30 @@ export function matchesClean(explicit: boolean | undefined, clean: boolean): boo
 }
 
 /**
+ * The same rule, for mood.
+ *
+ * No verdict is a no. It matters more here than anywhere: Gemini can be out of
+ * quota or simply not answer, and waving those tracks through would fill a
+ * 경쾌 queue with whatever happened to be asked about during the outage.
+ */
+export function matchesMood(
+  moods: readonly MoodKey[] | undefined,
+  mood: MoodKey | null,
+): boolean {
+  if (mood === null) return true;
+  return moods !== undefined && moods.includes(mood);
+}
+
+/**
  * Every dimension a candidate can be judged on, cheapest first: `clean` is
- * free, lyrics costs a request. `genre` is absent because a candidate carries
- * no genre to test — it is applied when the queue is built, not filtered.
+ * free, lyrics and mood each cost a request. `genre` is absent because a
+ * candidate carries no genre to test — it is applied when the queue is built,
+ * not filtered.
  */
 export function matches(track: Judgeable, filter: StationFilter): boolean {
   return (
     matchesClean(track.explicit, filter.clean) &&
-    matchesLyrics(track.instrumental ?? null, filter.lyrics)
+    matchesLyrics(track.instrumental ?? null, filter.lyrics) &&
+    matchesMood(track.moods, filter.mood)
   );
 }

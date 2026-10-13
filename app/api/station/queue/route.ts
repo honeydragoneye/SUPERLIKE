@@ -4,21 +4,26 @@ import {
   SpotifyApiError,
   findTrack,
   flushToken,
+  type SpotifyTrack,
 } from "@/lib/spotify/api";
 import {
   artistTopTags,
   artistTopTracks,
+  isSharedTag,
   similarArtists,
   similarTracks,
   tagTopTracks,
 } from "@/lib/lastfm/client";
 import { checkInstrumental, type LyricsFlag } from "@/lib/lrclib/client";
+import { judgeMoods } from "@/lib/gemini/moods";
 import {
   NO_FILTER,
   isFiltered,
   matchesClean,
   matchesLyrics,
+  matchesMood,
 } from "@/lib/station/filter";
+import { moodTag } from "@/lib/station/moods";
 import type { Resolved } from "@/lib/spotify/tokens";
 import type {
   StationCandidate,
@@ -51,6 +56,35 @@ const MAX_LOOKUPS = 60;
  * whose neighbours are all vocal stops paying after eight.
  */
 const GIVE_UP_AFTER = 8;
+
+/**
+ * Names Gemini is asked about at a time.
+ *
+ * A mood is judged by the batch, not the track: one request costs about 1.5s
+ * whether it carries one name or twenty — measured 1/1 in 1.2s and 12/12 in
+ * 1.2s — so asking per candidate would rebuild the 가사 없음 wait with a slower
+ * API. Twenty is what one request carries, and names cost nothing to gather, so
+ * there is no reason to send fewer.
+ */
+const MOOD_BATCH = 20;
+
+/**
+ * A chosen genre's chart, taken a page at a time.
+ *
+ * It was the top thirty and nothing after, and a narrow pair of tags used that
+ * up in one build: CHRISTMAS with 우울·슬픔 found six that fit, and the refill
+ * that followed drew all nine of its tracks from rungs that never ask what
+ * genre a song is. The chart goes on for hundreds of places, so the next page
+ * is where a genre queue should look before it looks anywhere else.
+ */
+const GENRE_PAGE = 50;
+/** Pages one build may walk, so a genre nothing fits cannot hold the request open. */
+const GENRE_PAGES_PER_BUILD = 3;
+
+/** Genre pills the panel shows. */
+const PILLS = 5;
+/** Tags fetched to find them, so one that is dropped has a replacement behind it. */
+const TAGS_FETCHED = 8;
 
 /** Candidates to rank in the instrumental rung before falling back to raw order. */
 const RANK_SAMPLE = 10;
@@ -87,6 +121,13 @@ function byMatch(names: Names): Names {
 
 type Names = { name: string; artist: string; match?: number }[];
 
+/** Last.fm's "name|artist", the key a candidate is deduped and judged under. */
+const keyOf = (cand: Names[number]) => `${cand.name}|${cand.artist}`.toLowerCase();
+
+/** A batch of names, as Gemini is asked about them. */
+const asMoodAsk = (batch: Names) =>
+  batch.map((cand) => ({ id: `lfm:${keyOf(cand)}`, name: cand.name, artist: cand.artist }));
+
 /**
  * Candidate supply for the station queue — the fallback ladder.
  *
@@ -100,11 +141,15 @@ type Names = { name: string; artist: string; match?: number }[];
  *                     neighbours on record; nationality tags are excluded
  *   5. instrumental — only under the 가사 없음 filter, because the rungs above
  *                     skew vocal and would otherwise be filtered away to nothing
+ *   6. mood         — only under a mood tag: Last.fm's own mood tags, for a seed
+ *                     whose neighbours do not carry the mood that was asked for
  *
  * Last.fm answers in names only, so each candidate is resolved to a playable
  * Spotify track before it counts; an unresolvable one is dropped. Under a
  * filter, LRCLIB then has the final say, and its "unknown" is a no — the
- * existing rule in matchesFilter.
+ * existing rule in matchesFilter. A mood tag puts Gemini's say first instead,
+ * on the names and by the batch, under the same rule: only what it passes is
+ * looked up at all.
  *
  * The whole ladder runs here rather than in the browser because every hop is
  * paced by this process's throttles. Orchestrating it from the client would
@@ -117,6 +162,7 @@ export async function POST(request: NextRequest) {
     need = 10,
     filter = NO_FILTER,
     wantTags = false,
+    genrePage: genreFrom = 1,
     seenIds = [],
     seenLfm = [],
   } = (await request.json()) as StationQueueRequest;
@@ -133,6 +179,9 @@ export async function POST(request: NextRequest) {
   const stages: StationStage[] = [];
   const skipped: string[] = [];
   let lastfmError: string | null = null;
+  let moodError: string | null = null;
+  let moodMs = 0;
+  let genrePage = Math.max(1, Math.floor(genreFrom) || 1);
   let resolved: Resolved | null = null;
   let lookups = 0;
 
@@ -156,20 +205,28 @@ export async function POST(request: NextRequest) {
     );
 
     let missStreak = 0;
-    for (const cand of names.slice(0, Math.max(0, budget))) {
-      if (candidates.length >= need) break;
-      // this rung is not producing; the next one may
-      if (missStreak >= GIVE_UP_AFTER) {
-        stage.gaveUp = true;
-        break;
-      }
+    /** lookups this rung has spent, against `budget` */
+    let spent = 0;
 
-      const lfmKey = `${cand.name}|${cand.artist}`.toLowerCase();
-      if (lfmSet.has(lfmKey)) continue;
+    /**
+     * One name through Spotify and the tags that need the track itself.
+     *
+     * `true` is kept, `false` is found and turned down by a tag, `null` is a
+     * name that never became a candidate — unresolvable, a repeat, or one more
+     * by an artist who already has their share. Only the first two say anything
+     * about whether the rung is producing.
+     */
+    async function tryName(
+      cand: Names[number],
+      moods?: StationCandidate["moods"],
+    ): Promise<boolean | null> {
+      const lfmKey = keyOf(cand);
+      if (lfmSet.has(lfmKey)) return null;
       lfmSet.add(lfmKey);
 
       lookups += 1;
-      let track = null;
+      spent += 1;
+      let track: SpotifyTrack | null = null;
       try {
         const found = await findTrack(cand.name, cand.artist);
         resolved = found.resolved;
@@ -177,15 +234,15 @@ export async function POST(request: NextRequest) {
       } catch (e) {
         // one unresolvable name must not sink the whole build
         skipped.push(`${cand.name} — ${cand.artist}: ${e instanceof Error ? e.message : "?"}`);
-        continue;
+        return null;
       }
-      if (!track || idSet.has(track.id)) continue;
+      if (!track || idSet.has(track.id)) return null;
 
       const primary = (track.artists[0]?.name ?? cand.artist).toLowerCase();
       const already = candidates.filter(
         (c) => c.artist.split(",")[0].trim().toLowerCase() === primary,
       ).length;
-      if (already >= MAX_PER_ARTIST) continue;
+      if (already >= MAX_PER_ARTIST) return null;
 
       idSet.add(track.id);
       stage.resolved += 1;
@@ -199,10 +256,7 @@ export async function POST(request: NextRequest) {
        * question is only ever asked about tracks that have already survived
        * the cheap one.
        */
-      if (!matchesClean(track.explicit, filter.clean)) {
-        missStreak += 1;
-        continue;
-      }
+      if (!matchesClean(track.explicit, filter.clean)) return false;
 
       // no lyrics tag, no reason to spend an LRCLIB call
       let instrumental: LyricsFlag = null;
@@ -213,13 +267,9 @@ export async function POST(request: NextRequest) {
           track.duration_ms,
           track.id,
         );
-        if (!matchesLyrics(instrumental, filter.lyrics)) {
-          missStreak += 1;
-          continue;
-        }
+        if (!matchesLyrics(instrumental, filter.lyrics)) return false;
       }
 
-      missStreak = 0;
       stage.kept += 1;
       candidates.push({
         id: track.id,
@@ -231,7 +281,76 @@ export async function POST(request: NextRequest) {
         lfmKey,
         explicit: track.explicit,
         instrumental: filter.lyrics === null ? undefined : instrumental,
+        moods,
       });
+      return true;
+    }
+
+    const tally = (outcome: boolean | null) => {
+      if (outcome === true) missStreak = 0;
+      else if (outcome === false) missStreak += 1;
+    };
+
+    if (filter.mood === null) {
+      // the budget is spent on names not yet tried: counting the ones a refill
+      // has already used would stop it short of a page's unoffered tail
+      const fresh = names.filter((cand) => !lfmSet.has(keyOf(cand)));
+      for (const cand of fresh.slice(0, Math.max(0, budget))) {
+        if (candidates.length >= need) break;
+        // this rung is not producing; the next one may
+        if (missStreak >= GIVE_UP_AFTER) {
+          stage.gaveUp = true;
+          break;
+        }
+        tally(await tryName(cand));
+      }
+    } else {
+      /**
+       * Under a mood tag Gemini is asked first, about the names.
+       *
+       * It judges a title and an artist, and Last.fm has already supplied both,
+       * so there is nothing to wait for. Asking after the lookup, as this did,
+       * measured 34 tracks resolved to keep 7 — 18 of a 23 second build spent
+       * finding tracks that were then turned away. Asked first, only the names
+       * that carry the mood cost a Spotify search.
+       */
+      stage.fits = 0;
+      // batches are cut from the list as offered, not from what is left of it,
+      // so the first one is the same twenty names `ahead` already asked about
+      for (let at = 0; at < names.length; at += MOOD_BATCH) {
+        // Gemini is not answering: the next batch would only meet the same no
+        if (candidates.length >= need || moodError || spent >= budget) break;
+        if (missStreak >= GIVE_UP_AFTER) {
+          stage.gaveUp = true;
+          break;
+        }
+
+        const batch = names
+          .slice(at, at + MOOD_BATCH)
+          .filter((cand) => !lfmSet.has(keyOf(cand)));
+        if (!batch.length) continue;
+        const { verdicts, ms, error } = await judgeMoods(asMoodAsk(batch));
+        moodMs += ms;
+        if (error) moodError = error;
+
+        const fits = batch.filter((cand) =>
+          matchesMood(verdicts.get(`lfm:${keyOf(cand)}`), filter.mood),
+        );
+        stage.fits += fits.length;
+        // a batch with nothing in it counts whole: twenty names and not one fit
+        // is a rung looking in the wrong place
+        if (!fits.length) {
+          missStreak += batch.length;
+          continue;
+        }
+        missStreak = 0;
+
+        for (const cand of fits) {
+          if (candidates.length >= need || spent >= budget) break;
+          if (missStreak >= GIVE_UP_AFTER) break;
+          tally(await tryName(cand, verdicts.get(`lfm:${keyOf(cand)}`)));
+        }
+      }
     }
     stage.ms = Date.now() - startedAt;
   }
@@ -242,10 +361,18 @@ export async function POST(request: NextRequest) {
    * Two rungs want them — the genre rung for candidate names, the instrumental
    * rung for ranking — and either can lead now, so neither can own the call.
    */
-  let cachedTags: string[] | null = null;
-  async function seedTags(): Promise<string[]> {
-    if (cachedTags === null) cachedTags = await artistTopTags(seed.artist, 5);
-    return cachedTags;
+  let cachedTags: Promise<string[]> | null = null;
+  // the promise is kept, not the list: the pills ask while a rung may be asking
+  const seedTags = () => (cachedTags ??= artistTopTags(seed.artist, TAGS_FETCHED));
+
+  /** The seed's tags that enough people use to be worth a pill, strongest first. */
+  async function pillTags(): Promise<string[]> {
+    const out: string[] = [];
+    for (const tag of await seedTags()) {
+      if (out.length >= PILLS) break;
+      if (await isSharedTag(tag)) out.push(tag);
+    }
+    return out;
   }
 
   /** Neighbours of whatever played last. */
@@ -275,7 +402,7 @@ export async function POST(request: NextRequest) {
    * data is also far thicker than track-level, which matters for the Korean
    * catalogue where track.getSimilar often comes back empty.
    */
-  async function rungArtists(): Promise<void> {
+  async function gatherArtistNames(): Promise<Names> {
     const neighbours = await similarArtists(seed.artist, ARTISTS_FIRST_PASS);
     const lists: Names[] = [];
     let gathered = 0;
@@ -293,6 +420,34 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < deepest; i++) {
       for (const list of lists) if (list[i]) pool.push(list[i]);
     }
+    return pool;
+  }
+
+  /** Gathered at most once: under a mood tag `ahead` wants the list early. */
+  let artistPool: Promise<Names> | null = null;
+  const artistNames = () => (artistPool ??= gatherArtistNames());
+
+  /**
+   * The artists rung's first Gemini request, sent before the rung is reached.
+   *
+   * Each request waits on Google for as long as it likes — 7 to 8 seconds
+   * apiece when this was measured — and the rungs used to pay that one after
+   * another. Sent while `similar` is still waiting on its own, the two waits
+   * overlap, and by the time the ladder gets here the answer is in the cache.
+   *
+   * When `similar` fills the queue alone this request was not needed. It is
+   * not lost: the neighbours are the seed's, so every refill of this station
+   * offers the same names and finds them already judged.
+   */
+  let ahead: Promise<unknown> | null = null;
+
+  async function rungArtists(): Promise<void> {
+    const pool = await artistNames();
+    if (ahead) {
+      const startedAt = Date.now();
+      await ahead;
+      moodMs += Date.now() - startedAt;
+    }
     await drain("artists", pool);
   }
 
@@ -304,13 +459,31 @@ export async function POST(request: NextRequest) {
    * nationality's top tracks are simply that country's biggest hits.
    */
   async function rungGenre(): Promise<void> {
-    const pool: Names = [];
     /**
      * A chosen genre replaces the seed's own tags rather than joining them:
      * picking SHOEGAZE should build a shoegaze queue, not a queue that is one
      * third shoegaze because two other tags came along.
      */
-    const tags = filter.genre ? [filter.genre] : (await seedTags()).slice(0, 3);
+    if (filter.genre) {
+      for (let walked = 0; walked < GENRE_PAGES_PER_BUILD; walked++) {
+        const names = await tagTopTracks(filter.genre, GENRE_PAGE, genrePage);
+        // the chart has ended; the rungs below are all that is left
+        if (!names.length) return;
+        await drain("genre", names);
+        /**
+         * A page that filled the queue is kept for the next build: what is
+         * left on it has not been offered yet. One that did not is finished —
+         * everything on it was tried or turned away — so the next build starts
+         * past it instead of walking it again to learn the same thing.
+         */
+        if (candidates.length >= need || moodError) return;
+        genrePage += 1;
+      }
+      return;
+    }
+
+    const pool: Names = [];
+    const tags = (await seedTags()).slice(0, 3);
     for (const tag of tags) {
       pool.push(...(await tagTopTracks(tag, 30)));
       if (pool.length >= need * NAMES_PER_WANTED) break;
@@ -320,7 +493,7 @@ export async function POST(request: NextRequest) {
 
   /** The instrumental pool, ranked by how much genre it shares with the seed. */
   async function rungInstrumental(): Promise<void> {
-    const tags = await seedTags();
+    const tags = (await seedTags()).slice(0, PILLS);
     const pool = await tagTopTracks("instrumental", 40);
 
     /**
@@ -340,6 +513,32 @@ export async function POST(request: NextRequest) {
   }
 
   /**
+   * Last.fm's own mood tags, for when the seed's neighbours do not carry the
+   * mood.
+   *
+   * Their top tracks have nothing to do with the seed — "sad" opens with Jeff
+   * Buckley whatever the station was started from — so this is where the queue
+   * comes from only after every rung that knows the seed has been tried. The
+   * tag is a hint about where to look, never the verdict: "dance" is a genre as
+   * much as a mood, and Gemini still answers for each track.
+   */
+  async function rungMood(): Promise<void> {
+    if (filter.mood === null) return;
+    const lists: Names[] = [];
+    for (const tag of moodTag(filter.mood).pools) {
+      const top = await tagTopTracks(tag, 30);
+      if (top.length) lists.push(top);
+    }
+    // interleaved, so one tag's vocabulary does not open the whole queue
+    const pool: Names = [];
+    const deepest = Math.max(0, ...lists.map((l) => l.length));
+    for (let i = 0; i < deepest; i++) {
+      for (const list of lists) if (list[i]) pool.push(list[i]);
+    }
+    await drain("mood", pool);
+  }
+
+  /**
    * The ladder, ordered by what the filter will accept.
    *
    * Under 가사 없음 the instrumental rung leads. Measured on two builds before
@@ -353,27 +552,55 @@ export async function POST(request: NextRequest) {
    * They still follow it rather than being dropped: an instrumental seed's
    * neighbours are instrumental too, and closer to the seed than any tag pool.
    */
-  const ladder =
+  const byFilter =
     filter.genre !== null
       ? [rungGenre, rungSimilar, rungSeed, rungArtists]
       : filter.lyrics === "instrumental"
         ? [rungInstrumental, rungSimilar, rungSeed, rungArtists, rungGenre]
         : [rungSimilar, rungSeed, rungArtists, rungGenre];
+  /**
+   * A mood tag keeps that order and adds its own pool at the end.
+   *
+   * Unlike 가사 없음 the seed's neighbours do not fail a mood wholesale:
+   * measured under 경쾌, one seed's `similar` kept 10 of 12 and another's
+   * `artists` 3 of 7 against the pool's own 3 of 11. Leading with the pool
+   * would trade a station built from this song for the same hundred tracks
+   * every time, to save a rung that now costs one Gemini request to rule out.
+   */
+  const ladder = filter.mood !== null ? [...byFilter, rungMood] : byFilter;
+
+  /**
+   * Started now and collected at the end.
+   *
+   * Vetting costs a Last.fm call per tag the first time one is seen, and the
+   * ladder spends most of its time waiting on Spotify — so the two overlap
+   * instead of the pills adding their second to the end of the build.
+   */
+  const pills: Promise<string[]> = wantTags ? pillTags().catch(() => []) : Promise.resolve([]);
 
   try {
+    if (filter.mood !== null) {
+      ahead = artistNames()
+        .then((pool) => judgeMoods(asMoodAsk(pool.slice(0, MOOD_BATCH))))
+        // it only warms a cache; the rung asks again and reports for itself
+        .catch(() => null);
+    }
+
     for (const rung of ladder) {
-      if (lastfmError || candidates.length >= need) break;
+      if (lastfmError || moodError || candidates.length >= need) break;
       await rung();
     }
 
     if (skipped.length) console.warn("[station/queue] skipped", skipped.slice(0, 5));
     // so the next slow build explains itself instead of being guessed at
     console.log(
-      `[station/queue] filter=${isFiltered(filter) ? `${filter.lyrics ?? "-"}${filter.clean ? "+clean" : ""}${filter.genre ? `+${filter.genre}` : ""}` : "none"} ` +
+      `[station/queue] filter=${isFiltered(filter) ? `${filter.lyrics ?? "-"}${filter.clean ? "+clean" : ""}${filter.genre ? `+${filter.genre}` : ""}${filter.mood ? `+${filter.mood}` : ""}` : "none"} ` +
       `kept=${candidates.length}/${need} ` +
         stages
-          .map((st) => `${st.source}:${st.kept}/${st.resolved}/${st.offered}@${st.ms}ms${st.gaveUp ? "(gaveup)" : ""}`)
-          .join(" "),
+          .map((st) => `${st.source}:${st.kept}/${st.resolved}/${st.fits === undefined ? "" : `${st.fits}fit/`}${st.offered}@${st.ms}ms${st.gaveUp ? "(gaveup)" : ""}`)
+          .join(" ") +
+        (filter.mood ? ` gemini@${moodMs}ms` : "") +
+        (filter.genre ? ` page=${genreFrom}>${genrePage}` : ""),
     );
 
     const body: StationQueueResponse = {
@@ -383,10 +610,13 @@ export async function POST(request: NextRequest) {
        * one runs, so the panel's pills do not either — asking again on every
        * refill would spend a Last.fm call to be told the same thing.
        */
-      tags: wantTags ? await seedTags() : [],
+      tags: await pills,
       stages,
       exhausted: candidates.length < need,
       lastfmError,
+      moodError,
+      moodMs,
+      genrePage,
     };
     return resolved
       ? flushToken(NextResponse.json(body), resolved)

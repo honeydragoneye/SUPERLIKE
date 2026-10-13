@@ -199,10 +199,58 @@ export async function artistTopTags(artistName: string, limit = 3): Promise<stri
   return [];
 }
 
-/** Popular tracks carrying a tag — the genre and "instrumental" pools. */
-export async function tagTopTracks(tag: string, limit = 30): Promise<LfmCandidate[]> {
+/**
+ * How many listeners a tag needs before it is offered as a genre.
+ *
+ * "yuma e maki da jen" came up as a pill: one person's shelf, seven tracks to
+ * its name, and a reach of 0. No list of words would have caught it, and the
+ * next one will be spelled differently. Measured beside it: trot 298, korean
+ * indie 363, city pop 903, slowcore 7,360 — so the floor sits well under the
+ * smallest real genre seen, and only clears out tags nobody else uses.
+ *
+ * It does not catch a tag that is popular and still not a genre —
+ * "nickelodeon" has a reach of 366 — which is what NON_GENRE_TAGS is for.
+ */
+const MIN_TAG_REACH = 100;
+
+/** Reach by tag, for as long as the server runs: "pop" is asked about once. */
+const reachCache = new Map<string, number>();
+
+/**
+ * True when enough people use a tag for it to mean something.
+ *
+ * A lookup that fails says nothing about the tag, so it passes and is not
+ * remembered: hiding SHOEGAZE because Last.fm had a bad second would be a
+ * worse answer than showing one stray pill.
+ */
+export async function isSharedTag(tag: string): Promise<boolean> {
+  const known = reachCache.get(tag);
+  if (known !== undefined) return known >= MIN_TAG_REACH;
+  try {
+    const data = await call<{ tag?: { reach?: unknown } }>(endpoint("tag.getinfo", { tag }));
+    if (data.error || !data.tag) return true;
+    const reach = Number(data.tag.reach) || 0;
+    reachCache.set(tag, reach);
+    return reach >= MIN_TAG_REACH;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Popular tracks carrying a tag — the genre and "instrumental" pools.
+ *
+ * `page` reaches past the first `limit`: measured on "christmas", page 3 of 50
+ * opens with 2000 Miles, Happy Xmas (War Is Over) and Step Into Christmas, so
+ * the chart is still the genre a hundred places down.
+ */
+export async function tagTopTracks(
+  tag: string,
+  limit = 30,
+  page = 1,
+): Promise<LfmCandidate[]> {
   const data = await call<{ tracks?: { track?: unknown } }>(
-    endpoint("tag.gettoptracks", { tag, limit }),
+    endpoint("tag.gettoptracks", { tag, limit, page }),
   );
   if (fatal(data)) return [];
   return asList(data?.tracks?.track)
