@@ -408,6 +408,22 @@ export function useStation({
   }, []);
 
   /**
+   * Takes one track out of what is coming up.
+   *
+   * Its id stays in `seenIds`, so a refill does not hand the same track back:
+   * removing it means "not in this station", not "not right now".
+   */
+  const removeFromQueue = useCallback(
+    (id: string) => {
+      const left = queueRef.current.filter((t) => t.id !== id).length;
+      if (left === queueRef.current.length) return;
+      setQueue((list) => list.filter((t) => t.id !== id));
+      if (left <= REFILL_WHEN) void fillQueue(false, left);
+    },
+    [fillQueue],
+  );
+
+  /**
    * Advance to a specific track, or the head of the queue.
    *
    * Jumping ahead consumes everything before the target too — picking the third
@@ -690,6 +706,7 @@ export function useStation({
     startStation,
     stopStation,
     playFromQueue,
+    removeFromQueue,
     playPrevious,
     shuffleQueue,
     fillQueue,

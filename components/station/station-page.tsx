@@ -8,6 +8,8 @@ import { LoadingDots } from "@/components/ui/loading-dots";
 import { Icon } from "@/components/ui/icon";
 import { clock } from "@/lib/time";
 import { useRouter } from "next/navigation";
+import { useCallback, useState } from "react";
+import { TrackMenu, type TrackMenuTarget } from "./track-menu";
 
 /** One upcoming track. Mirrors 최근 재생 목록's row so the two read as one family. */
 function StationRow({
@@ -15,18 +17,24 @@ function StationRow({
   index,
   playing,
   onPlay,
+  menuOpen,
+  onMore,
 }: {
   track: StationCandidate;
   index: number;
   playing: boolean;
   onPlay: () => void;
+  menuOpen: boolean;
+  onMore: (anchor: HTMLElement) => void;
 }) {
   return (
-    <li className="shrink-0 rule-b">
+    // two buttons side by side: one inside the other is not valid, and a click
+    // on ··· must not also start the track
+    <li className="flex shrink-0 items-center gap-[12px] rule-b">
       <button
         type="button"
         onClick={onPlay}
-        className="flex h-[46px] w-full cursor-pointer items-center gap-[12px] text-left"
+        className="flex h-[46px] min-w-0 flex-1 cursor-pointer items-center gap-[12px] text-left"
       >
         <span className="tnum w-[32px] shrink-0 text-[18px] font-black tracking-[-0.5px]">
           {playing ? (
@@ -60,6 +68,18 @@ function StationRow({
           {clock(track.durationMs)}
         </span>
       </button>
+
+      <button
+        type="button"
+        onClick={(e) => onMore(e.currentTarget)}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-label={`${track.name} 세부 기능`}
+        title="세부 기능"
+        className="flex h-[24px] w-[24px] shrink-0 cursor-pointer items-center justify-center rounded-pill hover:bg-gold aria-expanded:bg-gold"
+      >
+        <Icon name="more" size={14} />
+      </button>
     </li>
   );
 }
@@ -85,9 +105,14 @@ export function StationPage() {
     stationBusy: busy,
     stationActive: running,
     playFromStation,
+    removeFromStation,
     now: playing,
   } = useSpotify();
   const router = useRouter();
+  /** the row whose ··· was pressed; null while the menu is closed */
+  const [menu, setMenu] = useState<TrackMenuTarget | null>(null);
+  // stable, because the menu's listeners are re-attached whenever it changes
+  const closeMenu = useCallback(() => setMenu(null), []);
 
   /**
    * The session, the device and what is playing are the browser's to know, so
@@ -181,6 +206,8 @@ export function StationPage() {
         <span className="w-[32px] shrink-0" />
         <span className="min-w-px flex-1">UP NEXT</span>
         <span className="w-[40px] shrink-0 text-right">TIME</span>
+        {/* the width of a row's ··· button, so TIME stays over its column */}
+        <span className="w-[24px] shrink-0" />
       </div>
 
       {/* hugs its rows: with `flex-1` an empty queue swallowed the rest of the
@@ -194,9 +221,20 @@ export function StationPage() {
             index={i}
             playing={now?.uri === track.uri}
             onPlay={() => void playFromStation(track)}
+            menuOpen={menu?.track.id === track.id}
+            // pressing the same ··· again puts the menu away
+            onMore={(anchor) =>
+              setMenu((open) => (open?.track.id === track.id ? null : { track, anchor }))
+            }
           />
         ))}
       </ul>
+
+      <TrackMenu
+        target={menu}
+        onClose={closeMenu}
+        onRemove={(track) => removeFromStation(track.id)}
+      />
 
       {/* directly under the rows it is about to add, in the same line the
           detail screens use while they wait */}

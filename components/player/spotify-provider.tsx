@@ -102,6 +102,8 @@ type Ctx = {
   startStation: (seed: StationSeed) => Promise<void>;
   stopStation: () => void;
   playFromStation: (track: StationCandidate) => Promise<void>;
+  /** drops one upcoming track; it does not come back while this station runs */
+  removeFromStation: (id: string) => void;
   /** the signed-in user's own playlists and stations */
   playlists: Playlist[];
   playlistTotal: number;
@@ -603,6 +605,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
         station.stopStation();
       },
       playFromStation: station.playFromQueue,
+      removeFromStation: station.removeFromQueue,
       playlists: playlists ?? [],
       playlistTotal,
       playlistsLoaded: connected && playlists !== null,
