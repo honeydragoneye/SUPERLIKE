@@ -2,10 +2,10 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { StationCandidate } from "@/lib/station/types";
+import type { RejectTarget } from "@/lib/station/rejects";
 
 /** Which row's menu is open, and the ··· it hangs from. */
-export type TrackMenuTarget = { track: StationCandidate; anchor: HTMLElement };
+export type TrackMenuTarget = { track: RejectTarget; anchor: HTMLElement };
 
 /** Space kept between the menu and the button, and between it and the window. */
 const GAP = 6;
@@ -28,8 +28,22 @@ function TrashIcon() {
   );
 }
 
+/** "No", in the same weight: a circle struck through. */
+function NotIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden className="shrink-0">
+      <circle cx="7" cy="7" r="4.9" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M3.6 10.4l6.8-6.8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /**
- * What can be done with one upcoming track, hung under its ··· button.
+ * What can be done with one track, hung under its ··· button.
+ *
+ * Each item is offered only by a caller that can carry it out: the station's
+ * rows can be removed, the track playing cannot, and "아님" exists only while a
+ * mood tag is on to be wrong about it.
  *
  * Rendered into <body> and placed by the button's own rectangle: the list sits
  * inside a scrolling column, and a menu positioned within it would be clipped
@@ -42,10 +56,13 @@ export function TrackMenu({
   target,
   onClose,
   onRemove,
+  reject,
 }: {
   target: TrackMenuTarget | null;
   onClose: () => void;
-  onRemove: (track: StationCandidate) => void;
+  onRemove?: (track: RejectTarget) => void;
+  /** the mood tag that is on, and what to do when the listener says it is wrong */
+  reject?: { label: string; onReject: (track: RejectTarget) => void } | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
@@ -107,18 +124,35 @@ export function TrackMenu({
       style={{ left: at?.left ?? 0, top: at?.top ?? 0, visibility: at ? "visible" : "hidden" }}
       className="fixed z-50 flex w-[168px] flex-col gap-[2px] rounded-[6px] bg-paper-solid p-[6px] text-ink shadow-[0_6px_18px_rgba(0,0,0,0.18)] rule"
     >
-      <button
-        type="button"
-        role="menuitem"
-        onClick={() => {
-          onRemove(target.track);
-          onClose();
-        }}
-        className={ITEM}
-      >
-        <TrashIcon />
-        삭제
-      </button>
+      {onRemove && (
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            onRemove(target.track);
+            onClose();
+          }}
+          className={ITEM}
+        >
+          <TrashIcon />
+          삭제
+        </button>
+      )}
+      {reject && (
+        <button
+          type="button"
+          role="menuitem"
+          title={`${reject.label} 태그에서 이 곡을 다시 넣지 않습니다`}
+          onClick={() => {
+            reject.onReject(target.track);
+            onClose();
+          }}
+          className={ITEM}
+        >
+          <NotIcon />
+          {reject.label} 아님
+        </button>
+      )}
     </div>,
     document.body,
   );

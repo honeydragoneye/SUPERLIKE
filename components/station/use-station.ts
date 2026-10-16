@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StationCandidate } from "@/lib/station/types";
 import {
+  isRejected,
+  lfmKeyOf,
+  reject,
+  rejectedFor,
+  type RejectTarget,
+} from "@/lib/station/rejects";
+import {
   NO_FILTER,
   isFiltered,
   matchesClean,
@@ -120,7 +127,12 @@ async function keepMatching(
    * request — and dropping on it first shortens the batch the lyrics check
    * below has to ask about.
    */
-  const clean = tracks.filter((t) => matchesClean(t.explicit, filter.clean));
+  const clean = tracks.filter(
+    (t) =>
+      matchesClean(t.explicit, filter.clean) &&
+      // what the listener already said is not this mood costs no Gemini answer
+      !isRejected(filter.mood, t),
+  );
   return keepMood(await keepLyrics(clean, filter.lyrics), filter.mood);
 }
 
@@ -353,6 +365,7 @@ export function useStation({
         genrePage: station.genrePage,
         seenIds: [...station.seenIds],
         seenLfm: [...station.seenLfm],
+        rejected: rejectedFor(filterRef.current.mood),
       });
 
       // a newer build (a filter change) started while this one was in flight
@@ -486,6 +499,32 @@ export function useStation({
       if (list.length <= REFILL_WHEN) void fillQueue(false, list.length);
     },
     [attempt, fillQueue],
+  );
+
+  /**
+   * "이 곡은 <tag> 아님": remembered for that tag, and out of the way now.
+   *
+   * A queued track leaves the queue; the track playing is skipped, since the
+   * listener has just said it is not what they asked for. With no mood tag on
+   * there is nothing to reject it from, so nothing happens.
+   */
+  const rejectTrack = useCallback(
+    (track: RejectTarget) => {
+      const mood = filterRef.current.mood;
+      if (mood === null) return;
+      // the Last.fm spelling, when the station still has the candidate it came from
+      const known = [...historyRef.current, ...queueRef.current].find((t) => t.id === track.id);
+      reject({
+        mood,
+        id: track.id,
+        lfmKey: track.lfmKey ?? known?.lfmKey ?? lfmKeyOf(track.name, track.artist),
+        title: track.name,
+        artist: track.artist,
+      });
+      if (track.uri === currentUri) void playFromQueue();
+      else removeFromQueue(track.id);
+    },
+    [currentUri, playFromQueue, removeFromQueue],
   );
 
   /** Steps back through what has played, returning the current track to the queue. */
@@ -707,6 +746,7 @@ export function useStation({
     stopStation,
     playFromQueue,
     removeFromQueue,
+    rejectTrack,
     playPrevious,
     shuffleQueue,
     fillQueue,

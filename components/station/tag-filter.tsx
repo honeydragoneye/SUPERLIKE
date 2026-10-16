@@ -10,7 +10,9 @@ import {
   type LyricsKind,
   type StationFilter,
 } from "@/lib/station/filter";
-import { MOODS } from "@/lib/station/moods";
+import { MOODS, moodTag } from "@/lib/station/moods";
+import { clearMood } from "@/lib/station/rejects";
+import { useRejectCount } from "./use-rejects";
 
 /**
  * One flat list rather than a group per dimension.
@@ -94,6 +96,7 @@ export function TagFilter() {
   const stationTags = hydrated ? genres : NOTHING;
   const moodError = hydrated ? moodFailure : null;
   const moodMs = hydrated ? moodWait : null;
+  const rejects = useRejectCount(stationFilter.mood);
 
   const locked = !stationActive || stationBusy !== null;
   const on = (t: (typeof TAGS)[number]) =>
@@ -241,6 +244,22 @@ export function TagFilter() {
             : "분위기는 Gemini가 제목과 아티스트로 추정합니다. 판정하지 못한 곡은 제외됩니다."}
           {!moodError && !stationBusy && moodMs !== null &&
             ` 방금 Gemini 응답 대기 ${clock(Math.round(moodMs / 1000))}.`}
+        </p>
+      )}
+
+      {/* what the listener has overruled Gemini on, and the way back: without
+          it a mistaken 아님 would hide a track from this tag for good */}
+      {stationActive && stationFilter.mood !== null && rejects > 0 && (
+        <p className="flex w-full shrink-0 items-center gap-[8px] text-[8px] leading-[12px] text-on-bright-muted">
+          {`${moodTag(stationFilter.mood).label} 태그에서 제외한 곡 ${rejects}곡`}
+          <button
+            type="button"
+            title="이 태그에서 제외한 곡을 모두 다시 받습니다. 다음 리필부터 적용됩니다"
+            onClick={() => stationFilter.mood && clearMood(stationFilter.mood)}
+            className="cursor-pointer underline underline-offset-2 hover:text-ink"
+          >
+            되돌리기
+          </button>
         </p>
       )}
     </section>

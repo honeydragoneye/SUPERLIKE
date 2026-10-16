@@ -10,6 +10,7 @@ import { clock } from "@/lib/time";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { TrackMenu, type TrackMenuTarget } from "./track-menu";
+import { moodTag } from "@/lib/station/moods";
 
 /** One upcoming track. Mirrors 최근 재생 목록's row so the two read as one family. */
 function StationRow({
@@ -106,6 +107,8 @@ export function StationPage() {
     stationActive: running,
     playFromStation,
     removeFromStation,
+    rejectFromStation,
+    stationFilter,
     now: playing,
   } = useSpotify();
   const router = useRouter();
@@ -234,6 +237,11 @@ export function StationPage() {
         target={menu}
         onClose={closeMenu}
         onRemove={(track) => removeFromStation(track.id)}
+        reject={
+          stationFilter.mood
+            ? { label: moodTag(stationFilter.mood).label, onReject: rejectFromStation }
+            : null
+        }
       />
 
       {/* directly under the rows it is about to add, in the same line the

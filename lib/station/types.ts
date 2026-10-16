@@ -1,4 +1,5 @@
 import type { MoodKey, StationFilter } from "@/lib/station/filter";
+import type { RejectedKeys } from "@/lib/station/rejects";
 
 /** A queue entry: a Last.fm suggestion already resolved to a playable track. */
 export type StationCandidate = {
@@ -55,6 +56,8 @@ export type StationQueueRequest = {
   genrePage?: number;
   seenIds: string[];
   seenLfm: string[];
+  /** tracks the listener rejected under the mood tag that is on; never offered under it */
+  rejected?: RejectedKeys;
 };
 
 export type StationQueueResponse = {

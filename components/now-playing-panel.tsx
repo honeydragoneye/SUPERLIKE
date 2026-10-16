@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useCallback, useState, type MouseEvent } from "react";
 import { Icon, TintedIcon } from "./ui/icon";
 import { QueueItem } from "./ui/queue-item";
 import { usePlaybackPosition, useSpotify } from "./player/spotify-provider";
@@ -11,6 +12,8 @@ import { useRouter } from "next/navigation";
 import { useLyricsView } from "./lyrics/lyrics-view";
 import { clock } from "@/lib/time";
 import type { Track } from "@/lib/data";
+import { moodTag } from "@/lib/station/moods";
+import { TrackMenu, type TrackMenuTarget } from "./station/track-menu";
 
 /** One empty array for every list the panel holds back during hydration. */
 const NOTHING: never[] = [];
@@ -28,7 +31,8 @@ function RoundButton({
   label: string;
   size: number;
   icon: number;
-  onClick?: () => void;
+  /** handed the click, so a menu can hang from the button that opened it */
+  onClick?: (e: MouseEvent<HTMLButtonElement>) => void;
   /** a toggle rather than an action: announced, and tinted while on */
   pressed?: boolean;
   disabled?: boolean;
@@ -74,6 +78,8 @@ export function NowPlayingPanel() {
     stationSeed: seedLabel,
     stopStation,
     playFromStation,
+    stationFilter: filter,
+    rejectFromStation,
     recent: history,
     shuffle: shuffled,
     repeatMode: repeat,
@@ -122,6 +128,23 @@ export function NowPlayingPanel() {
   // used outside the stationActive guard too, so it needs its own gate
   const stationBusy = hydrated ? busy : null;
   const stationSeed = hydrated ? seedLabel : null;
+  const mood = hydrated ? filter.mood : null;
+
+  /**
+   * ··· holds "이 곡은 <mood> 아님" for the track playing, and nothing else yet,
+   * so it only opens while a station runs under a mood tag. Outside that it
+   * stays the inert button it was.
+   */
+  const nowId = now?.uri?.startsWith("spotify:track:") ? now.uri.slice(14) : null;
+  const rejectable = stationActive && mood !== null && nowId !== null && now !== null;
+  const [menu, setMenu] = useState<TrackMenuTarget | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+  const openMenu = (e: MouseEvent<HTMLButtonElement>) => {
+    if (!nowId || !now) return;
+    const track = { id: nowId, uri: now.uri, name: now.title, artist: now.artist };
+    const anchor = e.currentTarget;
+    setMenu((open) => (open ? null : { track, anchor }));
+  };
 
   const likeable = hydrated && likeTrack !== null;
   const likedNow = likeable && liked;
@@ -468,9 +491,23 @@ export function NowPlayingPanel() {
           </button>
           <RoundButton name="plus" label="보관함에 추가" size={30} icon={14} />
           <RoundButton name="share" label="공유" size={30} icon={14} />
-          <RoundButton name="more" label="더 보기" size={30} icon={14} />
+          <RoundButton
+            name="more"
+            label={rejectable ? "세부 기능" : "더 보기"}
+            size={30}
+            icon={14}
+            pressed={rejectable && menu !== null}
+            onClick={rejectable ? openMenu : undefined}
+          />
         </div>
       </div>
+
+      <TrackMenu
+        // closes by itself when the tag goes off, the station stops or the track moves on
+        target={rejectable && menu?.track.id === nowId ? menu : null}
+        onClose={closeMenu}
+        reject={mood ? { label: moodTag(mood).label, onReject: rejectFromStation } : null}
+      />
     </section>
   );
 }

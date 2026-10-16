@@ -8,6 +8,7 @@ import {
 } from "@/components/station/use-station";
 import type { StationCandidate } from "@/lib/station/types";
 import type { StationFilter } from "@/lib/station/filter";
+import type { RejectTarget } from "@/lib/station/rejects";
 import {
   createContext,
   useCallback,
@@ -104,6 +105,8 @@ type Ctx = {
   playFromStation: (track: StationCandidate) => Promise<void>;
   /** drops one upcoming track; it does not come back while this station runs */
   removeFromStation: (id: string) => void;
+  /** "이 곡은 <mood> 아님" under the mood tag that is on; skips it if it is playing */
+  rejectFromStation: (track: RejectTarget) => void;
   /** the signed-in user's own playlists and stations */
   playlists: Playlist[];
   playlistTotal: number;
@@ -606,6 +609,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       },
       playFromStation: station.playFromQueue,
       removeFromStation: station.removeFromQueue,
+      rejectFromStation: station.rejectTrack,
       playlists: playlists ?? [],
       playlistTotal,
       playlistsLoaded: connected && playlists !== null,

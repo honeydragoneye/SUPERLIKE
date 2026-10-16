@@ -165,6 +165,7 @@ export async function POST(request: NextRequest) {
     genrePage: genreFrom = 1,
     seenIds = [],
     seenLfm = [],
+    rejected,
   } = (await request.json()) as StationQueueRequest;
 
   if (!seed?.artist || !seed?.name) {
@@ -172,8 +173,14 @@ export async function POST(request: NextRequest) {
   }
 
   const branch = basis ?? { name: seed.name, artist: seed.artist };
-  const idSet = new Set(seenIds);
-  const lfmSet = new Set(seenLfm.map((k) => k.toLowerCase()));
+  /**
+   * A rejected track is treated as already seen, which every rung and the mood
+   * batches skip before asking anyone — so it costs neither a Gemini answer
+   * nor a Spotify lookup. Only under a mood tag: the rejection was of the tag.
+   */
+  const refused = filter.mood !== null ? rejected : undefined;
+  const idSet = new Set([...seenIds, ...(refused?.ids ?? [])]);
+  const lfmSet = new Set([...seenLfm, ...(refused?.lfm ?? [])].map((k) => k.toLowerCase()));
 
   const candidates: StationCandidate[] = [];
   const stages: StationStage[] = [];
