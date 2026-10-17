@@ -45,7 +45,7 @@ export function RecentlyPlayed() {
   const connected = hydrated && session;
   const recentLive = hydrated && live;
 
-  const [range, setRange] = useState<Range>("TODAY");
+  const [range, setRange] = useState<Range>("THIS WEEK");
   // no stand-in rows: an invented track flashing before the real history lands
   // is worse than an empty list for a beat
   const all = recentLive ? recent : [];
