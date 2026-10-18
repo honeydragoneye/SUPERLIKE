@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { Icon } from "./ui/icon";
+import { useChat } from "./chat/chat-provider";
+import { useHydrated } from "./ui/use-hydrated";
 import { ConnectButton } from "./player/connect-button";
 import { useSearchFocus } from "./search/search-focus";
 
@@ -51,6 +53,34 @@ function IconButton({
   );
 }
 
+/**
+ * Opens and closes the chat column.
+ *
+ * Black with white eyes, a tenth larger than the round controls beside it
+ * (36 → 39.6px): the one control that starts a conversation. The eyes sit low
+ * and to the left of centre on purpose, looking where the pupils look.
+ */
+function ChatButton() {
+  const { open, toggle } = useChat();
+  // the open state is the session's to know, so it stays off until React has matched the server HTML
+  const hydrated = useHydrated();
+  const on = hydrated && open;
+  return (
+    <button
+      type="button"
+      aria-label="챗봇"
+      aria-pressed={on}
+      title={on ? "챗봇 닫기" : "챗봇 열기"}
+      onClick={toggle}
+      className={`relative size-[39.6px] shrink-0 cursor-pointer rounded-pill bg-ink transition-colors hover:bg-pink-bright ${
+        on ? "ring-2 ring-pink-bright ring-offset-2 ring-offset-white" : ""
+      }`}
+    >
+      <Icon name="eyes-white" size={20} className="absolute left-[4.1px] top-[12.8px]" />
+    </button>
+  );
+}
+
 export function SiteHeader() {
   const { focus } = useSearchFocus();
 
@@ -79,7 +109,7 @@ export function SiteHeader() {
       {/* the list, not the switch: liking a track is the Now Playing panel's
           heart, which is beside the track it would act on */}
       <IconButton name="heart-outline" label="좋아요한 음악" href="/mypage" />
-      <IconButton name="queue" label="재생 목록" />
+      <ChatButton />
 
       <ConnectButton />
     </header>

@@ -4,6 +4,7 @@ import { Noto_Sans_KR } from "next/font/google";
 import { SpotifyProvider } from "@/components/player/spotify-provider";
 import { SearchProvider } from "@/components/search/search-provider";
 import { AppShell } from "@/components/app-shell";
+import { ChatProvider } from "@/components/chat/chat-provider";
 import { LyricsViewProvider } from "@/components/lyrics/lyrics-view";
 import { SearchFocusProvider } from "@/components/search/search-focus";
 import "./globals.css";
@@ -34,9 +35,11 @@ export default function RootLayout({
           <Suspense fallback={<div className="h-screen w-full bg-shell" />}>
             <SearchProvider>
               <LyricsViewProvider>
-                <SearchFocusProvider>
-                  <AppShell>{children}</AppShell>
-                </SearchFocusProvider>
+                <ChatProvider>
+                  <SearchFocusProvider>
+                    <AppShell>{children}</AppShell>
+                  </SearchFocusProvider>
+                </ChatProvider>
               </LyricsViewProvider>
             </SearchProvider>
           </Suspense>

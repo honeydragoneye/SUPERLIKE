@@ -9,8 +9,12 @@ import { useRecordListening } from "./player/use-listening";
 import { TagSpace } from "./tag-space";
 import { Ticker } from "./ticker";
 import { TagFilter } from "./station/tag-filter";
+import { ChatPanel } from "./chat/chat-panel";
+import { ChatResizer } from "./chat/chat-resizer";
+import { useChat } from "./chat/chat-provider";
 import { LyricsPanel } from "./lyrics/lyrics-panel";
 import { useLyricsView } from "./lyrics/lyrics-view";
+import { useEffect } from "react";
 
 /**
  * Everything that is not the page.
@@ -50,6 +54,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
    * would leave the page itself too narrow to read.
    */
   const { open: lyricsOpen } = useLyricsView();
+  /**
+   * The chat takes the rail's column, at the width it was dragged to. The
+   * lyrics column and the chat want the same room, so the chat steps aside
+   * while lyrics are up (and opening the chat closes the lyrics).
+   */
+  const { open: chatOpen, width: chatWidth, close: closeChat } = useChat();
+  const chat = chatOpen && !lyricsOpen;
+  useEffect(() => {
+    if (lyricsOpen) closeChat();
+  }, [lyricsOpen, closeChat]);
 
   /**
    * Mounted here, once, because it writes rather than reads: a second copy
@@ -89,9 +103,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           style={{
             gridTemplateColumns: lyricsOpen
               ? "330px minmax(0, 1fr)"
-              : rail
-                ? "minmax(0, 1fr) 330px"
-                : "minmax(0, 1fr)",
+              : chat
+                ? `minmax(0, 1fr) ${chatWidth}px`
+                : rail
+                  ? "minmax(0, 1fr) 330px"
+                  : "minmax(0, 1fr)",
             gridTemplateRows: "76px minmax(0, 1fr)",
           }}
         >
@@ -100,9 +116,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             style={{
               gridColumn: lyricsOpen
                 ? "1 / 3"
-                : home || railless
-                  ? "1 / 2"
-                  : "1 / 3",
+                : chat
+                  ? home
+                    ? "1 / 2"
+                    : "1 / 3"
+                  : home || railless
+                    ? "1 / 2"
+                    : "1 / 3",
               gridRow: "1 / 2",
             }}
           >
@@ -140,7 +160,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           )}
 
-          {rail && !lyricsOpen && (
+          {chat && (
+            <div
+              className="relative min-h-0"
+              style={{ gridColumn: "2 / 3", gridRow: home ? "1 / 3" : "2 / 3" }}
+            >
+              <ChatResizer />
+              <ChatPanel />
+            </div>
+          )}
+
+          {rail && !lyricsOpen && !chat && (
             <div
               className="min-h-0 overflow-hidden"
               style={{ gridColumn: "2 / 3", gridRow: home ? "1 / 3" : "2 / 3" }}
