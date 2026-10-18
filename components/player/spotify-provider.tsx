@@ -1,6 +1,6 @@
 "use client";
 
-import type { Playlist, RecentTrack } from "@/lib/data";
+import type { RecentTrack } from "@/lib/data";
 import {
   useStation,
   type PlayOutcome,
@@ -107,11 +107,6 @@ type Ctx = {
   removeFromStation: (id: string) => void;
   /** "이 곡은 <mood> 아님" under the mood tag that is on; skips it if it is playing */
   rejectFromStation: (track: RejectTarget) => void;
-  /** the signed-in user's own playlists and stations */
-  playlists: Playlist[];
-  playlistTotal: number;
-  playlistsLoaded: boolean;
-  playlistError: string | null;
   error: string | null;
   isPlaying: boolean;
   /** the station skips only on "refused", never on "unavailable" */
@@ -213,9 +208,6 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
   const [repeatMode, setRepeatMode] = useState<0 | 1 | 2>(0);
   const [recent, setRecent] = useState<RecentTrack[] | null>(null);
   const [recentError, setRecentError] = useState<string | null>(null);
-  const [playlists, setPlaylists] = useState<Playlist[] | null>(null);
-  const [playlistTotal, setPlaylistTotal] = useState(0);
-  const [playlistError, setPlaylistError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const playerRef = useRef<Spotify.Player | null>(null);
@@ -407,31 +399,6 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
     };
   }, [connected, recentNonce]);
 
-  useEffect(() => {
-    if (!connected) return;
-    let cancelled = false;
-    (async () => {
-      const res = await fetch("/api/spotify/me/playlists", { cache: "no-store" });
-      if (cancelled) return;
-      if (!res.ok) {
-        setPlaylistError(
-          res.status === 401 || res.status === 403
-            ? "권한 부족 — DISCONNECT 후 다시 연결해 주세요"
-            : "불러오지 못했습니다",
-        );
-        return;
-      }
-      const body = (await res.json()) as { playlists: Playlist[]; total: number };
-      if (cancelled) return;
-      setPlaylists(body.playlists);
-      setPlaylistTotal(body.total);
-      setPlaylistError(null);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [connected]);
-
   const play = useCallback(
     async (opts: PlayOptions = {}): Promise<PlayOutcome> => {
       if (!deviceId) return "unavailable";
@@ -610,10 +577,6 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       playFromStation: station.playFromQueue,
       removeFromStation: station.removeFromQueue,
       rejectFromStation: station.rejectTrack,
-      playlists: playlists ?? [],
-      playlistTotal,
-      playlistsLoaded: connected && playlists !== null,
-      playlistError,
       error,
       play,
       toggle: async () => {
@@ -667,7 +630,6 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
         setQueue(NO_QUEUE);
         setQueueIndex(-1);
         setRecent(null);
-        setPlaylists(null);
         stationOwnsShuffleRef.current = false;
         station.stopStation();
       },
@@ -687,9 +649,6 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       recentError,
       refreshRecent,
       station,
-      playlists,
-      playlistTotal,
-      playlistError,
       error,
       play,
     ],
