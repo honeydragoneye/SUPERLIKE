@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StationCandidate } from "@/lib/station/types";
+import { customSpecFor } from "@/lib/station/custom-tags";
 import {
   isRejected,
   lfmKeyOf,
@@ -197,7 +198,11 @@ async function keepMood(
     return { kept: tracks, moodError: null, moodMs: 0 };
   }
 
-  const unjudged = tracks.filter((t) => t.moods === undefined);
+  const custom = customSpecFor(mood);
+  // a built-in tag's verdict covers every built-in tag; a custom tag's covers itself
+  const judged = (t: StationCandidate) =>
+    custom ? t.customFits?.[custom.key] !== undefined : t.moods !== undefined;
+  const unjudged = tracks.filter((t) => !judged(t));
   let verdicts = new Map<string, MoodKey[]>();
   let moodError: string | null = null;
   let moodMs = 0;
@@ -208,6 +213,7 @@ async function keepMood(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tracks: unjudged.map((t) => ({ id: t.id, name: t.name, artist: t.artist })),
+          custom,
         }),
         cache: "no-store",
       });
@@ -226,6 +232,17 @@ async function keepMood(
   }
 
   // an unanswered track keeps `moods` absent, so the next switch asks again
+  if (custom) {
+    const kept = tracks
+      .map((t) => {
+        const answer = verdicts.get(t.id);
+        return t.customFits?.[custom.key] === undefined && answer
+          ? { ...t, customFits: { ...t.customFits, [custom.key]: answer.includes(custom.key) } }
+          : t;
+      })
+      .filter((t) => t.customFits?.[custom.key] === true);
+    return { kept, moodError, moodMs };
+  }
   const kept = tracks
     .map((t) =>
       t.moods === undefined && verdicts.has(t.id) ? { ...t, moods: verdicts.get(t.id) } : t,
@@ -366,6 +383,7 @@ export function useStation({
         seenIds: [...station.seenIds],
         seenLfm: [...station.seenLfm],
         rejected: rejectedFor(filterRef.current.mood),
+        customMood: customSpecFor(filterRef.current.mood),
       });
 
       // a newer build (a filter change) started while this one was in flight

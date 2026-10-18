@@ -2,6 +2,7 @@ import { RateLimitedError, geminiHttp } from "@/lib/http/throttle";
 import type { MoodKey } from "@/lib/station/filter";
 import {
   MOODS,
+  type CustomMoodSpec,
   moodInstruction,
   moodQuestion,
   parseMoodAnswer,
@@ -51,20 +52,33 @@ export type MoodVerdicts = {
  */
 const cache = new Map<string, MoodKey[]>();
 
-const SCHEMA = {
+/**
+ * A listener's own tag is a separate question with its own answers.
+ *
+ * Keyed by the tag and what it was defined as, so editing a definition cannot
+ * serve the old verdicts, and kept apart from `cache` so the built-in tags'
+ * answers never carry a custom key and nobody else's tag can read them.
+ */
+const customCache = new Map<string, MoodKey[]>();
+const customKey = (c: CustomMoodSpec, id: string) => `${c.key}\u0000${c.definition}\u0000${id}`;
+
+const schemaFor = (custom?: CustomMoodSpec) => ({
   type: "ARRAY",
   items: {
     type: "OBJECT",
     properties: {
       id: { type: "STRING" },
-      tags: { type: "ARRAY", items: { type: "STRING", enum: MOODS.map((m) => m.key) } },
+      tags: {
+        type: "ARRAY",
+        items: { type: "STRING", enum: custom ? [custom.key] : MOODS.map((m) => m.key) },
+      },
     },
     required: ["id", "tags"],
   },
-};
+});
 
 /** One request. Throws for anything that is not an answer. */
-async function ask(tracks: MoodAsk[]): Promise<(MoodKey[] | null)[]> {
+async function ask(tracks: MoodAsk[], custom?: CustomMoodSpec): Promise<(MoodKey[] | null)[]> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY is not set");
 
@@ -72,13 +86,13 @@ async function ask(tracks: MoodAsk[]): Promise<(MoodKey[] | null)[]> {
     method: "POST",
     headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: moodInstruction() }] },
+      systemInstruction: { parts: [{ text: moodInstruction(custom) }] },
       contents: [{ role: "user", parts: [{ text: moodQuestion(tracks) }] }],
       generationConfig: {
         // the same track should get the same answer tomorrow
         temperature: 0,
         responseMimeType: "application/json",
-        responseSchema: SCHEMA,
+        responseSchema: schemaFor(custom),
       },
     }),
   });
@@ -88,7 +102,7 @@ async function ask(tracks: MoodAsk[]): Promise<(MoodKey[] | null)[]> {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
   };
   const text = (body.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("");
-  return parseMoodAnswer(JSON.parse(text), tracks.length);
+  return parseMoodAnswer(JSON.parse(text), tracks.length, custom);
 }
 
 function describe(e: unknown): string {
@@ -107,11 +121,16 @@ function describe(e: unknown): string {
  * matchesMood. The error comes back beside the verdicts so the panel can say
  * why a 경쾌 queue is empty instead of looking as if nothing was 경쾌.
  */
-export async function judgeMoods(tracks: MoodAsk[]): Promise<MoodVerdicts> {
+export async function judgeMoods(
+  tracks: MoodAsk[],
+  custom?: CustomMoodSpec,
+): Promise<MoodVerdicts> {
+  const store = custom ? customCache : cache;
+  const slot = (id: string) => (custom ? customKey(custom, id) : id);
   const verdicts = new Map<string, MoodKey[]>();
   const unasked: MoodAsk[] = [];
   for (const t of tracks) {
-    const known = cache.get(t.id);
+    const known = store.get(slot(t.id));
     if (known) verdicts.set(t.id, known);
     else unasked.push(t);
   }
@@ -122,13 +141,13 @@ export async function judgeMoods(tracks: MoodAsk[]): Promise<MoodVerdicts> {
     const batch = unasked.slice(i, i + MAX_BATCH);
     const startedAt = Date.now();
     try {
-      const answers = await ask(batch);
+      const answers = await ask(batch, custom);
       let answered = 0;
       batch.forEach((t, at) => {
         const moods = answers[at];
         if (!moods) return;
         answered += 1;
-        cache.set(t.id, moods);
+        store.set(slot(t.id), moods);
         verdicts.set(t.id, moods);
       });
       console.log(

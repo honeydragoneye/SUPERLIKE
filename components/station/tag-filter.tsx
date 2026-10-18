@@ -10,8 +10,17 @@ import {
   type LyricsKind,
   type StationFilter,
 } from "@/lib/station/filter";
-import { MOODS, moodTag } from "@/lib/station/moods";
+import {
+  CUSTOM_DEFINITION_MAX,
+  CUSTOM_LABEL_MAX,
+  MAX_CUSTOM_TAGS,
+  addCustomTag,
+  moodLabel,
+  removeCustomTag,
+} from "@/lib/station/custom-tags";
+import { MOODS } from "@/lib/station/moods";
 import { clearMood } from "@/lib/station/rejects";
+import { useCustomTags } from "./use-custom-tags";
 import { useRejectCount } from "./use-rejects";
 
 /**
@@ -97,6 +106,21 @@ export function TagFilter() {
   const moodError = hydrated ? moodFailure : null;
   const moodMs = hydrated ? moodWait : null;
   const rejects = useRejectCount(stationFilter.mood);
+  const custom = useCustomTags();
+
+  // the form that writes a new tag: closed until + is pressed
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [meaning, setMeaning] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const submit = () => {
+    const why = addCustomTag(name, meaning);
+    setFormError(why);
+    if (why) return;
+    setName("");
+    setMeaning("");
+    setAdding(false);
+  };
 
   const locked = !stationActive || stationBusy !== null;
   const on = (t: (typeof TAGS)[number]) =>
@@ -174,6 +198,62 @@ export function TagFilter() {
           );
         })}
 
+        {/* the listener's own tags: the same field as the moods above, so
+            one is picked at a time and Gemini judges it the same way. The ×
+            is a second control beside the pill, not nested in it */}
+        {custom.map((t) => {
+          const chosen = stationFilter.mood === t.key;
+          return (
+            <span key={t.key} className="flex shrink-0 items-stretch">
+              <button
+                type="button"
+                aria-pressed={chosen}
+                title={stationActive ? t.definition : "스테이션을 먼저 시작해 주세요"}
+                disabled={locked}
+                onClick={() =>
+                  void setStationFilter({ ...stationFilter, mood: chosen ? null : t.key })
+                }
+                className={`${PILL} rounded-r-none pr-[8px] ${
+                  chosen
+                    ? "bg-ink text-paper-solid"
+                    : "bg-paper-solid text-ink enabled:hover:bg-gold"
+                }`}
+              >
+                {t.label}
+              </button>
+              <button
+                type="button"
+                aria-label={`${t.label} 태그 삭제`}
+                title="태그 삭제"
+                disabled={stationBusy !== null}
+                onClick={() => {
+                  // a tag that is on cannot outlive its definition
+                  if (chosen) void setStationFilter({ ...stationFilter, mood: null });
+                  removeCustomTag(t.key);
+                }}
+                className={`${PILL} rounded-l-none px-[8px] ${
+                  chosen
+                    ? "bg-ink text-paper-solid"
+                    : "bg-paper-solid text-on-bright-muted enabled:hover:text-ink"
+                }`}
+              >
+                ×
+              </button>
+            </span>
+          );
+        })}
+
+        {custom.length < MAX_CUSTOM_TAGS && !adding && (
+          <button
+            type="button"
+            title={`내 태그 만들기 (${custom.length}/${MAX_CUSTOM_TAGS})`}
+            onClick={() => setAdding(true)}
+            className={`${PILL} bg-transparent text-ink hover:bg-gold`}
+          >
+            + 태그 추가
+          </button>
+        )}
+
         {/* the seed artist's own genres, so a station offers what it is made
             of rather than a fixed vocabulary. Nothing is shown when Last.fm
             has no tags for them — an empty slot would say less than nothing */}
@@ -207,6 +287,52 @@ export function TagFilter() {
           );
         })}
       </div>
+
+      {adding && (
+        <form
+          className="flex w-full shrink-0 flex-col gap-[6px] rounded-[6px] bg-paper-solid p-[10px] rule"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          <input
+            autoFocus
+            value={name}
+            maxLength={CUSTOM_LABEL_MAX}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="태그 이름 (예: 비 오는 날)"
+            aria-label="태그 이름"
+            className="rounded-[4px] bg-transparent px-[8px] py-[6px] text-[10px] tracking-[0.4px] text-ink outline-none rule placeholder:text-on-bright-muted"
+          />
+          <input
+            value={meaning}
+            maxLength={CUSTOM_DEFINITION_MAX}
+            onChange={(e) => setMeaning(e.target.value)}
+            placeholder="어떤 곡인지 한 줄로 (비우면 이름 그대로)"
+            aria-label="태그 설명"
+            className="rounded-[4px] bg-transparent px-[8px] py-[6px] text-[10px] tracking-[0.4px] text-ink outline-none rule placeholder:text-on-bright-muted"
+          />
+          {formError && (
+            <p className="text-[8px] leading-[12px] text-on-bright-muted">{formError}</p>
+          )}
+          <div className="flex gap-[6px]">
+            <button type="submit" className={`${PILL} bg-ink text-paper-solid hover:bg-pink-bright`}>
+              추가
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAdding(false);
+                setFormError(null);
+              }}
+              className={`${PILL} bg-paper-solid text-ink hover:bg-gold`}
+            >
+              취소
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* same measure as the detail screens' 불러오는 중 line, so a wait looks
           the same wherever it happens */}
@@ -251,7 +377,7 @@ export function TagFilter() {
           it a mistaken 아님 would hide a track from this tag for good */}
       {stationActive && stationFilter.mood !== null && rejects > 0 && (
         <p className="flex w-full shrink-0 items-center gap-[8px] text-[8px] leading-[12px] text-on-bright-muted">
-          {`${moodTag(stationFilter.mood).label} 태그에서 제외한 곡 ${rejects}곡`}
+          {`${moodLabel(stationFilter.mood)} 태그에서 제외한 곡 ${rejects}곡`}
           <button
             type="button"
             title="이 태그에서 제외한 곡을 모두 다시 받습니다. 다음 리필부터 적용됩니다"

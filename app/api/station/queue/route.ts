@@ -18,12 +18,13 @@ import { checkInstrumental, type LyricsFlag } from "@/lib/lrclib/client";
 import { judgeMoods } from "@/lib/gemini/moods";
 import {
   NO_FILTER,
+  isCustomMood,
   isFiltered,
   matchesClean,
   matchesLyrics,
   matchesMood,
 } from "@/lib/station/filter";
-import { moodTag } from "@/lib/station/moods";
+import { cleanCustomSpec, moodTag } from "@/lib/station/moods";
 import type { Resolved } from "@/lib/spotify/tokens";
 import type {
   StationCandidate,
@@ -166,10 +167,16 @@ export async function POST(request: NextRequest) {
     seenIds = [],
     seenLfm = [],
     rejected,
+    customMood,
   } = (await request.json()) as StationQueueRequest;
 
   if (!seed?.artist || !seed?.name) {
     return NextResponse.json({ error: "missing_seed" }, { status: 400 });
+  }
+
+  const custom = cleanCustomSpec(customMood);
+  if (isCustomMood(filter.mood ?? null) && custom?.key !== filter.mood) {
+    return NextResponse.json({ error: "missing_custom_mood" }, { status: 400 });
   }
 
   const branch = basis ?? { name: seed.name, artist: seed.artist };
@@ -288,7 +295,9 @@ export async function POST(request: NextRequest) {
         lfmKey,
         explicit: track.explicit,
         instrumental: filter.lyrics === null ? undefined : instrumental,
-        moods,
+        moods: isCustomMood(filter.mood) ? undefined : moods,
+        customFits:
+          isCustomMood(filter.mood) && moods ? { [filter.mood]: moods.includes(filter.mood) } : undefined,
       });
       return true;
     }
@@ -336,7 +345,7 @@ export async function POST(request: NextRequest) {
           .slice(at, at + MOOD_BATCH)
           .filter((cand) => !lfmSet.has(keyOf(cand)));
         if (!batch.length) continue;
-        const { verdicts, ms, error } = await judgeMoods(asMoodAsk(batch));
+        const { verdicts, ms, error } = await judgeMoods(asMoodAsk(batch), custom);
         moodMs += ms;
         if (error) moodError = error;
 
@@ -532,7 +541,8 @@ export async function POST(request: NextRequest) {
   async function rungMood(): Promise<void> {
     if (filter.mood === null) return;
     const lists: Names[] = [];
-    for (const tag of moodTag(filter.mood).pools) {
+    // a listener's own tag has no Last.fm pool: it is only ever a question for Gemini
+    for (const tag of isCustomMood(filter.mood) ? [] : moodTag(filter.mood).pools) {
       const top = await tagTopTracks(tag, 30);
       if (top.length) lists.push(top);
     }
@@ -588,7 +598,7 @@ export async function POST(request: NextRequest) {
   try {
     if (filter.mood !== null) {
       ahead = artistNames()
-        .then((pool) => judgeMoods(asMoodAsk(pool.slice(0, MOOD_BATCH))))
+        .then((pool) => judgeMoods(asMoodAsk(pool.slice(0, MOOD_BATCH)), custom))
         // it only warms a cache; the rung asks again and reports for itself
         .catch(() => null);
     }

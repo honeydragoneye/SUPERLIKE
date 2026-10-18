@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import { useLyricsView } from "./lyrics/lyrics-view";
 import { clock } from "@/lib/time";
 import type { Track } from "@/lib/data";
-import { moodTag } from "@/lib/station/moods";
+import { moodLabel } from "@/lib/station/custom-tags";
 import { TrackMenu, type TrackMenuTarget } from "./station/track-menu";
 
 /** One empty array for every list the panel holds back during hydration. */
@@ -506,7 +506,7 @@ export function NowPlayingPanel() {
         // closes by itself when the tag goes off, the station stops or the track moves on
         target={rejectable && menu?.track.id === nowId ? menu : null}
         onClose={closeMenu}
-        reject={mood ? { label: moodTag(mood).label, onReject: rejectFromStation } : null}
+        reject={mood ? { label: moodLabel(mood), onReject: rejectFromStation } : null}
       />
     </section>
   );

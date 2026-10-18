@@ -10,7 +10,7 @@ import { clock } from "@/lib/time";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { TrackMenu, type TrackMenuTarget } from "./track-menu";
-import { moodTag } from "@/lib/station/moods";
+import { moodLabel } from "@/lib/station/custom-tags";
 
 /** One upcoming track. Mirrors 최근 재생 목록's row so the two read as one family. */
 function StationRow({
@@ -239,7 +239,7 @@ export function StationPage() {
         onRemove={(track) => removeFromStation(track.id)}
         reject={
           stationFilter.mood
-            ? { label: moodTag(stationFilter.mood).label, onReject: rejectFromStation }
+            ? { label: moodLabel(stationFilter.mood), onReject: rejectFromStation }
             : null
         }
       />

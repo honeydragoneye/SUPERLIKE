@@ -17,7 +17,23 @@ export type LyricsKind = "instrumental" | "lyrics" | null;
  * The mood tags. One at a time, like the lyrics pair: a queue that is both
  * 우울·슬픔 and 경쾌 is a queue of nothing.
  */
-export type MoodKey = "blue" | "upbeat" | "rhythmic";
+export type BuiltinMoodKey = "blue" | "upbeat" | "rhythmic";
+
+/**
+ * A tag the listener wrote: "u:" and an id of their own.
+ *
+ * It rides in the same field as the built-in moods, since it is judged the same
+ * way — Gemini reads a title and an artist against a definition. The
+ * definition is not in this key: it lives in the browser and goes to the
+ * server with each request that needs it.
+ */
+export type CustomMoodKey = `u:${string}`;
+
+export type MoodKey = BuiltinMoodKey | CustomMoodKey;
+
+export function isCustomMood(mood: MoodKey | null): mood is CustomMoodKey {
+  return mood !== null && mood.startsWith("u:");
+}
 
 /**
  * Every tag at once.
