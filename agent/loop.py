@@ -18,18 +18,32 @@ from agent.tools import TOOLS, Session, call_tool
 
 MAX_STEPS = 4
 
-SYSTEM_PROMPT = (
+_HEAD = (
     "너는 음악 이야기를 나누는 친절한 AI 어시스턴트다. 자연스러운 대화체로 답한다.\n\n"
     "곡을 추천할 때는 먼저 top_tracks로 실제 곡을 가져온다. tag에는 장르나 나라를 영어로 쓰고 "
     "(한국 노래면 k-indie, korean ballad 등), 사용자가 분위기나 상황까지 말했다면 condition에 "
     "그 전부를 영어 한 문장으로 적는다. 돌려받은 곡이 3곡 미만이면 tag를 바꿔 다시 부른다.\n"
+)
+# 터미널에서는 글이 곡을 보여 주는 유일한 곳이라 목록을 쓰게 한다
+_RULE_LIST = (
     "추천은 돌려받은 곡 중 최대 5곡을 '곡명 - 가수' 목록으로만 보여주고, 곡마다 설명을 "
     "붙이지 않는다 (곡을 듣지 못했으니 내용을 알 수 없다). 마지막에 왜 이 곡들을 골랐는지 "
-    "한두 문장으로 말한다. 돌려받은 곡이 1~2곡뿐이어도 그 곡을 추천하고, 부족하다고 "
-    "미리 포기하지 않는다. 돌려받지 않은 곡은 말하지 않는다.\n\n"
+    "한두 문장으로 말한다. "
+)
+# 화면에서는 도구가 돌려준 곡이 카드로 따로 나오므로, 글이 같은 목록을 되풀이하지 않게 한다
+_RULE_CARDS = (
+    "도구가 돌려준 곡은 화면에 카드로 따로 표시된다. 그래서 답변 글에 곡 목록을 나열하지 않고, "
+    "어떤 기준으로 골랐는지를 한두 문장으로만 말한다. 곡을 듣지 못했으니 곡의 내용을 꾸며 "
+    "쓰지 않는다. "
+)
+_TAIL = (
+    "돌려받은 곡이 1~2곡뿐이어도 그 곡을 추천하고, 부족하다고 미리 포기하지 않는다. "
+    "돌려받지 않은 곡은 말하지 않는다.\n\n"
     "날씨, 시간, 뉴스처럼 네가 알 수 없는 것은 모른다고 짧게 말하고, 음악 이야기로 돌아오도록 "
     "이끈다."
 )
+SYSTEM_PROMPT = _HEAD + _RULE_LIST + _TAIL
+SYSTEM_PROMPT_CARDS = _HEAD + _RULE_CARDS + _TAIL
 
 
 def _mentions_any(text: str, titles: list[str]) -> bool:
@@ -57,7 +71,9 @@ def _chat_stream(messages: list[dict], model: str) -> Iterator[dict]:
                 yield json.loads(raw.decode("utf-8"))
 
 
-def run_agent(history: list[dict], question: str, model: str | None = None) -> Iterator[dict]:
+def run_agent(
+    history: list[dict], question: str, model: str | None = None, cards: bool = False
+) -> Iterator[dict]:
     """이벤트를 하나씩 내보낸다.
 
     {"type": "tool_call", "name", "arguments"} — 모델이 도구를 부르기로 했다
@@ -65,10 +81,13 @@ def run_agent(history: list[dict], question: str, model: str | None = None) -> I
     {"type": "retry", "reason"}                  — 곡을 못 골라서 다시 시킨다 (앞서 나간 글자는 버려도 된다)
     {"type": "token", "data"}                   — 답변 글자 조각
     {"type": "done", "steps"}                   — 끝. steps는 모델을 부른 횟수
+
+    cards=True는 곡을 화면이 카드로 보여 주는 경우다. 글이 곡 이름을 말하지 않으니 "곡을
+    말했는가"로 하는 재시도 검사는 끄고, 글은 기준 설명만 쓰게 한다.
     """
     model = model or os.environ.get("AGENT_MODEL") or config.LOCAL_GENERATION_MODEL
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": SYSTEM_PROMPT_CARDS if cards else SYSTEM_PROMPT},
         *history,
         {"role": "user", "content": question},
     ]
@@ -90,7 +109,7 @@ def run_agent(history: list[dict], question: str, model: str | None = None) -> I
         if not calls:
             # 곡 목록을 받아 놓고 곡 하나 고르지 않은 채 끝내려는 경우: "다시 찾아볼게요"만
             # 말하고 멈추는 작은 모델의 버릇이라, 한 번 더 시킨다.
-            if seen_titles and step < MAX_STEPS and not _mentions_any(content, seen_titles):
+            if not cards and seen_titles and step < MAX_STEPS and not _mentions_any(content, seen_titles):
                 yield {"type": "retry", "reason": "추천한 곡이 없어 다시 시도"}
                 messages.append({"role": "assistant", "content": content})
                 messages.append(
