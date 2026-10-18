@@ -19,7 +19,8 @@ export type StationCandidate = {
   /** Gemini's verdict, when one has been given; absent means never answered */
   moods?: MoodKey[];
   /**
-   * Gemini's yes or no for a listener's own tag, by its key.
+   * Gemini's yes or no for a listener's own tag, by `customFitKey` — the tag and
+   * the definition it was judged by, so a tag that was redefined is asked again.
    *
    * Apart from `moods` because that field is every built-in tag at once and
    * stays true whichever one is on; this answer is about one tag and says

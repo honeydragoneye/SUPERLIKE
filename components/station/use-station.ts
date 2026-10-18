@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StationCandidate } from "@/lib/station/types";
 import { customSpecFor } from "@/lib/station/custom-tags";
+import { customFitKey } from "@/lib/station/moods";
 import {
   isRejected,
   lfmKeyOf,
@@ -201,7 +202,7 @@ async function keepMood(
   const custom = customSpecFor(mood);
   // a built-in tag's verdict covers every built-in tag; a custom tag's covers itself
   const judged = (t: StationCandidate) =>
-    custom ? t.customFits?.[custom.key] !== undefined : t.moods !== undefined;
+    custom ? t.customFits?.[customFitKey(custom)] !== undefined : t.moods !== undefined;
   const unjudged = tracks.filter((t) => !judged(t));
   let verdicts = new Map<string, MoodKey[]>();
   let moodError: string | null = null;
@@ -236,11 +237,11 @@ async function keepMood(
     const kept = tracks
       .map((t) => {
         const answer = verdicts.get(t.id);
-        return t.customFits?.[custom.key] === undefined && answer
-          ? { ...t, customFits: { ...t.customFits, [custom.key]: answer.includes(custom.key) } }
+        return t.customFits?.[customFitKey(custom)] === undefined && answer
+          ? { ...t, customFits: { ...t.customFits, [customFitKey(custom)]: answer.includes(custom.key) } }
           : t;
       })
-      .filter((t) => t.customFits?.[custom.key] === true);
+      .filter((t) => t.customFits?.[customFitKey(custom)] === true);
     return { kept, moodError, moodMs };
   }
   const kept = tracks

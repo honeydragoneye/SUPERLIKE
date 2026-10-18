@@ -101,6 +101,20 @@ export function addCustomTag(label: string, definition: string): string | null {
   return null;
 }
 
+/**
+ * Gives a tag a new definition — what the chat does once the listener agrees to
+ * one. The name stays; the key stays, so a tag that is switched on stays on.
+ * null when changed, otherwise why it was not.
+ */
+export function updateCustomDefinition(key: CustomMoodKey, definition: string): string | null {
+  const d = flat(definition, CUSTOM_DEFINITION_MAX);
+  if (!d) return "정의가 비어 있습니다";
+  const tags = ensure();
+  if (!tags.some((t) => t.key === key)) return "없는 태그입니다";
+  persist(tags.map((t) => (t.key === key ? { ...t, definition: d } : t)));
+  return null;
+}
+
 export function removeCustomTag(key: CustomMoodKey): void {
   persist(ensure().filter((t) => t.key !== key));
 }

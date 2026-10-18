@@ -33,6 +33,13 @@
   --color-lime-soft: #e4fb8a;
   --color-chart: #f4f9f9;
   --color-sky: #54bdff;
+  /* the listener's own tags: the same pill as the others, in a diluted blue so
+     they read as theirs without being a second design */
+  --color-tag-blue: #c4d6ee;
+  /* what a press leaves on each kind of tag: the same colour, a shade down */
+  --color-tag-blue-press: #aec7e8;
+  --color-paper-press: #ebe8dc;
+  --color-gold-press: rgba(238, 188, 40, 0.86);
   --color-alert: #ff383c;
   --color-shell: #ffffff;
 

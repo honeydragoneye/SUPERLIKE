@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useHydrated } from "@/components/ui/use-hydrated";
+import { Icon } from "@/components/ui/icon";
 import { LoadingDots } from "@/components/ui/loading-dots";
+import { useChat } from "@/components/chat/chat-provider";
 import {
   NO_FILTER,
   isFiltered,
@@ -20,6 +22,7 @@ import {
 } from "@/lib/station/custom-tags";
 import { MOODS } from "@/lib/station/moods";
 import { clearMood } from "@/lib/station/rejects";
+import { TagMenu, type TagMenuTarget } from "./tag-menu";
 import { useCustomTags } from "./use-custom-tags";
 import { useRejectCount } from "./use-rejects";
 
@@ -44,6 +47,24 @@ const LYRICS_OF: Record<string, LyricsKind> = {
 
 /** One empty array, so a blank render costs no re-render. */
 const NOTHING: never[] = [];
+
+/**
+ * Three kinds of tag, told apart by colour.
+ *
+ * - basic: what is looked up rather than guessed — lyrics (LRCLIB), 19금
+ *   (Spotify) — and the genres Last.fm gives the seed. The panel's own cream.
+ * - mood: Gemini's estimates, in the gold the other tags used to turn on hover.
+ * - custom: the listener's own, a diluted blue. Its press shade is added where
+ *   it is used, because a tag that is locked must not answer a press.
+ *
+ * None of them changes on hover: a press is the only thing that darkens one.
+ */
+const KIND = {
+  basic: "bg-paper-solid text-ink enabled:active:bg-paper-press",
+  mood: "bg-gold text-ink enabled:active:bg-gold-press",
+  custom: "bg-tag-blue text-ink",
+} as const;
+const ON = "bg-ink text-paper-solid";
 
 const PILL =
   "shrink-0 rounded-pill px-[14px] py-[8px] text-[10px] tracking-[0.6px] transition-colors rule disabled:opacity-40";
@@ -107,6 +128,11 @@ export function TagFilter() {
   const moodMs = hydrated ? moodWait : null;
   const rejects = useRejectCount(stationFilter.mood);
   const custom = useCustomTags();
+  const { openRefine } = useChat();
+  // the right-click menu of one of the listener's own tags
+  const [menu, setMenu] = useState<TagMenuTarget | null>(null);
+  // the listener's own tag that is on, if one is: the one the chat can settle the meaning of
+  const selectedCustom = hydrated ? custom.find((t) => t.key === selected.mood) : undefined;
 
   // the form that writes a new tag: closed until + is pressed
   const [adding, setAdding] = useState(false);
@@ -141,151 +167,137 @@ export function TagFilter() {
         </p>
       </div>
 
-      <div className="flex w-full shrink-0 flex-wrap gap-[6px]">
-        {/* an action, not a tag: it holds no value, it returns them all to none */}
-        <button
-          type="button"
-          title={
-            stationActive ? "선택한 태그 모두 끄기" : "스테이션을 먼저 시작해 주세요"
-          }
-          disabled={locked || !isFiltered(stationFilter)}
-          onClick={() => void setStationFilter(NO_FILTER)}
-          className={`${PILL} bg-ink text-paper-solid enabled:hover:bg-pink-bright`}
-        >
-          해제
-        </button>
-
-        {TAGS.map((t) => (
+      <div className="flex w-full shrink-0 flex-col gap-[6px]">
+        {/* Basic: what is looked up (LRCLIB, Spotify) and the genres Last.fm gives
+            the seed — one cream group, so a genre sits beside the lyrics tags and
+            not on the far side of Gemini's gold */}
+        <div className="flex flex-wrap gap-[6px]">
+          {/* an action, not a tag: it holds no value, it returns them all to none */}
           <button
-            key={t.label}
             type="button"
-            aria-pressed={on(t)}
-            title={stationActive ? t.hint : "스테이션을 먼저 시작해 주세요"}
-            disabled={locked}
-            onClick={() => void setStationFilter(toggle(t))}
-            className={`${PILL} ${
-              on(t)
-                ? "bg-ink text-paper-solid"
-                : "bg-paper-solid text-ink enabled:hover:bg-gold"
-            }`}
+            title={
+              stationActive ? "선택한 태그 모두 끄기" : "스테이션을 먼저 시작해 주세요"
+            }
+            disabled={locked || !isFiltered(stationFilter)}
+            onClick={() => void setStationFilter(NO_FILTER)}
+            className={`${PILL} bg-ink text-paper-solid enabled:hover:bg-pink-bright`}
           >
-            {t.label}
+            해제
           </button>
-        ))}
 
-        {/* one value of one field, like the lyrics pair: picking a mood
-            releases the one that was on */}
-        {MOODS.map((m) => {
-          const chosen = stationFilter.mood === m.key;
-          return (
+          {TAGS.map((t) => (
             <button
-              key={m.key}
+              key={t.label}
               type="button"
-              aria-pressed={chosen}
-              title={stationActive ? m.hint : "스테이션을 먼저 시작해 주세요"}
+              aria-pressed={on(t)}
+              title={stationActive ? t.hint : "스테이션을 먼저 시작해 주세요"}
               disabled={locked}
-              onClick={() =>
-                void setStationFilter({ ...stationFilter, mood: chosen ? null : m.key })
-              }
-              className={`${PILL} ${
-                chosen
-                  ? "bg-ink text-paper-solid"
-                  : "bg-paper-solid text-ink enabled:hover:bg-gold"
-              }`}
+              onClick={() => void setStationFilter(toggle(t))}
+              className={`${PILL} ${on(t) ? ON : KIND.basic}`}
             >
-              {m.label}
+              {t.label}
             </button>
-          );
-        })}
+          ))}
 
-        {/* the listener's own tags: the same field as the moods above, so
-            one is picked at a time and Gemini judges it the same way. The ×
-            is a second control beside the pill, not nested in it */}
-        {custom.map((t) => {
-          const chosen = stationFilter.mood === t.key;
-          return (
-            <span key={t.key} className="flex shrink-0 items-stretch">
+          {/* the seed artist's own genres, so a station offers what it is made
+              of rather than a fixed vocabulary. Nothing is shown when Last.fm
+              has no tags for them — an empty slot would say less than nothing */}
+          {stationTags.map((tag) => {
+            const chosen = stationFilter.genre === tag;
+            return (
               <button
+                key={tag}
                 type="button"
                 aria-pressed={chosen}
-                title={stationActive ? t.definition : "스테이션을 먼저 시작해 주세요"}
+                title={
+                  stationActive
+                    ? `${tag} 곡으로 다음 목록 만들기`
+                    : "스테이션을 먼저 시작해 주세요"
+                }
                 disabled={locked}
                 onClick={() =>
-                  void setStationFilter({ ...stationFilter, mood: chosen ? null : t.key })
+                  void setStationFilter({
+                    ...stationFilter,
+                    genre: chosen ? null : tag,
+                  })
                 }
-                className={`${PILL} rounded-r-none pr-[8px] ${
-                  chosen
-                    ? "bg-ink text-paper-solid"
-                    : "bg-paper-solid text-ink enabled:hover:bg-gold"
-                }`}
+                className={`${PILL} ${chosen ? ON : KIND.basic}`}
+              >
+                {tag.toUpperCase()}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Gemini's estimates: the golds */}
+        <div className="flex flex-wrap gap-[6px]">
+          {/* one value of one field, like the lyrics pair: picking a mood
+              releases the one that was on */}
+          {MOODS.map((m) => {
+            const chosen = stationFilter.mood === m.key;
+            return (
+              <button
+                key={m.key}
+                type="button"
+                aria-pressed={chosen}
+                title={stationActive ? m.hint : "스테이션을 먼저 시작해 주세요"}
+                disabled={locked}
+                onClick={() =>
+                  void setStationFilter({ ...stationFilter, mood: chosen ? null : m.key })
+                }
+                className={`${PILL} ${chosen ? ON : KIND.mood}`}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* the listener's own, last: the blues, and the way to add another */}
+        <div className="flex flex-wrap gap-[6px]">
+          {/* the listener's own tags: the same field as the moods above, so
+              one is picked at a time and Gemini judges it the same way. The ×
+              is a second control beside the pill, not nested in it */}
+          {custom.map((t) => {
+            const chosen = stationFilter.mood === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                aria-pressed={chosen}
+                // not `disabled`: a disabled button swallows the right-click, and a tag
+                // can be deleted whether or not a station is running
+                aria-disabled={locked || undefined}
+                title={`${stationActive ? t.definition : "스테이션을 먼저 시작해 주세요"}\n오른쪽 클릭: 삭제`}
+                onClick={() => {
+                  if (locked) return;
+                  void setStationFilter({ ...stationFilter, mood: chosen ? null : t.key });
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMenu({ key: t.key, label: t.label, x: e.clientX, y: e.clientY });
+                }}
+                className={`${PILL} aria-disabled:opacity-40 ${
+                  chosen ? ON : `${KIND.custom} ${locked ? "" : "active:bg-tag-blue-press"}`
+                } ${locked ? "cursor-default" : "cursor-pointer"}`}
               >
                 {t.label}
               </button>
-              <button
-                type="button"
-                aria-label={`${t.label} 태그 삭제`}
-                title="태그 삭제"
-                disabled={stationBusy !== null}
-                onClick={() => {
-                  // a tag that is on cannot outlive its definition
-                  if (chosen) void setStationFilter({ ...stationFilter, mood: null });
-                  removeCustomTag(t.key);
-                }}
-                className={`${PILL} rounded-l-none px-[8px] ${
-                  chosen
-                    ? "bg-ink text-paper-solid"
-                    : "bg-paper-solid text-on-bright-muted enabled:hover:text-ink"
-                }`}
-              >
-                ×
-              </button>
-            </span>
-          );
-        })}
+            );
+          })}
 
-        {custom.length < MAX_CUSTOM_TAGS && !adding && (
-          <button
-            type="button"
-            title={`내 태그 만들기 (${custom.length}/${MAX_CUSTOM_TAGS})`}
-            onClick={() => setAdding(true)}
-            className={`${PILL} bg-transparent text-ink hover:bg-gold`}
-          >
-            + 태그 추가
-          </button>
-        )}
-
-        {/* the seed artist's own genres, so a station offers what it is made
-            of rather than a fixed vocabulary. Nothing is shown when Last.fm
-            has no tags for them — an empty slot would say less than nothing */}
-        {stationTags.map((tag) => {
-          const chosen = stationFilter.genre === tag;
-          return (
+          {custom.length < MAX_CUSTOM_TAGS && !adding && (
             <button
-              key={tag}
               type="button"
-              aria-pressed={chosen}
-              title={
-                stationActive
-                  ? `${tag} 곡으로 다음 목록 만들기`
-                  : "스테이션을 먼저 시작해 주세요"
-              }
-              disabled={locked}
-              onClick={() =>
-                void setStationFilter({
-                  ...stationFilter,
-                  genre: chosen ? null : tag,
-                })
-              }
-              className={`${PILL} ${
-                chosen
-                  ? "bg-ink text-paper-solid"
-                  : "bg-paper-solid text-ink enabled:hover:bg-gold"
-              }`}
+              title={`내 태그 만들기 (${custom.length}/${MAX_CUSTOM_TAGS})`}
+              onClick={() => setAdding(true)}
+              className={`${PILL} bg-transparent text-ink active:bg-black/10`}
             >
-              {tag.toUpperCase()}
+              + 태그 추가
             </button>
-          );
-        })}
+          )}
+        </div>
+
       </div>
 
       {adding && (
@@ -326,7 +338,7 @@ export function TagFilter() {
                 setAdding(false);
                 setFormError(null);
               }}
-              className={`${PILL} bg-paper-solid text-ink hover:bg-gold`}
+              className={`${PILL} ${KIND.basic}`}
             >
               취소
             </button>
@@ -387,6 +399,36 @@ export function TagFilter() {
             되돌리기
           </button>
         </p>
+      )}
+
+      {/* the way into the chat for this tag: its meaning is settled by talking it
+          through, not by guessing at examples — see agent/experiments/personal_tag_exp.py */}
+      <TagMenu
+        target={menu}
+        onClose={() => setMenu(null)}
+        deleteDisabled={menu !== null && stationFilter.mood === menu.key && stationBusy !== null}
+        onDelete={(key) => {
+          // a tag that is on cannot outlive its definition
+          if (stationFilter.mood === key) void setStationFilter({ ...stationFilter, mood: null });
+          removeCustomTag(key as (typeof custom)[number]["key"]);
+        }}
+      />
+
+      {selectedCustom && (
+        <div className="flex w-full shrink-0 flex-col gap-[8px]">
+          <button
+            type="button"
+            title={`${selectedCustom.label} 태그의 기준을 챗봇과 대화로 정하기`}
+            onClick={() => openRefine(selectedCustom.key)}
+            className="flex h-[30px] w-fit cursor-pointer items-center gap-[4px] rounded-pill bg-pink pl-[10px] pr-[14px] text-[10px] tracking-[0.6px] text-on-bright transition-colors rule hover:bg-gold"
+          >
+            <Icon name="eyes-ink" size={22} />
+            대화로 다듬기
+          </button>
+          <p className="text-[8px] leading-[12px] text-on-bright-muted">
+            선택한 태그의 정의를 챗봇과 대화로 고칩니다
+          </p>
+        </div>
       )}
     </section>
   );

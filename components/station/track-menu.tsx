@@ -10,11 +10,11 @@ export type TrackMenuTarget = { track: RejectTarget; anchor: HTMLElement };
 /** Space kept between the menu and the button, and between it and the window. */
 const GAP = 6;
 
-const ITEM =
+export const MENU_ITEM =
   "flex h-[34px] w-full shrink-0 cursor-pointer items-center gap-[10px] rounded-[4px] px-[10px] text-left text-[11px] tracking-[0.5px] outline-none hover:bg-gold focus-visible:bg-gold";
 
 /** Not exported from Figma yet, so it is drawn here in the icons' own weight. */
-function TrashIcon() {
+export function TrashIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden className="shrink-0">
       <path
@@ -132,7 +132,7 @@ export function TrackMenu({
             onRemove(target.track);
             onClose();
           }}
-          className={ITEM}
+          className={MENU_ITEM}
         >
           <TrashIcon />
           삭제
@@ -147,7 +147,7 @@ export function TrackMenu({
             reject.onReject(target.track);
             onClose();
           }}
-          className={ITEM}
+          className={MENU_ITEM}
         >
           <NotIcon />
           {reject.label} 아님

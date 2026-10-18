@@ -24,7 +24,7 @@ import {
   matchesLyrics,
   matchesMood,
 } from "@/lib/station/filter";
-import { cleanCustomSpec, moodTag } from "@/lib/station/moods";
+import { cleanCustomSpec, customFitKey, moodTag } from "@/lib/station/moods";
 import type { Resolved } from "@/lib/spotify/tokens";
 import type {
   StationCandidate,
@@ -297,7 +297,9 @@ export async function POST(request: NextRequest) {
         instrumental: filter.lyrics === null ? undefined : instrumental,
         moods: isCustomMood(filter.mood) ? undefined : moods,
         customFits:
-          isCustomMood(filter.mood) && moods ? { [filter.mood]: moods.includes(filter.mood) } : undefined,
+          isCustomMood(filter.mood) && custom && moods
+            ? { [customFitKey(custom)]: moods.includes(filter.mood) }
+            : undefined,
       });
       return true;
     }

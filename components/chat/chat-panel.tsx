@@ -4,10 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useHydrated } from "@/components/ui/use-hydrated";
+import { useCustomTags } from "@/components/station/use-custom-tags";
 import { boldSpans } from "@/lib/chat/inline";
-import { useChat, type ChatMessage, type ChatTrack } from "./chat-provider";
+import { useChat, type ChatMessage, type ChatProposal, type ChatTrack } from "./chat-provider";
 
 type Seed = Parameters<ReturnType<typeof useSpotify>["startStation"]>[0];
+
+/** What the box offers when the listener is settling what one of their tags means. */
+const REFINE_STARTERS = [
+  "해외 곡 중에서 슬픈 곡만 넣고 싶어",
+  "BTS나 IU 같은 특정 가수의 곡만 넣고 싶어",
+];
 
 /** What the box offers before anything has been said. */
 const STARTERS = [
@@ -196,6 +203,69 @@ function withoutList(text: string): string {
     .trim();
 }
 
+/** One line of a preview: a dot for what the new criterion did with the song, then the song. */
+function PreviewRow({ track, passed }: { track: ChatTrack; passed: boolean }) {
+  return (
+    <li className="flex items-center gap-[6px]">
+      <span className={`size-[6px] shrink-0 rounded-full ${passed ? "bg-mint" : "bg-alert"}`} />
+      <span className="min-w-0 flex-1 truncate text-[9px] text-on-bright">
+        {track.title}
+        <span className="text-on-bright-muted"> — {track.artist}</span>
+      </span>
+    </li>
+  );
+}
+
+/**
+ * A new definition for the tag being worked on, and what it does to real songs.
+ *
+ * The preview is the point: a sentence of English means little to the listener,
+ * a list of songs that pass and songs that do not means a great deal. Nothing
+ * is changed until 적용.
+ */
+function ProposalCard({ id, p }: { id: string; p: ChatProposal }) {
+  const { refine, applyProposal, dismissProposal } = useChat();
+  const { checked, passedCount, passed, failed } = p.preview;
+  return (
+    <div className="flex flex-col gap-[8px] rounded-[8px] bg-chart p-[10px] ring-[1.5px] ring-pink-bright">
+      <p className="text-[8px] tracking-[0.6px] text-on-bright-muted">새 기준</p>
+      <p className="break-words text-[10px] leading-[15px] text-on-bright">{p.definition}</p>
+      {p.warning && <p className="text-[8px] leading-[12px] text-alert">{p.warning}</p>}
+
+      <div className="flex flex-col gap-[4px]">
+        <p className="text-[8px] tracking-[0.6px] text-on-bright-muted">
+          미리보기 · 곡 {checked}개 중 {passedCount}개 통과
+        </p>
+        {passed.length + failed.length > 0 && (
+          <ul className="flex flex-col gap-[3px]">
+            {passed.slice(0, 4).map((t) => (
+              <PreviewRow key={`p|${t.title}|${t.artist}`} track={t} passed />
+            ))}
+            {failed.slice(0, 3).map((t) => (
+              <PreviewRow key={`f|${t.title}|${t.artist}`} track={t} passed={false} />
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {p.state === "pending" && (
+        <div className="flex gap-[6px]">
+          <Pill dark disabled={!refine} onClick={() => applyProposal(id)}>
+            적용
+          </Pill>
+          <Pill onClick={() => dismissProposal(id)}>취소</Pill>
+        </div>
+      )}
+      {p.state === "applied" && (
+        <p className="text-[8px] leading-[12px] text-on-bright-muted">
+          적용했어요. 다음 재생 목록을 만들 때부터 반영돼요. 지금 목록에 바로 보려면 태그를 껐다 켜 주세요.
+        </p>
+      )}
+      {p.state === "dismissed" && <p className="text-[8px] leading-[12px] text-on-bright-muted">취소했어요.</p>}
+    </div>
+  );
+}
+
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex w-full justify-end">
@@ -208,7 +278,7 @@ function UserBubble({ text }: { text: string }) {
 
 function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }> }) {
   const text = m.tracks.length ? withoutList(m.text) : m.text;
-  const waiting = m.streaming && !text && !m.status && !m.error;
+  const waiting = m.streaming && !text && !m.status && !m.proposal && !m.error;
   return (
     <div className="flex w-full justify-start">
       <div className="flex w-full min-w-0 max-w-full flex-col gap-[8px] rounded-[4px_14px_14px_14px] bg-paper-solid p-[10px]">
@@ -237,6 +307,7 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
             {m.status}
           </p>
         )}
+        {m.proposal && <ProposalCard id={m.id} p={m.proposal} />}
         {m.tracks.length > 0 && (
           <ul className="flex flex-col gap-[6px]">
             {m.tracks.map((t) => (
@@ -257,7 +328,8 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
  * its 16px margin rather than introducing a second look for the right-hand side.
  */
 export function ChatPanel() {
-  const { messages, busy, send, stop, clear, close } = useChat();
+  const { messages, busy, send, stop, clear, close, refine, openRefine, leaveRefine } = useChat();
+  const tags = useCustomTags();
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const hydrated = useHydrated();
@@ -295,8 +367,41 @@ export function ChatPanel() {
         </div>
       </div>
 
+      {refine && (
+        <div className="flex w-full shrink-0 items-center gap-[8px]">
+          <p className="text-[8px] tracking-[0.6px] text-on-bright-muted">대화로 다듬는 태그</p>
+          <button
+            type="button"
+            title="다듬기를 끝내고 곡 추천으로 돌아가기"
+            onClick={leaveRefine}
+            className="flex min-w-0 cursor-pointer items-center gap-[6px] rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-on-bright transition-colors rule hover:bg-gold"
+          >
+            <span className="truncate">{refine.label}</span>
+            <span aria-hidden>×</span>
+          </button>
+        </div>
+      )}
+
       <div ref={listRef} className="scroll-y scroll-y-ink flex min-h-0 flex-1 flex-col gap-[10px]" aria-live="polite">
-        {messages.length === 0 ? (
+        {messages.length === 0 && refine ? (
+          <div className="flex flex-col gap-[10px]">
+            <p className="text-[10px] leading-[15px] text-on-bright">
+              ‘{refine.label}’ 태그에 어떤 곡을 넣고 싶으세요? 말씀해 주시면 기준으로 정리하고, 어떤 곡이 통과하는지
+              미리 보여 드려요.
+            </p>
+            <p className="rounded-[8px] bg-paper-solid px-[10px] py-[8px] text-[9px] leading-[14px] text-on-bright-muted">
+              지금 기준 ·{" "}
+              {refine.definition === refine.label ? "설명이 없어서 이름만 쓰고 있어요" : refine.definition}
+            </p>
+            <div className="flex flex-wrap gap-[6px]">
+              {REFINE_STARTERS.map((s) => (
+                <Pill key={s} onClick={() => void send(s)}>
+                  {s}
+                </Pill>
+              ))}
+            </div>
+          </div>
+        ) : messages.length === 0 ? (
           <div className="flex flex-col gap-[10px]">
             <p className="text-[10px] leading-[15px] text-on-bright-muted">
               듣고 싶은 분위기나 상황을 말해 보세요. 실제로 있는 곡만 골라 드려요.
@@ -308,6 +413,18 @@ export function ChatPanel() {
                 </Pill>
               ))}
             </div>
+            {hydrated && tags.length > 0 && (
+              <div className="flex flex-col gap-[6px]">
+                <p className="text-[8px] tracking-[0.6px] text-on-bright-muted">내 태그 다듬기</p>
+                <div className="flex flex-wrap gap-[6px]">
+                  {tags.map((t) => (
+                    <Pill key={t.key} onClick={() => openRefine(t.key)} title={`${t.label} 태그의 기준을 대화로 정하기`}>
+                      {t.label}
+                    </Pill>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           messages.map((m) => (m.role === "user" ? <UserBubble key={m.id} text={m.text} /> : <AssistantBubble key={m.id} m={m} />))
@@ -324,7 +441,7 @@ export function ChatPanel() {
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="음악에 대해 물어보세요"
+          placeholder={refine ? "이 태그에 넣고 싶은 곡을 말해 보세요" : "음악에 대해 물어보세요"}
           aria-label="챗봇에게 물어보기"
           maxLength={2000}
           className="min-w-0 flex-1 bg-transparent text-[11px] text-on-bright outline-none placeholder:text-on-bright-muted"

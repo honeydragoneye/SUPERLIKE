@@ -99,6 +99,14 @@ export type CustomMoodSpec = {
   definition: string;
 };
 
+/**
+ * What a custom tag's verdict on a track is filed under.
+ *
+ * The definition is part of it: change what a tag means and every earlier
+ * verdict was about a different question, so none of them is reused.
+ */
+export const customFitKey = (c: CustomMoodSpec): string => `${c.key}|${c.definition}`;
+
 export const CUSTOM_LABEL_MAX = 12;
 export const CUSTOM_DEFINITION_MAX = 80;
 

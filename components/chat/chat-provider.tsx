@@ -10,6 +10,9 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { useCustomTags } from "@/components/station/use-custom-tags";
+import { updateCustomDefinition } from "@/lib/station/custom-tags";
+import type { CustomMoodKey } from "@/lib/station/filter";
 import { useLyricsView } from "@/components/lyrics/lyrics-view";
 
 /** The width the chat column starts at, and the narrowest it can be dragged to. */
@@ -18,6 +21,20 @@ const WIDTH_KEY = "superlike:chat-width:v1";
 
 /** A song the agent chose. Last.fm's spelling: no Spotify id until the card looks one up. */
 export type ChatTrack = { title: string; artist: string };
+
+/**
+ * What the agent proposes a tag should mean, and how that reads on real songs.
+ *
+ * Nothing changes until the listener presses 적용: `state` is where it stands.
+ */
+export type ChatProposal = {
+  definition: string;
+  reason: string;
+  /** set when the criterion is something a title and an artist cannot settle */
+  warning: string | null;
+  preview: { checked: number; passedCount: number; passed: ChatTrack[]; failed: ChatTrack[] };
+  state: "pending" | "applied" | "dismissed";
+};
 
 export type ChatMessage =
   | { id: string; role: "user"; text: string }
@@ -28,9 +45,13 @@ export type ChatMessage =
       /** what the agent is doing, or just did: "후보 20곡 확인 → 3곡 통과" */
       status: string | null;
       tracks: ChatTrack[];
+      proposal: ChatProposal | null;
       error: string | null;
       streaming: boolean;
     };
+
+/** The tag a conversation is about, as it reads right now. */
+export type ChatRefine = { key: CustomMoodKey; label: string; definition: string };
 
 type Ctx = {
   open: boolean;
@@ -38,6 +59,14 @@ type Ctx = {
   close: () => void;
   messages: ChatMessage[];
   busy: boolean;
+  /** non-null: the chat is settling this tag's definition instead of recommending songs */
+  refine: ChatRefine | null;
+  /** opens the chat on a fresh conversation about one of the listener's own tags */
+  openRefine: (key: CustomMoodKey) => void;
+  leaveRefine: () => void;
+  /** makes the proposal in this message the tag's definition */
+  applyProposal: (messageId: string) => void;
+  dismissProposal: (messageId: string) => void;
   send: (question: string) => Promise<void>;
   stop: () => void;
   clear: () => void;
@@ -135,11 +164,16 @@ function historyOf(messages: ChatMessage[]): { role: "user" | "assistant"; conte
   for (const m of messages) {
     if (m.role === "user") {
       out.push({ role: "user", content: m.text });
-    } else if (m.text.trim() || m.tracks.length) {
+    } else if (m.text.trim() || m.tracks.length || m.proposal) {
       const songs = m.tracks.length
         ? `\n(추천한 곡: ${m.tracks.map((t) => `${t.title} - ${t.artist}`).join(", ")})`
         : "";
-      out.push({ role: "assistant", content: m.text.trim() + songs });
+      const proposed = m.proposal
+        ? `\n(제안한 기준: ${m.proposal.definition} — ${
+            { pending: "아직 답 없음", applied: "사용자가 적용함", dismissed: "사용자가 취소함" }[m.proposal.state]
+          })`
+        : "";
+      out.push({ role: "assistant", content: m.text.trim() + songs + proposed });
     }
   }
   return out;
@@ -160,6 +194,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
+  const [refineKey, setRefineKey] = useState<CustomMoodKey | null>(null);
+  const tags = useCustomTags();
+  // read live: a tag that was deleted, or redefined, is no longer what the conversation started from
+  const tag = refineKey ? tags.find((t) => t.key === refineKey) : undefined;
+  const refine = useMemo<ChatRefine | null>(
+    () => (tag ? { key: tag.key, label: tag.label, definition: tag.definition } : null),
+    [tag],
+  );
+  const refineRef = useRef<ChatRefine | null>(null);
+  useEffect(() => {
+    refineRef.current = refine;
+  }, [refine]);
   const saved = useSyncExternalStore(subscribeWidth, readSavedWidth, () => CHAT_MIN_WIDTH);
   const maxWidth = useSyncExternalStore(subscribeWindow, maxChatWidth, () => CHAT_MIN_WIDTH);
   // a width that was fine before can be too wide for a window that has since shrunk
@@ -201,7 +247,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setMessages((all) => [
         ...all,
         { id: nextId(), role: "user", text: question },
-        { id: reply, role: "assistant", text: "", status: null, tracks: [], error: null, streaming: true },
+        { id: reply, role: "assistant", text: "", status: null, tracks: [], proposal: null, error: null, streaming: true },
       ]);
 
       const controller = new AbortController();
@@ -212,7 +258,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         const res = await fetch("/api/agent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question, history }),
+          body: JSON.stringify({
+            question,
+            history,
+            refine: refineRef.current && { label: refineRef.current.label, definition: refineRef.current.definition },
+          }),
           signal: controller.signal,
         });
         if (!res.ok || !res.body) {
@@ -226,11 +276,43 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           switch (event.type) {
             case "tool_call":
               patch(reply, (m) => {
-                m.status = event.name === "top_tracks" ? "곡을 찾는 중…" : "곡을 확인하는 중…";
+                m.status =
+                  event.name === "top_tracks"
+                    ? "곡을 찾는 중…"
+                    : event.name === "propose_definition"
+                      ? "기준을 정리하는 중…"
+                      : "곡을 확인하는 중…";
               });
               break;
             case "tool_result": {
-              const result = event.result as { tracks?: ChatTrack[]; checked?: number } | undefined;
+              const result = event.result as
+                | {
+                    tracks?: ChatTrack[];
+                    checked?: number;
+                    proposal?: { definition: string; reason?: string; warning?: string };
+                    preview?: { checked: number; passed_count?: number; passed: ChatTrack[]; failed: ChatTrack[] };
+                  }
+                | undefined;
+              if (result?.proposal && result.preview) {
+                const { proposal, preview } = result;
+                patch(reply, (m) => {
+                  // a newer proposal replaces the one before it: only the last is on the table
+                  m.proposal = {
+                    definition: String(proposal.definition),
+                    reason: String(proposal.reason ?? ""),
+                    warning: proposal.warning ? String(proposal.warning) : null,
+                    preview: {
+                      checked: Number(preview.checked) || 0,
+                      passedCount: Number(preview.passed_count ?? preview.passed.length) || 0,
+                      passed: preview.passed.map((t) => ({ title: String(t.title), artist: String(t.artist) })),
+                      failed: preview.failed.map((t) => ({ title: String(t.title), artist: String(t.artist) })),
+                    },
+                    state: "pending",
+                  };
+                  m.status = "기준을 정리했어요";
+                });
+                break;
+              }
               if (result && Array.isArray(result.tracks)) {
                 const found = result.tracks.map((t) => ({ title: String(t.title), artist: String(t.artist) }));
                 patch(reply, (m) => {
@@ -290,14 +372,60 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
 
+  const setProposalState = useCallback(
+    (id: string, state: "applied" | "dismissed") =>
+      setMessages((all) =>
+        all.map((m) =>
+          m.id === id && m.role === "assistant" && m.proposal
+            ? { ...m, proposal: { ...m.proposal, state } }
+            : m,
+        ),
+      ),
+    [],
+  );
+  const applyProposal = useCallback(
+    (id: string) => {
+      const target = refineRef.current;
+      const message = messagesRef.current.find((m) => m.id === id);
+      if (!target || !message || message.role !== "assistant" || !message.proposal) return;
+      // the store says no when the tag is gone or the text is empty; nothing is marked applied then
+      if (updateCustomDefinition(target.key, message.proposal.definition) === null) setProposalState(id, "applied");
+    },
+    [setProposalState],
+  );
+  const dismissProposal = useCallback((id: string) => setProposalState(id, "dismissed"), [setProposalState]);
+
   const clear = useCallback(() => {
     abortRef.current?.abort();
     setMessages([]);
   }, []);
 
+  const openRefine = useCallback(
+    (key: CustomMoodKey) => {
+      // a new subject is a new conversation: what was said about songs is not about this tag
+      abortRef.current?.abort();
+      setMessages([]);
+      setRefineKey(key);
+      lyrics.close();
+      setOpen(true);
+    },
+    [lyrics],
+  );
+  const leaveRefine = useCallback(() => {
+    abortRef.current?.abort();
+    setMessages([]);
+    setRefineKey(null);
+  }, []);
+
   const value = useMemo<Ctx>(
-    () => ({ open, toggle, close, messages, busy, send, stop, clear, width, setWidth, maxWidth }),
-    [open, toggle, close, messages, busy, send, stop, clear, width, setWidth, maxWidth],
+    () => ({
+      open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
+      applyProposal, dismissProposal, send, stop, clear, width, setWidth, maxWidth,
+    }),
+    [
+      open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
+      applyProposal, dismissProposal, send, stop, clear, width, setWidth, maxWidth,
+    ],
   );
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
