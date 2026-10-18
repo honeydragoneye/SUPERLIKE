@@ -52,3 +52,9 @@ next-env.d.ts
 # editor and tooling scratch files
 /*.md
 !README.md
+
+# python agent: its own virtualenv, bytecode, and local measurement logs
+/agent/.venv/
+__pycache__/
+*.pyc
+/agent/experiments/*_results.json
