@@ -8,13 +8,12 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from collections.abc import Iterator
 
 import requests
 
-from agent import config
+from agent import config, gemini
 from agent.tools import TOOLS, TOOLS_CHAT, TOOLS_REFINE, Session, call_tool
 
 MAX_STEPS = 4
@@ -28,7 +27,7 @@ _HEAD = (
 # 곡 이름을 말한 경우: 찾아서 알려 줄 뿐, 곡의 내용을 아는 척하지 않는다
 _NAMED = (
     "사용자가 곡 이름을 말하면(예: 'wave to earth의 hyang 틀어줘', '…검색해줘') 먼저 find_track으로 "
-    "그 곡이 있는지 확인한다. 찾았으면 찾았다고만 알리고, 못 찾았으면 못 찾았다고 말한다. "
+    "그 곡이 있는지 확인한다. 제목은 사용자가 쓴 그대로 넣고 줄이거나 고치지 않는다. 찾았으면 찾았다고만 알리고, 못 찾았으면 못 찾았다고 말한다. "
     "곡을 듣지 못했으니 분위기나 내용을 꾸며 쓰지 않는다.\n"
 )
 _NAMED_CARDS = (
@@ -83,8 +82,11 @@ def _mentions_any(text: str, titles: list[str]) -> bool:
     return any(t.lower() in flat for t in titles if len(t) >= 2)
 
 
-def _chat_stream(messages: list[dict], model: str, tools: tuple[str, ...] = TOOLS_CHAT) -> Iterator[dict]:
-    """Ollama /api/chat 한 번. 줄마다 오는 조각을 그대로 내보낸다."""
+def _chat_stream(messages: list[dict], model: str | None, tools: tuple[str, ...] = TOOLS_CHAT) -> Iterator[dict]:
+    """모델 한 번 호출. 조각은 Ollama /api/chat 모양이고, Gemini도 같은 모양으로 맞춰 내보낸다."""
+    if config.uses_gemini(model):
+        yield from gemini.chat_stream(messages, [TOOLS[n]["schema"] for n in tools])
+        return
     payload = {
         "model": model,
         "messages": messages,
@@ -124,7 +126,9 @@ def run_agent(
     cards=True는 곡을 화면이 카드로 보여 주는 경우다. 글이 곡 이름을 말하지 않으니 "곡을
     말했는가"로 하는 재시도 검사는 끄고, 글은 기준 설명만 쓰게 한다.
     """
-    model = model or os.environ.get("AGENT_MODEL") or config.LOCAL_GENERATION_MODEL
+    # model이 None이면 설정된 기본 모델(Gemini 또는 로컬). 이름을 주면 그 이름의 Ollama 모델이다.
+    if model is None and config.PROVIDER == "ollama":
+        model = config.LOCAL_GENERATION_MODEL
     tools = TOOLS_REFINE if refine else TOOLS_CHAT
     system = (
         refine_prompt(refine["label"], refine["definition"])

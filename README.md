@@ -49,11 +49,12 @@ Spotify에 연결합니다. `localhost`가 아니라 `127.0.0.1`로 접속해야
 보여 주고, 카드에서 바로 재생하거나 스테이션을 시작할 수 있습니다. 챗봇과 가운데 화면 사이의 선을
 끌면 폭이 바뀌고(창 너비의 절반까지), 더블클릭하면 처음 폭으로 돌아갑니다.
 
-챗봇은 Next.js와 별개의 로컬 프로세스(`agent/`)가 Ollama의 Qwen 모델로 답합니다. 쓰려면 터미널을 하나 더
-열어 아래를 한 번 준비하고 실행합니다.
+챗봇은 Next.js와 별개의 프로세스(`agent/`)가 답합니다. `.env.local`에 `GEMINI_API_KEY`가 있으면 Gemini를 쓰고
+(대화와 곡 판정 모두), 없으면 로컬 Ollama의 Qwen을 씁니다. `AGENT_PROVIDER=ollama`로 키가 있어도 로컬 모델을
+고를 수 있습니다. 쓰려면 터미널을 하나 더 열어 아래를 한 번 준비하고 실행합니다.
 
 ```bash
-ollama list                                   # qwen3-8b-local 이 보여야 합니다
+# 로컬 모델을 쓸 때만: ollama list 에 qwen3-8b-local 이 보여야 합니다
 python3 -m venv agent/.venv
 agent/.venv/bin/pip install -r agent/requirements.txt
 npm run agent                                 # http://127.0.0.1:8765 에서 대기

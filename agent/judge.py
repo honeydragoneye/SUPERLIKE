@@ -13,7 +13,7 @@ import os
 
 import requests
 
-from agent import config
+from agent import config, gemini
 
 BATCH = 20
 
@@ -59,28 +59,32 @@ def _examples_block(examples: dict | None) -> str:
 
 
 def _ask(
-    condition: str, tracks: list[dict], model: str, examples: dict | None = None
+    condition: str, tracks: list[dict], model: str | None, examples: dict | None = None
 ) -> list[bool | None]:
     question = f"Condition: {condition}\n{_examples_block(examples)}Tracks:\n" + "\n".join(
         f"{i + 1}. {t['title']} — {t['artist']}" for i, t in enumerate(tracks)
     )
-    response = requests.post(
-        f"{config.LOCAL_GENERATION_BASE_URL}/api/chat",
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": question},
-            ],
-            "stream": False,
-            "think": False,
-            "format": _schema(len(tracks)),
-            "options": {"temperature": 0},
-        },
-        timeout=180,
-    )
-    response.raise_for_status()
-    fits = json.loads(response.json()["message"]["content"]).get("fits")
+    if config.uses_gemini(model):
+        text = gemini.generate_json(SYSTEM_PROMPT, question, _schema(len(tracks)))
+    else:
+        response = requests.post(
+            f"{config.LOCAL_GENERATION_BASE_URL}/api/chat",
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": question},
+                ],
+                "stream": False,
+                "think": False,
+                "format": _schema(len(tracks)),
+                "options": {"temperature": 0},
+            },
+            timeout=180,
+        )
+        response.raise_for_status()
+        text = response.json()["message"]["content"]
+    fits = json.loads(text).get("fits")
     if not isinstance(fits, list) or len(fits) != len(tracks):
         return [None] * len(tracks)
     return [f if isinstance(f, bool) else None for f in fits]
@@ -90,7 +94,7 @@ def judge(
     condition: str, tracks: list[dict], model: str | None = None, examples: dict | None = None
 ) -> list[bool | None]:
     """곡마다 True/False. None은 모델이 답하지 않은 곡이고, 조건에 맞는다고 보지 않는다."""
-    model = model or os.environ.get("JUDGE_MODEL") or config.LOCAL_GENERATION_MODEL
+    model = model or os.environ.get("JUDGE_MODEL")
     # 예시가 다르면 같은 곡도 다른 답을 받을 수 있으니 캐시 키에 예시를 포함한다
     scope = condition + "\u0000" + _examples_block(examples)
     results: list[bool | None] = [_cache.get((scope, _key(t))) for t in tracks]

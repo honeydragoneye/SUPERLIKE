@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import requests
 
 from agent import config
+from agent.gemini import GeminiError
 from agent.loop import run_agent
 
 HOST = os.environ.get("AGENT_HOST", "127.0.0.1")
@@ -71,7 +72,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path == "/health":
-            self._json(200, {"status": "ok", "model": config.LOCAL_GENERATION_MODEL})
+            self._json(200, {"status": "ok", "model": config.DEFAULT_MODEL, "provider": config.PROVIDER})
         else:
             self._json(404, {"error": "not_found"})
 
@@ -107,7 +108,18 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass  # 브라우저가 창을 닫거나 대화를 끊었다
         except requests.exceptions.ConnectionError:
-            self._try_send_error("llm_offline", "로컬 모델(Ollama)에 연결할 수 없습니다. Ollama를 켜 주세요.")
+            self._try_send_error(
+                "llm_offline",
+                "Gemini에 연결할 수 없습니다. 네트워크를 확인해 주세요."
+                if config.PROVIDER == "gemini"
+                else "로컬 모델(Ollama)에 연결할 수 없습니다. Ollama를 켜 주세요.",
+            )
+        except GeminiError as e:
+            print(f"[agent] gemini: {e}", flush=True)
+            if e.status == 429:
+                self._try_send_error("rate_limited", "Gemini 사용 한도를 넘었어요. 잠시 뒤에 다시 시도해 주세요.")
+            else:
+                self._try_send_error("agent_error", "Gemini가 응답하지 못했습니다.")
         except Exception as e:  # 에이전트 안의 예기치 못한 오류도 화면에 이유가 보이게 한다
             print(f"[agent] error: {e!r}", flush=True)
             self._try_send_error("agent_error", "에이전트가 응답하지 못했습니다.")
@@ -124,7 +136,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"[agent] http://{HOST}:{PORT}  model={config.LOCAL_GENERATION_MODEL}", flush=True)
+    print(f"[agent] http://{HOST}:{PORT}  model={config.DEFAULT_MODEL} ({config.PROVIDER})", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

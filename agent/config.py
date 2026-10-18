@@ -33,3 +33,15 @@ def _from_env_local(name: str) -> str:
 
 
 LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY") or _from_env_local("LASTFM_API_KEY")
+
+# 대화와 판정을 맡길 모델. GEMINI_API_KEY가 있으면 Gemini, 없으면 로컬 Ollama.
+# AGENT_PROVIDER=ollama 로 키가 있어도 로컬 모델을 고를 수 있다.
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or _from_env_local("GEMINI_API_KEY")
+GEMINI_MODEL = os.environ.get("AGENT_GEMINI_MODEL", "gemini-flash-lite-latest")
+PROVIDER = os.environ.get("AGENT_PROVIDER") or ("gemini" if GEMINI_API_KEY else "ollama")
+DEFAULT_MODEL = GEMINI_MODEL if PROVIDER == "gemini" else LOCAL_GENERATION_MODEL
+
+
+def uses_gemini(model: str | None) -> bool:
+    """모델 이름을 직접 준 실험 스크립트는 그 이름의 Ollama 모델을 쓴다."""
+    return model is None and PROVIDER == "gemini"
