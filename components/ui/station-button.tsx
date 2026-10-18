@@ -29,17 +29,22 @@ export function StationButton({
 }) {
   const { startStation, stationBusy } = useSpotify();
   const [resolving, setResolving] = useState(false);
-  // the label flips to "구성 중", so it has to hold the server's answer first
+  // whether some station is being built, which has to hold the server's answer first
   const hydrated = useHydrated();
-  const busy = resolving || (hydrated && stationBusy !== null);
+  // only the button that was pressed says "구성 중"; the others look as they did
+  const busy = resolving;
+  // ...and do nothing meanwhile, so a second press cannot start a second station
+  const blocked = !resolving && hydrated && stationBusy !== null;
 
   return (
     <button
       type="button"
       disabled={busy}
       title={busy ? "스테이션 구성 중…" : `${label} 기준으로 스테이션 시작`}
+      aria-disabled={blocked || undefined}
       onClick={async (e) => {
         e.stopPropagation();
+        if (blocked) return;
         setResolving(true);
         try {
           const track = await seed();
@@ -48,7 +53,7 @@ export function StationButton({
           setResolving(false);
         }
       }}
-      className={`absolute top-1/2 flex -translate-y-1/2 items-center gap-[5px] rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-[opacity,background-color] group-hover:opacity-100 enabled:hover:bg-ink disabled:opacity-40 disabled:group-hover:opacity-40 ${className}`}
+      className={`absolute top-1/2 flex -translate-y-1/2 items-center gap-[5px] rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-[opacity,background-color] group-hover:opacity-100 disabled:opacity-100 ${blocked ? "cursor-default" : "enabled:hover:bg-ink"} ${className}`}
     >
       {busy ? (
         <>
