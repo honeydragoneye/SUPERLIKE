@@ -6,7 +6,7 @@ import { LoadingDots } from "@/components/ui/loading-dots";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { useCustomTags } from "@/components/station/use-custom-tags";
 import { boldSpans } from "@/lib/chat/inline";
-import { useChat, type ChatMessage, type ChatProposal, type ChatTrack } from "./chat-provider";
+import { CHAT_SOURCES, useChat, type ChatMessage, type ChatProposal, type ChatTrack } from "./chat-provider";
 
 type Seed = Parameters<ReturnType<typeof useSpotify>["startStation"]>[0];
 
@@ -328,7 +328,7 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
  * its 16px margin rather than introducing a second look for the right-hand side.
  */
 export function ChatPanel() {
-  const { messages, busy, send, stop, clear, close, refine, openRefine, leaveRefine } = useChat();
+  const { messages, busy, send, stop, clear, close, refine, openRefine, leaveRefine, sources, toggleSource } = useChat();
   const tags = useCustomTags();
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
@@ -355,7 +355,7 @@ export function ChatPanel() {
       <div className="flex w-full shrink-0 items-center justify-between gap-[10px]">
         <div className="flex min-w-0 flex-col gap-px">
           <h2 className="text-[19px] font-black tracking-[-0.4px] text-on-bright">CHAT</h2>
-          <p className="truncate text-[8px] tracking-[0.7px] text-on-bright-muted">음악 에이전트 · LOCAL QWEN</p>
+          <p className="truncate text-[8px] tracking-[0.7px] text-on-bright-muted">음악 에이전트</p>
         </div>
         <div className="flex shrink-0 items-center gap-[6px]">
           {hydrated && messages.length > 0 && (
@@ -366,6 +366,35 @@ export function ChatPanel() {
           <Pill onClick={close}>CLOSE</Pill>
         </div>
       </div>
+
+      {!refine && (
+        <div className="flex w-full shrink-0 flex-wrap items-center gap-[6px]" role="group" aria-label="참고할 출처">
+          <p className="text-[8px] tracking-[0.6px] text-on-bright-muted">출처</p>
+          {CHAT_SOURCES.map((s) => {
+            // before the saved choice is read, every source shows as on — the same as the server's starting point
+            const on = !hydrated || sources.includes(s.key);
+            return (
+              <button
+                key={s.key}
+                type="button"
+                aria-pressed={on}
+                title={`${s.hint} — ${on ? "끄기" : "켜기"}`}
+                onClick={() => toggleSource(s.key)}
+                className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[10px] py-[4px] text-[8px] tracking-[0.6px] transition-colors rule ${
+                  on ? "bg-ink text-paper-solid hover:bg-pink-bright" : "bg-paper-solid text-on-bright-muted hover:bg-gold"
+                }`}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+          {hydrated && !sources.includes("lastfm") && (
+            <p className="w-full text-[8px] leading-[12px] text-on-bright-muted">
+              Last.fm을 끄면 곡을 찾거나 추천하지 못해요.
+            </p>
+          )}
+        </div>
+      )}
 
       {refine && (
         <div className="flex w-full shrink-0 items-center gap-[8px]">

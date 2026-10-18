@@ -10,17 +10,21 @@ const AGENT_URL = process.env.AGENT_URL ?? "http://127.0.0.1:8765";
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
 
+/** The places the agent may look things up. Anything else the browser sends is dropped. */
+const SOURCES = ["lastfm", "wikipedia", "musicbrainz"] as const;
+
 /**
  * Forwards one question and relays the agent's server-sent events as they
  * arrive, so the reply types itself out instead of landing in one piece.
  *
- * Only `question`, `history` and `refine` are passed on: the browser does not
+ * Only `question`, `history`, `refine` and `sources` are passed on: the browser does not
  * get to address anything else on the agent. `refine` is the tag the
  * conversation is about — its name and what it means now — and turns the chat
- * from recommending songs into settling that tag's definition.
+ * from recommending songs into settling that tag's definition. `sources` is what
+ * the listener has switched on: the agent only gets the tools of those.
  */
 export async function POST(request: NextRequest) {
-  let body: { question?: unknown; history?: unknown; refine?: unknown };
+  let body: { question?: unknown; history?: unknown; refine?: unknown; sources?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -45,12 +49,17 @@ export async function POST(request: NextRequest) {
       ? { label: r.label.slice(0, 24), definition: r.definition.slice(0, 200) }
       : undefined;
 
+  // an absent list means "all on"; an empty one is a listener who switched everything off
+  const sources = Array.isArray(body.sources)
+    ? SOURCES.filter((s) => (body.sources as unknown[]).includes(s))
+    : undefined;
+
   let upstream: Response;
   try {
     upstream = await fetch(`${AGENT_URL}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, history, refine }),
+      body: JSON.stringify({ question, history, refine, sources }),
       // closing the chat or sending the next question cuts the agent's work short too
       signal: request.signal,
       cache: "no-store",

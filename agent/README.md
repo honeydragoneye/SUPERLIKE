@@ -19,7 +19,8 @@ agent/.venv/bin/python -m agent        # 터미널에서 대화 (빈 줄이면 �
 | 파일 | 역할 |
 | --- | --- |
 | `loop.py` | 도구를 부르는 에이전트 루프. 이벤트(`tool_call`, `tool_result`, `token`, `done`)를 하나씩 내보냅니다. |
-| `tools.py` | 도구. `top_tracks`(Last.fm 태그의 실제 곡을 모으고 조건에 맞는 곡만 남김), `find_track`(곡 존재 확인) |
+| `tools.py` | 도구. `top_tracks`(Last.fm 태그의 실제 곡을 모으고 조건에 맞는 곡만 남김), `find_track`(곡 존재 확인), `artist_info`·`track_info`·`artist_top_tracks`(가수·곡 질문에 Last.fm 정보로 답함), `wiki_summary`(Wikipedia 소개), `albums`(MusicBrainz 앨범 목록) |
+| `SOURCES` (tools.py) | 출처(lastfm·wikipedia·musicbrainz)와 도구의 묶음. 챗봇 위쪽의 출처 버튼으로 켠 것만 모델에게 보입니다 |
 | `judge.py` | "제목과 가수만 보고 이 조건에 맞는가"를 판정하는 별도 모델 호출 |
 | `gemini.py` | Gemini 호출(도구 호출 대화, JSON 판정). Ollama와 같은 조각 모양으로 바꿔 내보냅니다 |
 | `config.py` | 모델 선택(Gemini/Ollama), 온도, Last.fm·Gemini 키 |

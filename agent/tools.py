@@ -7,8 +7,11 @@
 
 from __future__ import annotations
 
+import html
 import random
 import re
+import threading
+import time
 from difflib import SequenceMatcher
 
 import requests
@@ -171,6 +174,221 @@ def find_track(title: str, artist: str = "") -> dict:
     return result
 
 
+# 소개글을 모델에게 줄 때의 길이 상한. 더 길어도 앞부분(누구이고 언제 어디서 시작했는지)이 핵심이다.
+_BIO_MAX = 1200
+
+
+def _clean_wiki(text: str) -> str:
+    """Last.fm 위키 글에서 태그·"Read more" 꼬리·라이선스 문구를 걷어 낸다."""
+    text = re.sub(r"<[^>]+>", "", text or "")
+    text = re.sub(r"\s*Read more on Last\.fm.*$", "", text, flags=re.S)
+    text = re.sub(r"\s*User-contributed text is available.*$", "", text, flags=re.S)
+    return re.sub(r"\s+", " ", html.unescape(text)).strip()
+
+
+def _lastfm_info(method: str, **params) -> dict | None:
+    """artist.getinfo / track.getinfo. Last.fm이 모르는 대상이면 None."""
+    if not config.LASTFM_API_KEY:
+        raise RuntimeError("LASTFM_API_KEY가 설정되지 않았습니다")
+    response = requests.get(
+        _LASTFM_URL,
+        params={"method": method, "autocorrect": 1, "lang": "en", "api_key": config.LASTFM_API_KEY, "format": "json", **params},
+        timeout=10,
+    )
+    data = response.json()
+    if data.get("error") == 6 or response.status_code == 404:
+        return None
+    response.raise_for_status()
+    return data
+
+
+def artist_info(artist: str) -> dict:
+    """가수에 대해 Last.fm이 아는 것: 소개글(영어), 태그, 비슷한 가수, 청취자 수.
+
+    소개글은 사용자들이 쓴 글이라 없거나 짧을 수 있다. 그럴 때는 `bio`가 비어 있고, 모델이 있는
+    것만으로 답하거나 모른다고 말하게 한다.
+    """
+    data = _lastfm_info("artist.getinfo", artist=artist)
+    if not data or "artist" not in data:
+        return {"found": False, "artist": artist}
+    a = data["artist"]
+    return {
+        "found": True,
+        "artist": a["name"],
+        "listeners": int(a.get("stats", {}).get("listeners") or 0),
+        "tags": [t["name"] for t in (a.get("tags") or {}).get("tag", [])][:6],
+        "similar_artists": [x["name"] for x in (a.get("similar") or {}).get("artist", [])][:6],
+        "bio": _clean_wiki((a.get("bio") or {}).get("content", ""))[:_BIO_MAX],
+    }
+
+
+def artist_top_tracks(artist: str) -> dict:
+    """가수의 대표곡(Last.fm 인기순 5곡). `tracks`에 담아 돌려줘서 화면이 카드로 보여 준다."""
+    if not config.LASTFM_API_KEY:
+        raise RuntimeError("LASTFM_API_KEY가 설정되지 않았습니다")
+    response = requests.get(
+        _LASTFM_URL,
+        params={"method": "artist.gettoptracks", "artist": artist, "autocorrect": 1, "limit": 5, "api_key": config.LASTFM_API_KEY, "format": "json"},
+        timeout=10,
+    )
+    data = response.json()
+    found = (data.get("toptracks") or {}).get("track", [])
+    if not found:
+        return {"found": False, "artist": artist, "tracks": []}
+    name = (data["toptracks"].get("@attr") or {}).get("artist", artist)
+    return {"found": True, "artist": name, "tracks": [{"title": t["name"], "artist": t["artist"]["name"]} for t in found]}
+
+
+def track_info(title: str, artist: str = "") -> dict:
+    """곡에 대해 Last.fm이 아는 것: 앨범, 길이, 태그, 소개글(있으면).
+
+    가수를 모르면 먼저 find_track과 같은 검색으로 가수를 찾는다.
+    """
+    if not artist:
+        hit = find_track(title)
+        if not hit["found"]:
+            return {"found": False, "title": title}
+        title, artist = hit["title"], hit["artist"]
+    data = _lastfm_info("track.getinfo", track=title, artist=artist)
+    if not data or "track" not in data:
+        return {"found": False, "title": title, "artist": artist}
+    t = data["track"]
+    seconds = int(t.get("duration") or 0) // 1000
+    return {
+        "found": True,
+        "title": t["name"],
+        "artist": (t.get("artist") or {}).get("name", artist),
+        "album": (t.get("album") or {}).get("title"),
+        "length": f"{seconds // 60}:{seconds % 60:02d}" if seconds else None,
+        "listeners": int(t.get("listeners") or 0),
+        "tags": [x["name"] for x in (t.get("toptags") or {}).get("tag", [])][:6],
+        "about": _clean_wiki((t.get("wiki") or {}).get("content", ""))[:_BIO_MAX],
+    }
+
+
+# 사용자가 출처를 끄고 켤 수 있다. 출처 하나가 도구 여러 개를 거느리고, 꺼진 출처의 도구는 모델에게 보이지 않는다.
+SOURCES: dict[str, tuple[str, ...]] = {
+    "lastfm": ("top_tracks", "find_track", "artist_info", "artist_top_tracks", "track_info"),
+    "wikipedia": ("wiki_summary",),
+    "musicbrainz": ("albums",),
+}
+
+_WIKI_UA = "Superlike/0.1 (https://github.com/honeydragoneye/SUPERLIKE)"
+# 동명이인·동음이의 문서를 거르는 말: 소개 첫머리에 음악 이야기가 있어야 그 가수의 문서다
+_MUSICAL = re.compile(
+    r"band|singer|musician|rapper|group|composer|songwriter|duo|album|song|"
+    r"밴드|가수|음악|그룹|래퍼|작곡|앨범|노래|싱어송라이터",
+    re.IGNORECASE,
+)
+_HANGUL = re.compile(r"[가-힣]")
+
+
+def wiki_summary(name: str) -> dict:
+    """Wikipedia에서 가수·밴드의 소개(앞부분 요약)를 가져온다. 한글 이름이면 한국어판부터 본다.
+
+    검색 결과 중 제목이 이름과 비슷하고 소개에 음악 이야기가 있는 문서만 받아들인다 — 이름이 같은
+    다른 문서를 그 가수로 착각하지 않도록.
+    """
+    langs = ("ko", "en") if _HANGUL.search(name) else ("en", "ko")
+    for lang in langs:
+        response = requests.get(
+            f"https://{lang}.wikipedia.org/w/api.php",
+            params={
+                "action": "query", "format": "json", "generator": "search", "gsrsearch": name,
+                "gsrlimit": 4, "prop": "extracts", "exintro": 1, "explaintext": 1, "exlimit": 4,
+            },
+            headers={"User-Agent": _WIKI_UA},
+            timeout=10,
+        )
+        if not response.ok:
+            continue
+        pages = sorted((response.json().get("query") or {}).get("pages", {}).values(), key=lambda p: p.get("index", 99))
+        for page in pages:
+            extract = (page.get("extract") or "").strip()
+            title = re.sub(r"\s*\(.*?\)\s*$", "", page["title"])  # "Lucy (band)" → "Lucy"
+            # 제목이 이름과 같아야 한다: "Lucy"로 "Lucy Liu"를 받으면 안 된다
+            if _norm(title) == _norm(name) and _MUSICAL.search(extract[:400]):
+                return {
+                    "found": True,
+                    "title": page["title"],
+                    "language": lang,
+                    "summary": re.sub(r"\s+", " ", extract)[:_BIO_MAX],
+                    "url": f"https://{lang}.wikipedia.org/wiki/{page['title'].replace(' ', '_')}",
+                }
+    return {"found": False, "name": name}
+
+
+_MB_URL = "https://musicbrainz.org/ws/2"
+_MB_UA = "Superlike/0.1 (https://github.com/honeydragoneye/SUPERLIKE)"
+# MusicBrainz는 IP당 초당 1회. 호출 사이를 이만큼 띄우고, 거절(503)되면 쉬었다가 다시 부른다.
+_MB_GAP = 1.1
+_mb_lock = threading.Lock()
+_mb_last = 0.0
+_mb_cache: dict[str, dict] = {}
+
+
+def _mb_get(path: str, **params) -> dict | None:
+    global _mb_last
+    for attempt in range(3):
+        with _mb_lock:
+            wait = _MB_GAP - (time.monotonic() - _mb_last)
+            if wait > 0:
+                time.sleep(wait)
+            response = requests.get(
+                f"{_MB_URL}/{path}", params={**params, "fmt": "json"}, headers={"User-Agent": _MB_UA}, timeout=15
+            )
+            _mb_last = time.monotonic()
+        if response.ok:
+            return response.json()
+        if response.status_code != 503:
+            return None
+        time.sleep(2 * (attempt + 1))
+    return None
+
+
+def albums(artist: str) -> dict:
+    """MusicBrainz에 있는 가수의 앨범·EP를 발매일 순으로 (최신이 먼저, 최대 8장).
+
+    이름이 같은 가수가 둘 이상이라 하나로 정할 수 없으면 찾지 못한 것으로 돌려준다 — 엉뚱한
+    가수의 앨범을 알려주는 것보다 낫다.
+    """
+    key = artist.strip().lower()
+    if key in _mb_cache:
+        return _mb_cache[key]
+    result: dict = {"found": False, "artist": artist}
+    found = _mb_get("artist/", query=f'artist:"{artist}"', limit=5)
+    if found:
+        hits = [
+            a for a in found.get("artists", [])
+            if a.get("score", 0) >= 90
+            and (a["name"].lower() == key or any(x.get("name", "").lower() == key for x in a.get("aliases", [])))
+        ]
+        # 가장 높은 점수가 하나일 때만 그 가수로 정한다
+        top = [a for a in hits if a["score"] == max((h["score"] for h in hits), default=0)]
+        if len(top) == 1:
+            groups = _mb_get("release-group", artist=top[0]["id"], type="album|ep", limit=100)
+            if groups:
+                rows = sorted(
+                    (g for g in groups.get("release-groups", []) if not g.get("secondary-types") and g.get("first-release-date")),
+                    key=lambda g: g["first-release-date"],
+                    reverse=True,
+                )[:8]
+                result = {
+                    "found": bool(rows),
+                    "artist": top[0]["name"],
+                    "albums": [
+                        {"title": g["title"], "released": g["first-release-date"], "type": g.get("primary-type", "")}
+                        for g in rows
+                    ],
+                }
+        elif len(top) > 1:
+            result["note"] = "이름이 같은 가수가 여럿이라 하나로 정할 수 없습니다."
+    # 서버 오류로 못 찾은 것은 기억하지 않는다 (다음에 다시 시도)
+    if result["found"] or "note" in result:
+        _mb_cache[key] = result
+    return result
+
+
 # 태그 정의의 길이 상한. Superlike(lib/station/moods.ts의 CUSTOM_DEFINITION_MAX)와 같아야 한다.
 DEFINITION_MAX = 80
 # 미리보기에서 판정해 보는 곡 수와, 화면에 보여 줄 통과·탈락 곡 수
@@ -305,6 +523,100 @@ TOOLS: dict[str, dict] = {
         },
         "run": find_track,
     },
+    "artist_info": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "artist_info",
+                "description": (
+                    "가수나 밴드에 대한 질문(어떤 가수인지, 어느 나라인지, 언제 데뷔했는지, 어떤 스타일인지, "
+                    "비슷한 가수)에 답하기 위해 Last.fm의 소개글·태그·비슷한 가수를 가져온다. "
+                    "가수에 대해 설명하기 전에 반드시 부른다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {"artist": {"type": "string", "description": "가수 이름 (예: Slowdive)"}},
+                    "required": ["artist"],
+                },
+            },
+        },
+        "run": artist_info,
+    },
+    "track_info": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "track_info",
+                "description": (
+                    "곡 하나에 대한 질문(어떤 곡인지, 어느 앨범인지, 길이, 분위기 태그)에 답하기 위해 "
+                    "Last.fm의 곡 정보를 가져온다. 곡을 설명하기 전에 반드시 부른다. 가수를 모르면 비운다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "곡 제목"},
+                        "artist": {"type": "string", "description": "가수 이름. 모르면 빈 문자열"},
+                    },
+                    "required": ["title"],
+                },
+            },
+        },
+        "run": track_info,
+    },
+    "artist_top_tracks": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "artist_top_tracks",
+                "description": (
+                    "특정 가수의 대표곡·인기곡을 알려 달라고 할 때 그 가수의 실제 인기곡 5곡을 가져온다 "
+                    "(예: '10CM 대표곡'). 분위기로 곡을 추천하는 용도는 아니다 (그건 top_tracks)."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {"artist": {"type": "string", "description": "가수 이름 (예: 10CM)"}},
+                    "required": ["artist"],
+                },
+            },
+        },
+        "run": artist_top_tracks,
+    },
+    "wiki_summary": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "wiki_summary",
+                "description": (
+                    "Wikipedia에서 가수·밴드의 소개를 가져온다. artist_info의 소개글이 비어 있거나 짧을 때, "
+                    "또는 활동 이력·멤버·배경을 더 알고 싶을 때 부른다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string", "description": "가수·밴드 이름 (예: 웨이브 투 어스)"}},
+                    "required": ["name"],
+                },
+            },
+        },
+        "run": wiki_summary,
+    },
+    "albums": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "albums",
+                "description": (
+                    "가수의 앨범·EP를 발매일 순(최신이 먼저)으로 가져온다. '최근 앨범', '데뷔 앨범', "
+                    "'앨범이 몇 장' 같은 질문에 부른다. 곡 목록이 아니라 앨범 목록이다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {"artist": {"type": "string", "description": "가수 이름 (예: Radiohead)"}},
+                    "required": ["artist"],
+                },
+            },
+        },
+        "run": albums,
+    },
     "propose_definition": {
         "schema": {
             "type": "function",
@@ -337,8 +649,16 @@ TOOLS: dict[str, dict] = {
 }
 
 # 모드마다 모델에게 보여 주는 도구가 다르다. 작은 모델은 도구가 많을수록 고르기 어려워한다.
-TOOLS_CHAT = ("top_tracks", "find_track")
+TOOLS_CHAT = ("top_tracks", "find_track", "artist_info", "artist_top_tracks", "track_info", "wiki_summary", "albums")
 TOOLS_REFINE = ("propose_definition",)
+
+
+def tools_for(sources: list[str] | None) -> tuple[str, ...]:
+    """켜진 출처의 도구만. sources가 None이면 전부 켠 것으로 본다."""
+    if sources is None:
+        return TOOLS_CHAT
+    on = {tool for name in sources for tool in SOURCES.get(name, ())}
+    return tuple(t for t in TOOLS_CHAT if t in on)
 
 
 def call_tool(name: str, arguments: dict, session: Session, allowed: tuple[str, ...] | None = None) -> object:

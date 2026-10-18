@@ -20,6 +20,20 @@ _RETRY_STATUS = {429, 500, 502, 503, 504}
 _RETRIES = 3
 
 
+# 무료 등급은 모델당 분당 15회라서 한도에 걸리면 서버가 알려 주는 시간(보통 10여 초)만큼 기다려야 풀린다
+_MAX_WAIT = 30.0
+
+
+def _retry_delay(response: requests.Response) -> float | None:
+    try:
+        for d in response.json()["error"].get("details", []):
+            if d.get("@type", "").endswith("RetryInfo"):
+                return float(d["retryDelay"].rstrip("s")) + 0.5
+    except (ValueError, KeyError, TypeError):
+        pass
+    return None
+
+
 class GeminiError(RuntimeError):
     def __init__(self, message: str, status: int | None = None) -> None:
         super().__init__(message)
@@ -38,8 +52,9 @@ def _post(method: str, payload: dict, stream: bool = False) -> requests.Response
         response = requests.post(url, headers=_headers(), json=payload, stream=stream, timeout=120)
         if response.status_code not in _RETRY_STATUS or attempt == _RETRIES:
             break
+        wait = _retry_delay(response) or 1.5 * (attempt + 1)
         response.close()
-        time.sleep(1.5 * (attempt + 1))
+        time.sleep(min(wait, _MAX_WAIT))
     if not response.ok:
         raise GeminiError(f"Gemini {response.status_code}: {response.text[:300]}", response.status_code)
     return response
@@ -117,7 +132,8 @@ def chat_stream(messages: list[dict], tools: list[dict]) -> Iterator[dict]:
         {
             "systemInstruction": {"parts": [{"text": system}]},
             "contents": contents,
-            "tools": [{"functionDeclarations": [_declaration(t) for t in tools]}],
+            # 출처를 모두 끄면 도구가 없다: 빈 선언은 오류가 되니 아예 보내지 않는다
+            **({"tools": [{"functionDeclarations": [_declaration(t) for t in tools]}]} if tools else {}),
             "generationConfig": {"temperature": config.GENERATION_TEMPERATURE},
         },
         stream=True,

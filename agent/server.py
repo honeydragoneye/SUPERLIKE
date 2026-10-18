@@ -22,6 +22,7 @@ import requests
 from agent import config
 from agent.gemini import GeminiError
 from agent.loop import run_agent
+from agent.tools import SOURCES
 
 HOST = os.environ.get("AGENT_HOST", "127.0.0.1")
 PORT = int(os.environ.get("AGENT_PORT", "8765"))
@@ -54,6 +55,13 @@ def _clean_refine(raw: object) -> dict | None:
         return None
     label, definition = " ".join(label.split())[:24], " ".join(definition.split())[:200]
     return {"label": label, "definition": definition} if label and definition else None
+
+
+def _clean_sources(raw: object) -> list[str] | None:
+    """사용자가 켠 출처. 모르는 이름은 버린다. 목록이 아니면 None(전부 켬), 빈 목록은 전부 끔."""
+    if not isinstance(raw, list):
+        return None
+    return [x for x in dict.fromkeys(raw) if isinstance(x, str) and x in SOURCES]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -91,6 +99,7 @@ class Handler(BaseHTTPRequestHandler):
         question = question.strip()[:MAX_QUESTION]
         history = _clean_history(body.get("history"))
         refine = _clean_refine(body.get("refine"))
+        sources = _clean_sources(body.get("sources"))
 
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -103,7 +112,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         try:
-            for event in run_agent(history, question, cards=True, refine=refine):
+            for event in run_agent(history, question, cards=True, refine=refine, sources=sources):
                 send(event)
         except (BrokenPipeError, ConnectionResetError):
             pass  # 브라우저가 창을 닫거나 대화를 끊었다

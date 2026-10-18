@@ -18,6 +18,24 @@ import { useLyricsView } from "@/components/lyrics/lyrics-view";
 /** The width the chat column starts at, and the narrowest it can be dragged to. */
 export const CHAT_MIN_WIDTH = 330;
 const WIDTH_KEY = "superlike:chat-width:v1";
+const SOURCES_KEY = "superlike:chat-sources:v1";
+
+/** Where the agent may look things up. The listener switches them on and off. */
+export type ChatSource = "lastfm" | "wikipedia" | "musicbrainz";
+export const CHAT_SOURCES: { key: ChatSource; label: string; hint: string }[] = [
+  { key: "lastfm", label: "Last.fm", hint: "곡 추천, 가수·곡 정보" },
+  { key: "wikipedia", label: "Wikipedia", hint: "가수 소개와 활동 이력" },
+  { key: "musicbrainz", label: "MusicBrainz", hint: "앨범 목록과 발매일" },
+];
+const ALL_SOURCES: ChatSource[] = CHAT_SOURCES.map((s) => s.key);
+
+/** The tool that answered, by the name the reply's status line gives it. */
+const NOTE_OF: Record<string, string> = {
+  artist_info: "Last.fm",
+  track_info: "Last.fm",
+  wiki_summary: "Wikipedia",
+  albums: "MusicBrainz",
+};
 
 /** A song the agent chose. Last.fm's spelling: no Spotify id until the card looks one up. */
 export type ChatTrack = { title: string; artist: string };
@@ -74,6 +92,9 @@ type Ctx = {
   /** clamped to [CHAT_MIN_WIDTH, half the window] */
   setWidth: (px: number) => void;
   maxWidth: number;
+  /** the sources the agent may use, and the switch for one of them */
+  sources: ChatSource[];
+  toggleSource: (key: ChatSource) => void;
 };
 
 const ChatContext = createContext<Ctx | null>(null);
@@ -124,6 +145,40 @@ function writeSavedWidth(px: number): void {
     // still applies for this session
   }
   for (const fn of widthListeners) fn();
+}
+
+/**
+ * Which sources are on, kept in this browser — the same external-store shape as
+ * the width. The snapshot is cached so React sees the same array until it changes.
+ */
+let savedSources: ChatSource[] | undefined; // undefined = not read yet
+const sourceListeners = new Set<() => void>();
+
+function readSources(): ChatSource[] {
+  if (savedSources === undefined) {
+    try {
+      const parsed: unknown = JSON.parse(localStorage.getItem(SOURCES_KEY) ?? "null");
+      savedSources = Array.isArray(parsed) ? ALL_SOURCES.filter((k) => parsed.includes(k)) : ALL_SOURCES;
+    } catch {
+      savedSources = ALL_SOURCES;
+    }
+  }
+  return savedSources;
+}
+
+function subscribeSources(onChange: () => void): () => void {
+  sourceListeners.add(onChange);
+  return () => void sourceListeners.delete(onChange);
+}
+
+function writeSources(next: ChatSource[]): void {
+  savedSources = next;
+  try {
+    localStorage.setItem(SOURCES_KEY, JSON.stringify(next));
+  } catch {
+    // still applies for this session
+  }
+  for (const fn of sourceListeners) fn();
 }
 
 /** The window's own size, as an external store: it changes when the window does. */
@@ -208,6 +263,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [refine]);
   const saved = useSyncExternalStore(subscribeWidth, readSavedWidth, () => CHAT_MIN_WIDTH);
   const maxWidth = useSyncExternalStore(subscribeWindow, maxChatWidth, () => CHAT_MIN_WIDTH);
+  const sources = useSyncExternalStore(subscribeSources, readSources, () => ALL_SOURCES);
+  const toggleSource = useCallback((key: ChatSource) => {
+    const now = readSources();
+    writeSources(ALL_SOURCES.filter((k) => (k === key ? !now.includes(k) : now.includes(k))));
+  }, []);
   // a width that was fine before can be too wide for a window that has since shrunk
   const width = clamp(saved, maxWidth);
 
@@ -262,6 +322,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             question,
             history,
             refine: refineRef.current && { label: refineRef.current.label, definition: refineRef.current.definition },
+            sources: readSources(),
           }),
           signal: controller.signal,
         });
@@ -281,12 +342,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     ? "곡을 찾는 중…"
                     : event.name === "propose_definition"
                       ? "기준을 정리하는 중…"
-                      : "곡을 확인하는 중…";
+                      : String(event.name) in NOTE_OF
+                        ? `${NOTE_OF[String(event.name)]}에서 찾는 중…`
+                        : "곡을 확인하는 중…";
               });
               break;
             case "tool_result": {
               const result = event.result as
                 | {
+                    found?: boolean;
                     tracks?: ChatTrack[];
                     checked?: number;
                     proposal?: { definition: string; reason?: string; warning?: string };
@@ -313,6 +377,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 });
                 break;
               }
+              const note = NOTE_OF[String(event.name)];
+              if (note && result && !Array.isArray(result.tracks)) {
+                // an answer about an artist or a song: say where it came from, or that nothing was there
+                patch(reply, (m) => {
+                  m.status = result.found === false ? `${note}에 정보가 없었어요` : `${note} 참고`;
+                });
+                break;
+              }
               if (result && Array.isArray(result.tracks)) {
                 const found = result.tracks.map((t) => ({ title: String(t.title), artist: String(t.artist) }));
                 patch(reply, (m) => {
@@ -320,6 +392,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                   if (event.name === "find_track") {
                     // asked for one named song: it is either found, or it is not
                     m.status = found.length ? "곡을 찾았어요" : "곡을 찾지 못했어요";
+                  } else if (event.name === "artist_top_tracks") {
+                    m.status = found.length ? "Last.fm 참고" : "Last.fm에 정보가 없었어요";
                   } else {
                     m.status =
                       typeof result.checked === "number"
@@ -420,11 +494,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Ctx>(
     () => ({
       open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
-      applyProposal, dismissProposal, send, stop, clear, width, setWidth, maxWidth,
+      applyProposal, dismissProposal, send, stop, clear, width, setWidth, maxWidth, sources, toggleSource,
     }),
     [
       open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
-      applyProposal, dismissProposal, send, stop, clear, width, setWidth, maxWidth,
+      applyProposal, dismissProposal, send, stop, clear, width, setWidth, maxWidth, sources, toggleSource,
     ],
   );
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

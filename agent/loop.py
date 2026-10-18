@@ -14,7 +14,7 @@ from collections.abc import Iterator
 import requests
 
 from agent import config, gemini
-from agent.tools import TOOLS, TOOLS_CHAT, TOOLS_REFINE, Session, call_tool
+from agent.tools import TOOLS, TOOLS_CHAT, TOOLS_REFINE, Session, call_tool, tools_for
 
 MAX_STEPS = 4
 
@@ -34,6 +34,14 @@ _NAMED_CARDS = (
     "곡을 직접 재생할 수는 없다. 찾은 곡은 화면에 카드로 나오니, 카드의 재생 버튼을 누르면 들을 수 "
     "있다고 안내한다.\n"
 )
+# 가수·곡에 대한 질문: 글이 곧 답이다. 모델의 기억 대신 Last.fm이 돌려준 내용으로만 답하게 한다
+_INFO = (
+    "가수나 곡에 대해 묻는 말(어떤 가수·곡인지, 어느 나라인지, 언제 데뷔했는지, 어느 앨범인지, 비슷한 "
+    "가수)에는 artist_info나 track_info를 먼저 불러서, 돌려받은 내용으로만 답한다. 가수의 대표곡을 "
+    "물으면 artist_top_tracks를, 앨범이나 발매 이력을 물으면 albums를 부른다. 소개글이 비어 있거나 "
+    "부족하면 wiki_summary로 더 찾아본다 (도구가 보이는 것만 쓸 수 있다). 돌려받은 내용에 없는 것(활동 시기, 멤버, 곡의 분위기, 가사)은 "
+    "아는 척하지 말고 정보가 없다고 말한다. 소개글은 영어라서 한국어로 옮겨 짧게 답한다.\n"
+)
 # 터미널에서는 글이 곡을 보여 주는 유일한 곳이라 목록을 쓰게 한다
 _RULE_LIST = (
     "추천은 돌려받은 곡 중 최대 5곡을 '곡명 - 가수' 목록으로만 보여주고, 곡마다 설명을 "
@@ -52,12 +60,15 @@ _TAIL = (
     "날씨, 시간, 뉴스처럼 네가 알 수 없는 것은 모른다고 짧게 말하고, 음악 이야기로 돌아오도록 "
     "이끈다."
 )
-SYSTEM_PROMPT = _HEAD + _NAMED + _RULE_LIST + _TAIL
-SYSTEM_PROMPT_CARDS = _HEAD + _NAMED + _NAMED_CARDS + _RULE_CARDS + _TAIL
+SYSTEM_PROMPT = _HEAD + _NAMED + _INFO + _RULE_LIST + _TAIL
+SYSTEM_PROMPT_CARDS = _HEAD + _NAMED + _NAMED_CARDS + _INFO + _RULE_CARDS + _TAIL
 
 
 # 곡을 틀거나 찾아 달라는 말, 추천해 달라는 말: 이런 요청은 도구로 확인해야 답할 수 있다
-_NEEDS_TOOL = re.compile(r"(틀어|들려|재생|검색|찾아|추천|play)", re.IGNORECASE)
+_NEEDS_TOOL = re.compile(
+    r"(틀어|들려|재생|검색|찾아|추천|play|어떤 (밴드|가수|곡|노래)|누구|어느 나라|언제 (결성|데뷔|나왔)|앨범|대표곡|비슷한)",
+    re.IGNORECASE,
+)
 
 
 def refine_prompt(label: str, definition: str) -> str:
@@ -111,6 +122,7 @@ def run_agent(
     model: str | None = None,
     cards: bool = False,
     refine: dict | None = None,
+    sources: list[str] | None = None,
 ) -> Iterator[dict]:
     """이벤트를 하나씩 내보낸다.
 
@@ -123,18 +135,28 @@ def run_agent(
     refine={"label", "definition"}이면 곡 추천이 아니라 그 태그의 기준을 정하는 대화다: 도구는
     propose_definition 하나이고, 곡 이름·추천에 대한 되돌림 검사는 하지 않는다.
 
+    sources가 주어지면 그 출처의 도구만 모델에게 보여 준다.
+
     cards=True는 곡을 화면이 카드로 보여 주는 경우다. 글이 곡 이름을 말하지 않으니 "곡을
     말했는가"로 하는 재시도 검사는 끄고, 글은 기준 설명만 쓰게 한다.
     """
     # model이 None이면 설정된 기본 모델(Gemini 또는 로컬). 이름을 주면 그 이름의 Ollama 모델이다.
     if model is None and config.PROVIDER == "ollama":
         model = config.LOCAL_GENERATION_MODEL
-    tools = TOOLS_REFINE if refine else TOOLS_CHAT
+    # sources: 사용자가 켜 둔 출처(lastfm·wikipedia·musicbrainz). None이면 전부. 다듬기 대화는 출처와 무관하다.
+    tools = TOOLS_REFINE if refine else tools_for(sources)
     system = (
         refine_prompt(refine["label"], refine["definition"])
         if refine
         else (SYSTEM_PROMPT_CARDS if cards else SYSTEM_PROMPT)
     )
+    if not tools:
+        # 사용자가 출처를 모두 껐다: 곡을 찾거나 확인할 수 없으니, 그렇다고 말하고 지어내지 않게 한다
+        system += (
+            "\n\n지금은 조회 도구를 쓸 수 없다(사용자가 출처를 모두 껐다). 곡을 찾거나 추천하거나 "
+            "실제로 있는 곡인지 확인할 수 없다고 짧게 말하고, 챗봇 위쪽의 출처 버튼을 켜면 할 수 있다고 안내한다. "
+            "곡 이름을 지어내 추천하지 않는다."
+        )
     messages = [
         {"role": "system", "content": system},
         *history,
@@ -162,7 +184,7 @@ def run_agent(
         if not calls:
             # 곡 이름을 말했는데 도구를 부르지 않고 "그런 곡은 없다"거나 아는 척 답하는 경우: 작은 모델이
             # 확인 없이 단정하는 버릇이라, 도구를 먼저 쓰도록 한 번 되돌린다.
-            if not refine and step == 1 and not nudged and _NEEDS_TOOL.search(question):
+            if tools and not refine and step == 1 and not nudged and _NEEDS_TOOL.search(question):
                 nudged = True
                 yield {"type": "retry", "reason": "도구로 확인하지 않아 다시 시도"}
                 messages.append({"role": "assistant", "content": content})
@@ -171,7 +193,8 @@ def run_agent(
                         "role": "user",
                         "content": (
                             "도구를 먼저 불러서 확인한 뒤에 답해줘. 곡 이름을 말한 거면 find_track, "
-                            "분위기나 장르를 말한 거면 top_tracks를 불러."
+                            "분위기나 장르를 말한 거면 top_tracks, 가수나 곡에 대한 질문이면 "
+                            "artist_info, track_info, albums 같은 정보 도구를 불러."
                         ),
                     }
                 )
