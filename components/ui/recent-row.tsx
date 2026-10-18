@@ -13,13 +13,16 @@ export function RecentRow({
   onPlay,
   onStation,
   stationBusy = false,
+  stationBlocked = false,
   plays,
 }: {
   track: RecentTrack;
   onPlay?: (uri: string) => void;
   onStation?: (track: RecentTrack) => void;
-  /** a station is being built right now, so a second click would be ignored */
+  /** a station is being built from THIS row, which is the only one that says so */
   stationBusy?: boolean;
+  /** one is being built from another row: this button looks as it did and ignores clicks */
+  stationBlocked?: boolean;
   /** times played this period; shown instead of the timestamp when given */
   plays?: number;
 }) {
@@ -75,14 +78,17 @@ export function RecentRow({
       {onStation && track.uri && (
         <button
           type="button"
-          onClick={() => onStation(track)}
+          onClick={() => {
+            if (!stationBlocked) onStation(track);
+          }}
           disabled={stationBusy}
+          aria-disabled={stationBlocked || undefined}
           title={
             stationBusy
               ? "스테이션 구성 중…"
               : `${track.title} 기준으로 스테이션 시작`
           }
-          className="absolute right-[136px] top-1/2 flex -translate-y-1/2 items-center gap-[5px] rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-[opacity,background-color] group-hover:opacity-100 enabled:hover:bg-ink disabled:opacity-40 disabled:group-hover:opacity-40"
+          className={`absolute right-[136px] top-1/2 flex -translate-y-1/2 items-center gap-[5px] rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-[opacity,background-color] group-hover:opacity-100 disabled:opacity-100 ${stationBlocked ? "cursor-default" : "enabled:hover:bg-ink"}`}
         >
           {stationBusy ? (
             <>

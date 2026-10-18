@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { RecentRow } from "./recent-row";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useHydrated } from "./use-hydrated";
@@ -25,6 +26,15 @@ export function RecentList({
 }) {
   const { play, startStation, stationBusy } = useSpotify();
   const hydrated = useHydrated();
+  /**
+   * The row a station is being built from.
+   *
+   * `stationBusy` is the provider's, and it is true for every row at once; only
+   * the one that was pressed should say "구성 중". The index, not the uri: the
+   * same track can sit in the history twice.
+   */
+  const [starting, setStarting] = useState<string | null>(null);
+  const building = hydrated && stationBusy !== null;
 
   return (
     <ul className="flex w-full flex-col">
@@ -32,10 +42,12 @@ export function RecentList({
         <RecentRow
           key={track.index}
           track={track}
-          stationBusy={hydrated && stationBusy !== null}
+          stationBusy={starting === track.index}
+          stationBlocked={building && starting !== track.index}
           plays={plays ? (plays[track.uri.split(":").pop() ?? ""] ?? 0) : undefined}
           onPlay={onPlay ?? ((uri) => void play({ uris: [uri] }))}
-          onStation={(t) =>
+          onStation={(t) => {
+            setStarting(track.index);
             void startStation({
               id: t.uri.split(":").pop() ?? t.uri,
               uri: t.uri,
@@ -43,8 +55,8 @@ export function RecentList({
               artist: t.artist,
               artwork: t.artwork,
               durationMs: t.durationMs,
-            })
-          }
+            }).finally(() => setStarting(null));
+          }}
         />
       ))}
     </ul>
