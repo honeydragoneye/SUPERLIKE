@@ -171,6 +171,84 @@ def find_track(title: str, artist: str = "") -> dict:
     return result
 
 
+# 태그 정의의 길이 상한. Superlike(lib/station/moods.ts의 CUSTOM_DEFINITION_MAX)와 같아야 한다.
+DEFINITION_MAX = 80
+# 미리보기에서 판정해 보는 곡 수와, 화면에 보여 줄 통과·탈락 곡 수
+_PREVIEW_SAMPLE = 20
+_PREVIEW_SHOWN = 6
+
+
+def _sample_pool(sample_tag: str) -> list[dict]:
+    """미리보기에 쓸 곡들: 태그가 있으면 그 태그의 인기곡, 없으면 전 세계 차트."""
+    params: dict = {"limit": 50, "api_key": config.LASTFM_API_KEY, "format": "json"}
+    if sample_tag.strip():
+        params.update(method="tag.gettoptracks", tag=sample_tag.strip().lower())
+    else:
+        params.update(method="chart.gettoptracks")
+    response = requests.get(_LASTFM_URL, params=params, timeout=10)
+    response.raise_for_status()
+    data = response.json()
+    found = (data.get("tracks") or {}).get("track", [])
+    pool = []
+    for t in found:
+        artist = t["artist"]["name"] if isinstance(t.get("artist"), dict) else str(t.get("artist", ""))
+        pool.append({"title": t["name"], "artist": artist})
+    return pool
+
+
+# 판정기는 곡 제목과 가수 이름만 본다. 이런 말이 든 기준은 그것만으로는 정확히 가릴 수 없다.
+_NOT_JUDGEABLE = re.compile(
+    r"lyric|melody|beat|tempo|bpm|vocal|voice|guitar|piano|instrument|sound|rhythm|chorus|가사|멜로디|박자|목소리|악기|소리",
+    re.IGNORECASE,
+)
+
+
+def propose_definition(definition: str, reason: str = "", sample_tag: str = "") -> dict:
+    """사용자의 태그에 새 기준(정의)을 제안하고, 그 기준이 곡들에 어떻게 적용되는지 미리 보여 준다.
+
+    예시를 주면서 규칙을 짐작하게 하는 것보다, 사용자에게 기준을 물어 말로 적은 정의가 훨씬 정확하다
+    (experiments/personal_tag_exp.py). 그래서 에이전트의 일은 기준을 묻고, 한 문장으로 정리하고,
+    그 기준이 어떤 곡을 통과시키는지 보여 주는 것이다. 정의를 실제로 바꾸는 건 화면이고, 사용자가
+    "적용"을 눌렀을 때만 일어난다.
+    """
+    if not config.LASTFM_API_KEY:
+        raise RuntimeError("LASTFM_API_KEY가 설정되지 않았습니다")
+    d = " ".join(str(definition).split())
+    if not d:
+        return {"error": "정의가 비어 있습니다. 영어 한 문장으로 기준을 적어 다시 불러 주세요."}
+    if len(d) > DEFINITION_MAX:
+        return {"error": f"정의가 {len(d)}자입니다. {DEFINITION_MAX}자 이내의 영어 한 문장으로 줄여 다시 불러 주세요."}
+
+    try:
+        pool = _sample_pool(sample_tag)
+    except requests.RequestException:
+        pool = []
+    if not pool and sample_tag.strip():
+        # 모델이 지어낸 태그("sad, non-korean")면 Last.fm에 곡이 없다. 실패로 돌려주면 모델이 그 오류를
+        # 사용자에게 읊고 멈추니, 차트로 바꿔서 미리보기는 반드시 보여 준다.
+        pool = _sample_pool("")
+    random.shuffle(pool)
+    pool = pool[:_PREVIEW_SAMPLE]
+    if not pool:
+        return {"error": "미리보기에 쓸 곡을 가져오지 못했습니다. sample_tag를 바꾸거나 비워서 다시 불러 주세요."}
+    verdicts = judge(d, pool)
+    proposal = {"definition": d, "reason": " ".join(str(reason).split())[:200]}
+    if _NOT_JUDGEABLE.search(d):
+        proposal["warning"] = "가사나 소리 같은 기준은 곡 제목과 가수만 보는 판정에서는 정확히 가려내기 어려워요."
+    passed = [t for t, ok in zip(pool, verdicts) if ok]
+    failed = [t for t, ok in zip(pool, verdicts) if ok is False]
+    return {
+        "proposal": proposal,
+        "preview": {
+            "checked": len(pool),
+            # 보여 주는 곡은 일부지만, 몇 곡이 통과했는지는 전체로 알려 준다
+            "passed_count": len(passed),
+            "passed": passed[:_PREVIEW_SHOWN],
+            "failed": failed[:_PREVIEW_SHOWN],
+        },
+    }
+
+
 TOOLS: dict[str, dict] = {
     "top_tracks": {
         "schema": {
@@ -226,15 +304,48 @@ TOOLS: dict[str, dict] = {
             },
         },
         "run": find_track,
-    }
+    },
+    "propose_definition": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "propose_definition",
+                "description": (
+                    "사용자가 말한 기준을 영어 한 문장으로 정리해 태그의 새 정의로 제안하고, 그 기준이 "
+                    "실제 곡들에 어떻게 적용되는지 미리 본다. 정의는 곡 제목과 가수만 보고 판정할 수 있는 "
+                    "기준(가수, 나라, 언어, 분위기, 장르)이어야 하고 70자 이내다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "definition": {
+                            "type": "string",
+                            "description": "영어 한 문장의 기준 (예: 'a sad song that is not Korean')",
+                        },
+                        "reason": {"type": "string", "description": "사용자의 말을 어떻게 정리했는지 한국어 한 문장"},
+                        "sample_tag": {
+                            "type": "string",
+                            "description": "미리보기 곡을 가져올 영어 태그 (예: korean, k-pop). 모르면 비운다",
+                        },
+                    },
+                    "required": ["definition"],
+                },
+            },
+        },
+        "run": propose_definition,
+    },
 }
 
+# 모드마다 모델에게 보여 주는 도구가 다르다. 작은 모델은 도구가 많을수록 고르기 어려워한다.
+TOOLS_CHAT = ("top_tracks", "find_track")
+TOOLS_REFINE = ("propose_definition",)
 
-def call_tool(name: str, arguments: dict, session: Session) -> object:
+
+def call_tool(name: str, arguments: dict, session: Session, allowed: tuple[str, ...] | None = None) -> object:
     """모델이 고른 도구를 실행한다. 없는 도구나 잘못된 인자는 예외 대신 오류 값으로 돌려줘서
     모델이 스스로 고쳐 다시 시도할 수 있게 한다."""
     tool = TOOLS.get(name)
-    if tool is None:
+    if tool is None or (allowed is not None and name not in allowed):
         return {"error": f"없는 도구: {name}"}
     try:
         run = tool["run"]

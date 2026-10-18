@@ -15,7 +15,7 @@ from collections.abc import Iterator
 import requests
 
 from agent import config
-from agent.tools import TOOLS, Session, call_tool
+from agent.tools import TOOLS, TOOLS_CHAT, TOOLS_REFINE, Session, call_tool
 
 MAX_STEPS = 4
 
@@ -61,17 +61,34 @@ SYSTEM_PROMPT_CARDS = _HEAD + _NAMED + _NAMED_CARDS + _RULE_CARDS + _TAIL
 _NEEDS_TOOL = re.compile(r"(틀어|들려|재생|검색|찾아|추천|play)", re.IGNORECASE)
 
 
+def refine_prompt(label: str, definition: str) -> str:
+    """태그의 기준을 정하는 대화용 프롬프트. 곡을 추천하는 대화와는 하는 일이 다르다."""
+    return (
+        "너는 사용자가 만든 음악 태그의 기준을 정하는 걸 돕는다.\n"
+        f"태그 이름: \"{label}\". 지금 기준(정의): \"{definition}\".\n\n"
+        "1. 사용자가 이 태그에 어떤 곡을 넣고 싶은지 말하면, 그 기준을 영어 한 문장(70자 이내)으로 "
+        "정리해 propose_definition 도구로 제안한다.\n"
+        "2. 기준은 곡 제목과 가수 이름만 보고 판정할 수 있어야 한다 (가수, 나라, 언어, 분위기, 장르). "
+        "가사나 소리처럼 판정할 수 없는 기준이면 그렇다고 말하고, 판정할 수 있는 말로 바꿔 보자고 한다.\n"
+        "3. 기준이 너무 모호하면(예: '그냥 좋은 노래') 도구를 부르기 전에 한 가지만 구체적으로 되묻는다.\n"
+        "4. 도구가 돌려준 미리보기는 화면에 따로 보여 준다. 글에서는 어떻게 정리했는지 한두 문장만 "
+        "말하고, 곡 목록을 나열하지 않는다. 마크다운 기호는 쓰지 않는다.\n"
+        "5. 사용자가 고치고 싶다고 하면 기준을 고쳐 propose_definition을 다시 부른다. 정의를 실제로 "
+        "바꾸는 건 사용자가 화면에서 적용을 눌렀을 때뿐이다."
+    )
+
+
 def _mentions_any(text: str, titles: list[str]) -> bool:
     flat = text.lower()
     return any(t.lower() in flat for t in titles if len(t) >= 2)
 
 
-def _chat_stream(messages: list[dict], model: str) -> Iterator[dict]:
+def _chat_stream(messages: list[dict], model: str, tools: tuple[str, ...] = TOOLS_CHAT) -> Iterator[dict]:
     """Ollama /api/chat 한 번. 줄마다 오는 조각을 그대로 내보낸다."""
     payload = {
         "model": model,
         "messages": messages,
-        "tools": [t["schema"] for t in TOOLS.values()],
+        "tools": [TOOLS[n]["schema"] for n in tools],
         "stream": True,
         # 생각 단계를 끄면 도구 선택이 훨씬 빠르다
         "think": False,
@@ -87,7 +104,11 @@ def _chat_stream(messages: list[dict], model: str) -> Iterator[dict]:
 
 
 def run_agent(
-    history: list[dict], question: str, model: str | None = None, cards: bool = False
+    history: list[dict],
+    question: str,
+    model: str | None = None,
+    cards: bool = False,
+    refine: dict | None = None,
 ) -> Iterator[dict]:
     """이벤트를 하나씩 내보낸다.
 
@@ -97,12 +118,21 @@ def run_agent(
     {"type": "token", "data"}                   — 답변 글자 조각
     {"type": "done", "steps"}                   — 끝. steps는 모델을 부른 횟수
 
+    refine={"label", "definition"}이면 곡 추천이 아니라 그 태그의 기준을 정하는 대화다: 도구는
+    propose_definition 하나이고, 곡 이름·추천에 대한 되돌림 검사는 하지 않는다.
+
     cards=True는 곡을 화면이 카드로 보여 주는 경우다. 글이 곡 이름을 말하지 않으니 "곡을
     말했는가"로 하는 재시도 검사는 끄고, 글은 기준 설명만 쓰게 한다.
     """
     model = model or os.environ.get("AGENT_MODEL") or config.LOCAL_GENERATION_MODEL
+    tools = TOOLS_REFINE if refine else TOOLS_CHAT
+    system = (
+        refine_prompt(refine["label"], refine["definition"])
+        if refine
+        else (SYSTEM_PROMPT_CARDS if cards else SYSTEM_PROMPT)
+    )
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT_CARDS if cards else SYSTEM_PROMPT},
+        {"role": "system", "content": system},
         *history,
         {"role": "user", "content": question},
     ]
@@ -118,7 +148,7 @@ def run_agent(
     for step in range(1, MAX_STEPS + 1):
         content = ""
         calls: list[dict] = []
-        for chunk in _chat_stream(messages, model):
+        for chunk in _chat_stream(messages, model, tools):
             message = chunk.get("message", {})
             if message.get("content"):
                 content += message["content"]
@@ -128,7 +158,7 @@ def run_agent(
         if not calls:
             # 곡 이름을 말했는데 도구를 부르지 않고 "그런 곡은 없다"거나 아는 척 답하는 경우: 작은 모델이
             # 확인 없이 단정하는 버릇이라, 도구를 먼저 쓰도록 한 번 되돌린다.
-            if step == 1 and not nudged and _NEEDS_TOOL.search(question):
+            if not refine and step == 1 and not nudged and _NEEDS_TOOL.search(question):
                 nudged = True
                 yield {"type": "retry", "reason": "도구로 확인하지 않아 다시 시도"}
                 messages.append({"role": "assistant", "content": content})
@@ -183,7 +213,7 @@ def run_agent(
             fn = call["function"]
             args = fn.get("arguments") or {}
             yield {"type": "tool_call", "name": fn["name"], "arguments": args}
-            result = call_tool(fn["name"], args, session)
+            result = call_tool(fn["name"], args, session, tools)
             yield {"type": "tool_result", "name": fn["name"], "result": result}
             if isinstance(result, dict) and isinstance(result.get("tracks"), list):
                 seen_titles += [t["title"] for t in result["tracks"] if "title" in t]
@@ -195,7 +225,7 @@ def run_agent(
 
     # 단계를 다 썼는데도 도구만 부르고 있다 — 지금까지 모은 걸로 마무리하라고 요청한다
     messages.append({"role": "user", "content": "지금까지 확인한 곡으로 바로 답해줘."})
-    for chunk in _chat_stream(messages, model):
+    for chunk in _chat_stream(messages, model, tools):
         text = chunk.get("message", {}).get("content")
         if text:
             yield {"type": "token", "data": text}

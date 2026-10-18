@@ -4,7 +4,8 @@
 
 표준 라이브러리만 쓰고, 이 컴퓨터 안에서만 열린다 (127.0.0.1). 인증이 없으므로 밖으로 열지 않는다.
 
-POST /chat  {"question": str, "history": [{"role": "user"|"assistant", "content": str}, ...]}
+POST /chat  {"question": str, "history": [{"role": "user"|"assistant", "content": str}, ...],
+             "refine": {"label": str, "definition": str}}   ← 선택. 있으면 그 태그의 기준을 정하는 대화
   → text/event-stream. 줄마다 `data: {이벤트 JSON}` — loop.run_agent의 이벤트에
     {"type": "error", "code", "message"}가 더해진다.
 GET /health → {"status": "ok", "model": ...}
@@ -43,6 +44,17 @@ def _clean_history(raw: object) -> list[dict]:
     return out
 
 
+def _clean_refine(raw: object) -> dict | None:
+    """태그 이름과 지금 정의. 모델의 지시문에 들어가므로 길이를 자르고 한 줄로 만든다."""
+    if not isinstance(raw, dict):
+        return None
+    label, definition = raw.get("label"), raw.get("definition")
+    if not isinstance(label, str) or not isinstance(definition, str):
+        return None
+    label, definition = " ".join(label.split())[:24], " ".join(definition.split())[:200]
+    return {"label": label, "definition": definition} if label and definition else None
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "SuperlikeAgent"
 
@@ -77,6 +89,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"error": "missing_question"})
         question = question.strip()[:MAX_QUESTION]
         history = _clean_history(body.get("history"))
+        refine = _clean_refine(body.get("refine"))
 
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -89,7 +102,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         try:
-            for event in run_agent(history, question, cards=True):
+            for event in run_agent(history, question, cards=True, refine=refine):
                 send(event)
         except (BrokenPipeError, ConnectionResetError):
             pass  # 브라우저가 창을 닫거나 대화를 끊었다
