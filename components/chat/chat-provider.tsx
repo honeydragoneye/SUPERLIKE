@@ -235,12 +235,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 const found = result.tracks.map((t) => ({ title: String(t.title), artist: String(t.artist) }));
                 patch(reply, (m) => {
                   m.tracks = found;
-                  m.status =
-                    typeof result.checked === "number"
-                      ? found.length
-                        ? `후보 ${result.checked}곡 확인 → ${found.length}곡 통과`
-                        : `후보 ${result.checked}곡 확인 → 조건에 맞는 곡 없음`
-                      : null;
+                  if (event.name === "find_track") {
+                    // asked for one named song: it is either found, or it is not
+                    m.status = found.length ? "곡을 찾았어요" : "곡을 찾지 못했어요";
+                  } else {
+                    m.status =
+                      typeof result.checked === "number"
+                        ? found.length
+                          ? `후보 ${result.checked}곡 확인 → ${found.length}곡 통과`
+                          : `후보 ${result.checked}곡 확인 → 조건에 맞는 곡 없음`
+                        : null;
+                  }
                 });
               }
               break;
@@ -274,6 +279,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         setBusy(false);
         patch(reply, (m) => {
           m.streaming = false;
+          // "…중…" is what a tool is doing; once the reply is over, a tool that never
+          // reported back leaves nothing true to say, so the line goes rather than lingering
+          if (m.status?.endsWith("…")) m.status = null;
         });
       }
     },

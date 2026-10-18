@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Iterator
 
 import requests
@@ -24,6 +25,16 @@ _HEAD = (
     "(한국 노래면 k-indie, korean ballad 등), 사용자가 분위기나 상황까지 말했다면 condition에 "
     "그 전부를 영어 한 문장으로 적는다. 돌려받은 곡이 3곡 미만이면 tag를 바꿔 다시 부른다.\n"
 )
+# 곡 이름을 말한 경우: 찾아서 알려 줄 뿐, 곡의 내용을 아는 척하지 않는다
+_NAMED = (
+    "사용자가 곡 이름을 말하면(예: 'wave to earth의 hyang 틀어줘', '…검색해줘') 먼저 find_track으로 "
+    "그 곡이 있는지 확인한다. 찾았으면 찾았다고만 알리고, 못 찾았으면 못 찾았다고 말한다. "
+    "곡을 듣지 못했으니 분위기나 내용을 꾸며 쓰지 않는다.\n"
+)
+_NAMED_CARDS = (
+    "곡을 직접 재생할 수는 없다. 찾은 곡은 화면에 카드로 나오니, 카드의 재생 버튼을 누르면 들을 수 "
+    "있다고 안내한다.\n"
+)
 # 터미널에서는 글이 곡을 보여 주는 유일한 곳이라 목록을 쓰게 한다
 _RULE_LIST = (
     "추천은 돌려받은 곡 중 최대 5곡을 '곡명 - 가수' 목록으로만 보여주고, 곡마다 설명을 "
@@ -34,7 +45,7 @@ _RULE_LIST = (
 _RULE_CARDS = (
     "도구가 돌려준 곡은 화면에 카드로 따로 표시된다. 그래서 답변 글에 곡 목록을 나열하지 않고, "
     "어떤 기준으로 골랐는지를 한두 문장으로만 말한다. 곡을 듣지 못했으니 곡의 내용을 꾸며 "
-    "쓰지 않는다. "
+    "쓰지 않는다. 굵게(**)나 제목(#) 같은 마크다운 기호는 쓰지 않는다. "
 )
 _TAIL = (
     "돌려받은 곡이 1~2곡뿐이어도 그 곡을 추천하고, 부족하다고 미리 포기하지 않는다. "
@@ -42,8 +53,12 @@ _TAIL = (
     "날씨, 시간, 뉴스처럼 네가 알 수 없는 것은 모른다고 짧게 말하고, 음악 이야기로 돌아오도록 "
     "이끈다."
 )
-SYSTEM_PROMPT = _HEAD + _RULE_LIST + _TAIL
-SYSTEM_PROMPT_CARDS = _HEAD + _RULE_CARDS + _TAIL
+SYSTEM_PROMPT = _HEAD + _NAMED + _RULE_LIST + _TAIL
+SYSTEM_PROMPT_CARDS = _HEAD + _NAMED + _NAMED_CARDS + _RULE_CARDS + _TAIL
+
+
+# 곡을 틀거나 찾아 달라는 말, 추천해 달라는 말: 이런 요청은 도구로 확인해야 답할 수 있다
+_NEEDS_TOOL = re.compile(r"(틀어|들려|재생|검색|찾아|추천|play)", re.IGNORECASE)
 
 
 def _mentions_any(text: str, titles: list[str]) -> bool:
@@ -95,6 +110,10 @@ def run_agent(
     # 도구가 돌려준 곡 제목들. 답변이 이 중 하나도 말하지 않으면 추천을 못 한 것이다.
     seen_titles: list[str] = []
     session = Session()
+    nudged = False
+    # 마지막 top_tracks가 돌려준 곡 수. 0곡이면 답하기 전에 다른 태그로 한 번 더 찾아 본다.
+    last_found: int | None = None
+    retried_empty = False
 
     for step in range(1, MAX_STEPS + 1):
         content = ""
@@ -107,6 +126,38 @@ def run_agent(
             calls.extend(message.get("tool_calls") or [])
 
         if not calls:
+            # 곡 이름을 말했는데 도구를 부르지 않고 "그런 곡은 없다"거나 아는 척 답하는 경우: 작은 모델이
+            # 확인 없이 단정하는 버릇이라, 도구를 먼저 쓰도록 한 번 되돌린다.
+            if step == 1 and not nudged and _NEEDS_TOOL.search(question):
+                nudged = True
+                yield {"type": "retry", "reason": "도구로 확인하지 않아 다시 시도"}
+                messages.append({"role": "assistant", "content": content})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "도구를 먼저 불러서 확인한 뒤에 답해줘. 곡 이름을 말한 거면 find_track, "
+                            "분위기나 장르를 말한 거면 top_tracks를 불러."
+                        ),
+                    }
+                )
+                continue
+            # 조건에 맞는 곡을 하나도 못 찾고 끝내려는 경우: 후보가 매번 조금씩 달라서 한 번은 빈손일 수
+            # 있다. 모델은 빈손인데도 "골라봤어요"라고 말하는 버릇이 있어, 태그를 바꿔 한 번 더 찾게 한다.
+            if last_found == 0 and not retried_empty and step < MAX_STEPS:
+                retried_empty = True
+                yield {"type": "retry", "reason": "곡을 못 찾아 다른 태그로 다시 시도"}
+                messages.append({"role": "assistant", "content": content})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "조건에 맞는 곡을 하나도 못 찾았어. 추천했다고 말하지 말고, 다른 tag(예: "
+                            "indie, ballad, korean ballad, k-indie)로 top_tracks를 한 번 더 불러."
+                        ),
+                    }
+                )
+                continue
             # 곡 목록을 받아 놓고 곡 하나 고르지 않은 채 끝내려는 경우: "다시 찾아볼게요"만
             # 말하고 멈추는 작은 모델의 버릇이라, 한 번 더 시킨다.
             if not cards and seen_titles and step < MAX_STEPS and not _mentions_any(content, seen_titles):
@@ -136,6 +187,8 @@ def run_agent(
             yield {"type": "tool_result", "name": fn["name"], "result": result}
             if isinstance(result, dict) and isinstance(result.get("tracks"), list):
                 seen_titles += [t["title"] for t in result["tracks"] if "title" in t]
+                if fn["name"] == "top_tracks":
+                    last_found = len(result["tracks"])
             messages.append(
                 {"role": "tool", "tool_name": fn["name"], "content": json.dumps(result, ensure_ascii=False)}
             )

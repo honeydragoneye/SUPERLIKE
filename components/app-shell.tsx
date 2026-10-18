@@ -117,9 +117,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               gridColumn: lyricsOpen
                 ? "1 / 3"
                 : chat
-                  ? home
-                    ? "1 / 2"
-                    : "1 / 3"
+                  ? "1 / 3"
                   : home || railless
                     ? "1 / 2"
                     : "1 / 3",
@@ -163,7 +161,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {chat && (
             <div
               className="relative min-h-0"
-              style={{ gridColumn: "2 / 3", gridRow: home ? "1 / 3" : "2 / 3" }}
+              style={{ gridColumn: "2 / 3", gridRow: "2 / 3" }}
             >
               <ChatResizer />
               <ChatPanel />

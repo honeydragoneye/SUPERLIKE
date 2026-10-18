@@ -121,41 +121,54 @@ def top_tracks(session: Session, tag: str, condition: str = "", page: int = 1) -
     return result
 
 
-def find_track(title: str, artist: str) -> dict:
-    """Last.fm에서 이 제목·가수의 곡이 실제로 있는지 확인한다.
+def _same_artist(a: str, b: str) -> bool:
+    a, b = _norm(a), _norm(b)
+    return bool(a) and bool(b) and (a in b or b in a or SequenceMatcher(None, a, b).ratio() >= 0.6)
 
-    분위기 설명 하나만 받는 검색 도구로 두면 작은 모델이 "비 오는 날 노래" 같은
-    문장을 그대로 검색어로 넘겨서, 제목에 그 단어가 든 엉뚱한 곡만 나온다. 제목과
-    가수를 따로 받으면 구체적인 곡을 먼저 떠올리지 않고서는 부를 수 없다.
+
+def _search(title: str, artist: str, limit: int) -> list[dict]:
+    params = {
+        "method": "track.search",
+        "track": title,
+        "limit": limit,
+        "api_key": config.LASTFM_API_KEY,
+        "format": "json",
+    }
+    if artist:
+        params["artist"] = artist
+    response = requests.get(_LASTFM_URL, params=params, timeout=10)
+    response.raise_for_status()
+    return response.json().get("results", {}).get("trackmatches", {}).get("track", [])
+
+
+def find_track(title: str, artist: str = "") -> dict:
+    """사용자가 말한 곡이 실제로 있는지 Last.fm에서 확인한다.
+
+    찾으면 `tracks`에 그 곡 하나를 담아 돌려준다 — 곡 목록을 주는 top_tracks와 같은 모양이라
+    화면이 같은 방식으로 카드를 만든다. 못 찾으면 `tracks`는 빈 목록이다.
+
+    가수 표기가 Last.fm과 달라서(한글/영문 등) 제목+가수 검색이 빈손일 수 있어, 그때는 제목만으로
+    다시 찾고 가수가 비슷한지로 거른다.
     """
     if not config.LASTFM_API_KEY:
         raise RuntimeError("LASTFM_API_KEY가 설정되지 않았습니다")
-    response = requests.get(
-        _LASTFM_URL,
-        params={
-            "method": "track.search",
-            "track": title,
-            "artist": artist,
-            "limit": 1,
-            "api_key": config.LASTFM_API_KEY,
-            "format": "json",
-        },
-        timeout=10,
-    )
-    response.raise_for_status()
-    found = response.json().get("results", {}).get("trackmatches", {}).get("track", [])
-    if not found:
-        return {"found": False, "title": title, "artist": artist}
-    top = found[0]
-    if not _same_title(title, top["name"]):
-        # 모델이 지어낸 제목일 가능성이 높다. 가수의 실제 곡을 알려줘서 다시 고르게 한다.
-        return {
-            "found": False,
-            "title": title,
-            "artist": artist,
-            "note": f"그 제목의 곡은 없습니다. {top['artist']}의 다른 곡으로 '{top['name']}'이 있습니다.",
-        }
-    return {"found": True, "title": top["name"], "artist": top["artist"]}
+
+    with_artist = _search(title, artist, 5) if artist else []
+    for t in with_artist:
+        if _same_title(title, t["name"]):
+            return {"found": True, "title": t["name"], "artist": t["artist"], "tracks": [{"title": t["name"], "artist": t["artist"]}]}
+
+    by_title = _search(title, "", 10)
+    for t in by_title:
+        if _same_title(title, t["name"]) and (not artist or _same_artist(artist, t["artist"])):
+            return {"found": True, "title": t["name"], "artist": t["artist"], "tracks": [{"title": t["name"], "artist": t["artist"]}]}
+
+    result: dict = {"found": False, "title": title, "artist": artist, "tracks": []}
+    if with_artist:
+        # 제목은 틀렸지만 가수는 맞을 수 있다: 가수의 실제 곡을 알려줘서 다시 고르게 한다
+        top = with_artist[0]
+        result["note"] = f"그 제목의 곡은 없습니다. {top['artist']}의 다른 곡으로 '{top['name']}'이 있습니다."
+    return result
 
 
 TOOLS: dict[str, dict] = {
@@ -198,16 +211,17 @@ TOOLS: dict[str, dict] = {
             "function": {
                 "name": "find_track",
                 "description": (
-                    "사용자가 말한 곡이나 가수가 실제로 있는지 제목과 가수로 확인한다. "
-                    "추천할 곡을 찾는 용도는 아니다 (그건 top_tracks)."
+                    "사용자가 곡 이름을 말했을 때 그 곡이 실제로 있는지 확인한다 "
+                    "(예: 'wave to earth의 hyang'). 가수를 모르면 artist는 비운다. "
+                    "분위기로 곡을 추천하는 용도는 아니다 (그건 top_tracks)."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "title": {"type": "string", "description": "곡 제목 (예: Dagger)"},
-                        "artist": {"type": "string", "description": "가수 이름 (예: Slowdive)"},
+                        "artist": {"type": "string", "description": "가수 이름 (예: Slowdive). 모르면 빈 문자열"},
                     },
-                    "required": ["title", "artist"],
+                    "required": ["title"],
                 },
             },
         },

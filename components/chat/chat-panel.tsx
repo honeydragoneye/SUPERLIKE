@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useHydrated } from "@/components/ui/use-hydrated";
+import { boldSpans } from "@/lib/chat/inline";
 import { useChat, type ChatMessage, type ChatTrack } from "./chat-provider";
 
 type Seed = Parameters<ReturnType<typeof useSpotify>["startStation"]>[0];
@@ -128,6 +129,24 @@ function TrackCard({ track }: { track: ChatTrack }) {
         <span className="w-full truncate text-[10px] text-on-bright">{track.title}</span>
         <span className="w-full truncate text-[8px] tracking-[0.5px] text-on-bright-muted">{track.artist}</span>
       </button>
+      <button
+        type="button"
+        disabled={!ready}
+        aria-label={`${track.title} 재생`}
+        title={
+          !hydrated || !connected
+            ? "Spotify를 연결하면 재생할 수 있어요"
+            : looked && !seed
+              ? "Spotify에서 이 곡을 찾지 못했어요"
+              : "재생"
+        }
+        onClick={() => seed && void play({ uris: [seed.uri] })}
+        className="flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-pill bg-ink text-paper-solid transition-colors enabled:hover:bg-pink-bright disabled:cursor-default disabled:opacity-40"
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden className="ml-[1px]">
+          <path d="M2 1 9 5 2 9Z" fill="currentColor" />
+        </svg>
+      </button>
       {ready && (
         <button
           type="button"
@@ -171,7 +190,7 @@ function TrackCard({ track }: { track: ChatTrack }) {
 function withoutList(text: string): string {
   return text
     .split("\n")
-    .filter((line) => !/^\s*(?:[-*•]|\d+[.)])\s*\S/.test(line) && !/^\s*(?:[-*•]|\d+[.)])\s*$/.test(line))
+    .filter((line) => !/^\s*(?:[-•]|\*(?!\*)|\d+[.)])(?:\s+\S|\s*$)/.test(line))
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -200,7 +219,17 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
           </p>
         )}
         {text && (
-          <p className="whitespace-pre-wrap break-words text-[10px] leading-[15px] text-on-bright">{text}</p>
+          <p className="whitespace-pre-wrap break-words text-[10px] leading-[15px] text-on-bright">
+            {boldSpans(text).map((s, i) =>
+              s.bold ? (
+                <strong key={i} className="font-black">
+                  {s.text}
+                </strong>
+              ) : (
+                <span key={i}>{s.text}</span>
+              ),
+            )}
+          </p>
         )}
         {m.status && (
           <p className="flex items-center gap-[6px] text-[8px] tracking-[0.5px] text-on-bright-muted">
