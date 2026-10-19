@@ -5,6 +5,7 @@ import { useState } from "react";
 import { usePlaysThisWeek } from "./player/use-listening";
 import { RecentList } from "./ui/recent-list";
 import { useSpotify } from "./player/spotify-provider";
+import { useChat } from "./chat/chat-provider";
 import { useHydrated } from "./ui/use-hydrated";
 
 const RANGES = ["TODAY", "THIS WEEK"] as const;
@@ -34,7 +35,8 @@ function startOfWeek(): number {
  * Spotify is connected so the block never collapses during design review.
  */
 export function RecentlyPlayed() {
-  const { connected: session, recent, recentLive: live, recentError } = useSpotify();
+  const { connected: session, recent, recentLive: live, recentLoaded: loaded, recentError } = useSpotify();
+  const chat = useChat();
   /**
    * The session is the browser's to know, so this screen renders what the
    * server rendered until React has finished comparing the two. Gated here
@@ -79,6 +81,20 @@ export function RecentlyPlayed() {
         );
       })()
     : within;
+
+  /**
+   * What the empty list says. A list with nothing in it reads as broken, so it
+   * says why and what fills it: a new week starts empty on Monday, and so does
+   * a day. `all` tells the two apart from an account with no history at all.
+   */
+  const emptyNote =
+    hydrated && session && loaded && !recentError && tracks.length === 0
+      ? range === "TODAY"
+        ? { head: "오늘은 아직 들은 곡이 없어요", body: "지금 한 곡 들어 보세요. 재생하면 여기에 쌓여요." }
+        : all.length > 0
+          ? { head: "새로운 한 주가 시작됐어요", body: "노래를 들으면 이번 주 많이 들은 순서가 여기에 채워져요." }
+          : { head: "아직 재생 기록이 없어요", body: "노래를 들으면 여기에 쌓여요. 마음에 드는 곡부터 시작해 보세요." }
+      : null;
 
   const status = recentError
     ? recentError
@@ -134,7 +150,23 @@ export function RecentlyPlayed() {
       {/* the page behind it still does not scroll; this list does, so a ranking
           can be read past the fold instead of being cut at whatever fits */}
       <div className="scroll-y scroll-y-ink min-h-0 w-full flex-1">
-        <RecentList tracks={tracks} plays={ranking ? plays : undefined} />
+        {emptyNote ? (
+          <div className="flex h-full min-h-[160px] flex-col items-start justify-center gap-[10px] pr-[8px]">
+            <p className="text-[15px] font-black tracking-[-0.3px]">{emptyNote.head}</p>
+            <p className="text-[10px] leading-[15px]">{emptyNote.body}</p>
+            <button
+              type="button"
+              onClick={() => {
+                if (!chat.open) chat.toggle();
+              }}
+              className="cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[14px] py-[7px] text-[8px] tracking-[0.8px] text-paper transition-colors hover:bg-pink-bright"
+            >
+              챗봇에게 곡 추천받기 →
+            </button>
+          </div>
+        ) : (
+          <RecentList tracks={tracks} plays={ranking ? plays : undefined} />
+        )}
       </div>
 
       <div className="flex w-full shrink-0 items-center justify-between gap-[8px] whitespace-nowrap">

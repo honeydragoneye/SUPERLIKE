@@ -82,6 +82,8 @@ type Ctx = {
   /** the signed-in user's listening history */
   recent: RecentTrack[];
   recentLive: boolean;
+  /** the history has arrived, even if it is empty — told apart from "still loading" */
+  recentLoaded: boolean;
   recentError: string | null;
   refreshRecent: () => Promise<void>;
   /** station: an app-managed queue, rebuildable without touching what plays */
@@ -546,6 +548,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       },
       recent: recent ?? [],
       recentLive: connected && Boolean(recent?.length),
+      recentLoaded: connected && recent !== null,
       recentError,
       refreshRecent,
       stationQueue: station.queue,
