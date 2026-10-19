@@ -11,6 +11,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useCustomTags } from "@/components/station/use-custom-tags";
+import { snapshot as likedSnapshot } from "@/lib/likes";
 import { updateCustomDefinition } from "@/lib/station/custom-tags";
 import type { CustomMoodKey } from "@/lib/station/filter";
 import { useLyricsView } from "@/components/lyrics/lyrics-view";
@@ -18,7 +19,9 @@ import { useLyricsView } from "@/components/lyrics/lyrics-view";
 /** The width the chat column starts at, and the narrowest it can be dragged to. */
 export const CHAT_MIN_WIDTH = 330;
 const WIDTH_KEY = "superlike:chat-width:v1";
-const SOURCES_KEY = "superlike:chat-sources:v1";
+const TASTE_KEY = "superlike:chat-taste:v1";
+/** How many of the newest liked songs go to the agent when the listener shares them. */
+const TASTE_MAX = 30;
 
 /** Where the agent may look things up. The listener switches them on and off. */
 export type ChatSource = "lastfm" | "wikipedia" | "musicbrainz";
@@ -27,7 +30,6 @@ export const CHAT_SOURCES: { key: ChatSource; label: string; hint: string }[] = 
   { key: "wikipedia", label: "Wikipedia", hint: "가수 소개와 활동 이력" },
   { key: "musicbrainz", label: "MusicBrainz", hint: "앨범 목록과 발매일" },
 ];
-const ALL_SOURCES: ChatSource[] = CHAT_SOURCES.map((s) => s.key);
 
 /** The tool that answered, by the name the reply's status line gives it. */
 const NOTE_OF: Record<string, string> = {
@@ -64,6 +66,10 @@ export type ChatMessage =
       status: string | null;
       tracks: ChatTrack[];
       proposal: ChatProposal | null;
+      /** the question as asked, so the same one can be asked again with another source */
+      question: string;
+      /** set when the agent could not answer: where it looked, and where else the listener can send it */
+      offer: { tried: ChatSource[]; options: ChatSource[] } | null;
       error: string | null;
       streaming: boolean;
     };
@@ -92,9 +98,11 @@ type Ctx = {
   /** clamped to [CHAT_MIN_WIDTH, half the window] */
   setWidth: (px: number) => void;
   maxWidth: number;
-  /** the sources the agent may use, and the switch for one of them */
-  sources: ChatSource[];
-  toggleSource: (key: ChatSource) => void;
+  /** the listener picked where to look next, for the question this answer was about */
+  searchWith: (messageId: string, source: ChatSource) => void;
+  /** whether the liked songs are shared with the agent, and the switch for it */
+  shareTaste: boolean;
+  toggleTaste: () => void;
 };
 
 const ChatContext = createContext<Ctx | null>(null);
@@ -148,37 +156,36 @@ function writeSavedWidth(px: number): void {
 }
 
 /**
- * Which sources are on, kept in this browser — the same external-store shape as
- * the width. The snapshot is cached so React sees the same array until it changes.
+ * Whether the liked songs are shared with the agent. Off until the listener
+ * turns it on: the songs leave this browser for the model, so it is a choice.
  */
-let savedSources: ChatSource[] | undefined; // undefined = not read yet
-const sourceListeners = new Set<() => void>();
+let savedTaste: boolean | undefined; // undefined = not read yet
+const tasteListeners = new Set<() => void>();
 
-function readSources(): ChatSource[] {
-  if (savedSources === undefined) {
+function readTaste(): boolean {
+  if (savedTaste === undefined) {
     try {
-      const parsed: unknown = JSON.parse(localStorage.getItem(SOURCES_KEY) ?? "null");
-      savedSources = Array.isArray(parsed) ? ALL_SOURCES.filter((k) => parsed.includes(k)) : ALL_SOURCES;
+      savedTaste = localStorage.getItem(TASTE_KEY) === "1";
     } catch {
-      savedSources = ALL_SOURCES;
+      savedTaste = false;
     }
   }
-  return savedSources;
+  return savedTaste;
 }
 
-function subscribeSources(onChange: () => void): () => void {
-  sourceListeners.add(onChange);
-  return () => void sourceListeners.delete(onChange);
+function subscribeTaste(onChange: () => void): () => void {
+  tasteListeners.add(onChange);
+  return () => void tasteListeners.delete(onChange);
 }
 
-function writeSources(next: ChatSource[]): void {
-  savedSources = next;
+function writeTaste(on: boolean): void {
+  savedTaste = on;
   try {
-    localStorage.setItem(SOURCES_KEY, JSON.stringify(next));
+    localStorage.setItem(TASTE_KEY, on ? "1" : "0");
   } catch {
     // still applies for this session
   }
-  for (const fn of sourceListeners) fn();
+  for (const fn of tasteListeners) fn();
 }
 
 /** The window's own size, as an external store: it changes when the window does. */
@@ -263,13 +270,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [refine]);
   const saved = useSyncExternalStore(subscribeWidth, readSavedWidth, () => CHAT_MIN_WIDTH);
   const maxWidth = useSyncExternalStore(subscribeWindow, maxChatWidth, () => CHAT_MIN_WIDTH);
-  const sources = useSyncExternalStore(subscribeSources, readSources, () => ALL_SOURCES);
-  const toggleSource = useCallback((key: ChatSource) => {
-    const now = readSources();
-    writeSources(ALL_SOURCES.filter((k) => (k === key ? !now.includes(k) : now.includes(k))));
-  }, []);
   // a width that was fine before can be too wide for a window that has since shrunk
   const width = clamp(saved, maxWidth);
+  const shareTaste = useSyncExternalStore(subscribeTaste, readTaste, () => false);
+  const toggleTaste = useCallback(() => writeTaste(!readTaste()), []);
 
   const messagesRef = useRef<ChatMessage[]>([]);
   useEffect(() => {
@@ -297,17 +301,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  const send = useCallback(
-    async (raw: string) => {
+  const run = useCallback(
+    async (raw: string, opts?: { sources?: ChatSource[]; via?: string; before?: number }) => {
       const question = raw.trim();
       if (!question || abortRef.current) return;
 
-      const history = historyOf(messagesRef.current);
+      // a retry leaves out the answer that gave up: the model would copy it instead of looking again
+      const history = historyOf(opts?.before === undefined ? messagesRef.current : messagesRef.current.slice(0, opts.before));
       const reply = nextId();
       setMessages((all) => [
         ...all,
-        { id: nextId(), role: "user", text: question },
-        { id: reply, role: "assistant", text: "", status: null, tracks: [], proposal: null, error: null, streaming: true },
+        { id: nextId(), role: "user", text: opts?.via ? `${question} · ${opts.via}에서 찾기` : question },
+        {
+          id: reply, role: "assistant", text: "", status: null, tracks: [], proposal: null,
+          question, offer: null, error: null, streaming: true,
+        },
       ]);
 
       const controller = new AbortController();
@@ -322,7 +330,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             question,
             history,
             refine: refineRef.current && { label: refineRef.current.label, definition: refineRef.current.definition },
-            sources: readSources(),
+            sources: opts?.sources,
+            // read when sending, so a heart pressed a second ago is already in
+            taste: readTaste()
+              ? likedSnapshot().slice(0, TASTE_MAX).map((t) => ({ title: t.title, artist: t.artist }))
+              : undefined,
           }),
           signal: controller.signal,
         });
@@ -342,6 +354,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     ? "곡을 찾는 중…"
                     : event.name === "propose_definition"
                       ? "기준을 정리하는 중…"
+                      : event.name === "request_source"
+                        ? "찾을 곳을 정리하는 중…"
+                      : event.name === "similar_to"
+                        ? "비슷한 곡을 찾는 중…"
                       : String(event.name) in NOTE_OF
                         ? `${NOTE_OF[String(event.name)]}에서 찾는 중…`
                         : "곡을 확인하는 중…";
@@ -351,6 +367,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               const result = event.result as
                 | {
                     found?: boolean;
+                    based_on?: string;
                     tracks?: ChatTrack[];
                     checked?: number;
                     proposal?: { definition: string; reason?: string; warning?: string };
@@ -392,6 +409,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                   if (event.name === "find_track") {
                     // asked for one named song: it is either found, or it is not
                     m.status = found.length ? "곡을 찾았어요" : "곡을 찾지 못했어요";
+                  } else if (event.name === "similar_to") {
+                    m.status = found.length
+                      ? `비슷한 곡 · ${String(result.based_on ?? "")}`
+                      : "비슷한 곡을 찾지 못했어요";
                   } else if (event.name === "artist_top_tracks") {
                     m.status = found.length ? "Last.fm 참고" : "Last.fm에 정보가 없었어요";
                   } else {
@@ -402,6 +423,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                           : `후보 ${result.checked}곡 확인 → 조건에 맞는 곡 없음`
                         : null;
                   }
+                });
+              }
+              break;
+            }
+            case "offer": {
+              const keys = CHAT_SOURCES.map((x) => x.key);
+              const only = (v: unknown): ChatSource[] =>
+                Array.isArray(v) ? v.filter((k): k is ChatSource => keys.includes(k as ChatSource)) : [];
+              const options = only(event.options);
+              if (options.length) {
+                patch(reply, (m) => {
+                  m.offer = { tried: only(event.tried), options };
                 });
               }
               break;
@@ -442,6 +475,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [patch],
+  );
+
+  const send = useCallback((question: string) => run(question), [run]);
+
+  // the same question again, with one more place to look; the buttons of the answer it follows are spent
+  const searchWith = useCallback(
+    (id: string, source: ChatSource) => {
+      const m = messagesRef.current.find((x) => x.id === id);
+      if (!m || m.role !== "assistant" || !m.offer || abortRef.current) return;
+      const via = CHAT_SOURCES.find((x) => x.key === source)?.label ?? source;
+      const tried = [...m.offer.tried, source];
+      patch(id, (copy) => {
+        copy.offer = null;
+      });
+      const at = messagesRef.current.indexOf(m);
+      void run(m.question, { sources: tried, via, before: Math.max(0, at - 1) });
+    },
+    [run, patch],
   );
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
@@ -494,11 +545,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Ctx>(
     () => ({
       open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
-      applyProposal, dismissProposal, send, stop, clear, width, setWidth, maxWidth, sources, toggleSource,
+      applyProposal, dismissProposal, send, stop, clear, width, setWidth, maxWidth, searchWith, shareTaste, toggleTaste,
     }),
     [
       open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
-      applyProposal, dismissProposal, send, stop, clear, width, setWidth, maxWidth, sources, toggleSource,
+      applyProposal, dismissProposal, send, stop, clear, width, setWidth, maxWidth, searchWith, shareTaste, toggleTaste,
     ],
   );
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

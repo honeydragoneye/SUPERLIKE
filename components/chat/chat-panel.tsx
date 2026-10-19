@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useHydrated } from "@/components/ui/use-hydrated";
+import { useLikedTracks } from "@/components/player/use-likes";
 import { useCustomTags } from "@/components/station/use-custom-tags";
 import { boldSpans } from "@/lib/chat/inline";
 import { CHAT_SOURCES, useChat, type ChatMessage, type ChatProposal, type ChatTrack } from "./chat-provider";
@@ -277,6 +278,7 @@ function UserBubble({ text }: { text: string }) {
 }
 
 function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }> }) {
+  const { searchWith, busy } = useChat();
   const text = m.tracks.length ? withoutList(m.text) : m.text;
   const waiting = m.streaming && !text && !m.status && !m.proposal && !m.error;
   return (
@@ -315,6 +317,21 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
             ))}
           </ul>
         )}
+        {m.offer && !m.streaming && (
+          <div className="flex flex-col gap-[6px]">
+            <p className="text-[8px] tracking-[0.6px] text-on-bright-muted">어디에서 더 찾아볼까요?</p>
+            <div className="flex flex-wrap gap-[6px]">
+              {m.offer.options.map((key) => {
+                const source = CHAT_SOURCES.find((s) => s.key === key);
+                return (
+                  <Pill key={key} disabled={busy} title={source?.hint} onClick={() => searchWith(m.id, key)}>
+                    {source?.label ?? key}에서 찾기
+                  </Pill>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {m.error && <p className="text-[10px] leading-[15px] text-alert">{m.error}</p>}
       </div>
     </div>
@@ -328,7 +345,8 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
  * its 16px margin rather than introducing a second look for the right-hand side.
  */
 export function ChatPanel() {
-  const { messages, busy, send, stop, clear, close, refine, openRefine, leaveRefine, sources, toggleSource } = useChat();
+  const { messages, busy, send, stop, clear, close, refine, openRefine, leaveRefine, shareTaste, toggleTaste } = useChat();
+  const liked = useLikedTracks();
   const tags = useCustomTags();
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
@@ -368,29 +386,47 @@ export function ChatPanel() {
       </div>
 
       {!refine && (
-        <div className="flex w-full shrink-0 flex-wrap items-center gap-[6px]" role="group" aria-label="참고할 출처">
-          <p className="text-[8px] tracking-[0.6px] text-on-bright-muted">출처</p>
-          {CHAT_SOURCES.map((s) => {
-            // before the saved choice is read, every source shows as on — the same as the server's starting point
-            const on = !hydrated || sources.includes(s.key);
+        <div className="flex w-full shrink-0 flex-wrap items-center gap-[6px]" role="group" aria-label="내 취향">
+          <p className="text-[8px] tracking-[0.6px] text-on-bright-muted">내 취향</p>
+          {(() => {
+            const none = hydrated && liked.length === 0;
+            const on = hydrated && shareTaste && !none;
             return (
               <button
-                key={s.key}
                 type="button"
                 aria-pressed={on}
-                title={`${s.hint} — ${on ? "끄기" : "켜기"}`}
-                onClick={() => toggleSource(s.key)}
-                className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[10px] py-[4px] text-[8px] tracking-[0.6px] transition-colors rule ${
-                  on ? "bg-ink text-paper-solid hover:bg-pink-bright" : "bg-paper-solid text-on-bright-muted hover:bg-gold"
+                aria-disabled={none}
+                title={
+                  none
+                    ? "좋아요한 곡이 없어요"
+                    : on
+                      ? "좋아요한 곡 공유 끄기"
+                      : "최근 좋아요한 곡을 챗봇에게 보여 줘서 내 취향에 맞는 곡을 추천받기"
+                }
+                onClick={() => {
+                  if (!none) toggleTaste();
+                }}
+                className={`shrink-0 whitespace-nowrap rounded-pill px-[10px] py-[4px] text-[8px] tracking-[0.6px] transition-colors rule ${
+                  none
+                    ? "cursor-default bg-paper-solid text-on-bright-muted opacity-60"
+                    : on
+                      ? "cursor-pointer bg-ink text-paper-solid hover:bg-pink-bright"
+                      : "cursor-pointer bg-paper-solid text-on-bright-muted hover:bg-gold"
                 }`}
               >
-                {s.label}
+                {!hydrated
+                  ? "좋아요한 곡 공유"
+                  : none
+                    ? "좋아요한 곡 없음"
+                    : `좋아요한 곡 ${Math.min(liked.length, 30)}곡 · ${on ? "공유 중" : "공유 안 함"}`}
               </button>
             );
-          })}
-          {hydrated && !sources.includes("lastfm") && (
+          })()}
+          {hydrated && (
             <p className="w-full text-[8px] leading-[12px] text-on-bright-muted">
-              Last.fm을 끄면 곡을 찾거나 추천하지 못해요.
+              {shareTaste && liked.length > 0
+                ? "챗봇이 최근 좋아요한 곡을 보고 내 취향에 맞는 곡을 골라 줘요."
+                : "켜면 최근 좋아요한 곡을 챗봇에게 보여 줘서 내 취향에 맞는 곡을 추천받을 수 있어요."}
             </p>
           )}
         </div>
@@ -441,6 +477,9 @@ export function ChatPanel() {
                   {s}
                 </Pill>
               ))}
+              {hydrated && shareTaste && liked.length > 0 && (
+                <Pill onClick={() => void send("내 취향에 맞는 곡 추천해줘")}>내 취향에 맞는 곡 추천해줘</Pill>
+              )}
             </div>
             {hydrated && tags.length > 0 && (
               <div className="flex flex-col gap-[6px]">
