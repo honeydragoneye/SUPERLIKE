@@ -64,6 +64,22 @@ def _clean_sources(raw: object) -> list[str] | None:
     return [x for x in dict.fromkeys(raw) if isinstance(x, str) and x in SOURCES]
 
 
+MAX_TASTE = 30
+
+
+def _clean_taste(raw: object) -> list[dict] | None:
+    """좋아요한 곡 목록. 모델의 지시문에 들어가므로 개수와 길이를 자르고 한 줄로 만든다."""
+    if not isinstance(raw, list):
+        return None
+    out = []
+    for t in raw[:MAX_TASTE]:
+        if isinstance(t, dict) and isinstance(t.get("title"), str) and isinstance(t.get("artist"), str):
+            title, artist = " ".join(t["title"].split())[:80], " ".join(t["artist"].split())[:80]
+            if title and artist:
+                out.append({"title": title, "artist": artist})
+    return out or None
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "SuperlikeAgent"
 
@@ -100,6 +116,7 @@ class Handler(BaseHTTPRequestHandler):
         history = _clean_history(body.get("history"))
         refine = _clean_refine(body.get("refine"))
         sources = _clean_sources(body.get("sources"))
+        taste = _clean_taste(body.get("taste"))
 
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -112,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         try:
-            for event in run_agent(history, question, cards=True, refine=refine, sources=sources):
+            for event in run_agent(history, question, cards=True, refine=refine, sources=sources, taste=taste):
                 send(event)
         except (BrokenPipeError, ConnectionResetError):
             pass  # 브라우저가 창을 닫거나 대화를 끊었다

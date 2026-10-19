@@ -239,6 +239,63 @@ def artist_top_tracks(artist: str) -> dict:
     return {"found": True, "artist": name, "tracks": [{"title": t["name"], "artist": t["artist"]["name"]} for t in found]}
 
 
+def _seen_key(title: str, artist: str) -> str:
+    return f"{title}|{artist}".lower()
+
+
+def similar_to(session: Session, artist: str, title: str = "") -> dict:
+    """"OO 같은 곡"에 답할 곡들을 Last.fm이 비슷하다고 한 것에서 모은다 (최대 5곡).
+
+    곡 이름까지 알면 그 곡과 비슷한 곡(track.getsimilar)을, 가수만 알면 비슷한 가수들의 대표곡을 하나씩
+    돌려준다. 이미 본 곡(좋아요한 곡 포함)과 한 가수의 세 번째 곡은 뺀다. 결과는 `tracks`에 담아
+    화면이 카드로 보여 준다.
+    """
+    if not config.LASTFM_API_KEY:
+        raise RuntimeError("LASTFM_API_KEY가 설정되지 않았습니다")
+
+    def get(method: str, **params) -> dict:
+        response = requests.get(
+            _LASTFM_URL,
+            params={"method": method, "autocorrect": 1, "api_key": config.LASTFM_API_KEY, "format": "json", **params},
+            timeout=10,
+        )
+        return response.json() if response.ok else {}
+
+    picked: list[dict] = []
+    per_artist: dict[str, int] = {}
+
+    def take(t_title: str, t_artist: str) -> None:
+        key = _seen_key(t_title, t_artist)
+        # 기준이 된 가수 자신의 곡은 "비슷한 곡"이 아니다
+        if len(picked) >= 5 or key in session.seen or t_artist.lower() == artist.lower() or per_artist.get(t_artist.lower(), 0) >= 2:
+            return
+        session.seen.add(key)
+        per_artist[t_artist.lower()] = per_artist.get(t_artist.lower(), 0) + 1
+        picked.append({"title": t_title, "artist": t_artist})
+
+    based_on = f"{title} — {artist}" if title else artist
+    if title:
+        for t in (get("track.getsimilar", artist=artist, track=title, limit=30).get("similartracks") or {}).get("track", []):
+            take(t["name"], t["artist"]["name"])
+    if not picked:
+        based_on = artist
+        similar = (get("artist.getsimilar", artist=artist, limit=10).get("similarartists") or {}).get("artist", [])
+        for a in similar[:8]:
+            tops = (get("artist.gettoptracks", artist=a["name"], limit=3).get("toptracks") or {}).get("track", [])
+            # 대표곡 셋 중 아직 안 본 첫 곡
+            for t in tops:
+                before = len(picked)
+                take(t["name"], t["artist"]["name"])
+                if len(picked) > before:
+                    break
+            if len(picked) >= 5:
+                break
+    result: dict = {"found": bool(picked), "based_on": based_on, "tracks": picked}
+    if not picked:
+        result["note"] = "Last.fm에 비슷한 곡 정보가 없습니다."
+    return result
+
+
 def track_info(title: str, artist: str = "") -> dict:
     """곡에 대해 Last.fm이 아는 것: 앨범, 길이, 태그, 소개글(있으면).
 
@@ -268,7 +325,7 @@ def track_info(title: str, artist: str = "") -> dict:
 
 # 사용자가 출처를 끄고 켤 수 있다. 출처 하나가 도구 여러 개를 거느리고, 꺼진 출처의 도구는 모델에게 보이지 않는다.
 SOURCES: dict[str, tuple[str, ...]] = {
-    "lastfm": ("top_tracks", "find_track", "artist_info", "artist_top_tracks", "track_info"),
+    "lastfm": ("top_tracks", "find_track", "artist_info", "artist_top_tracks", "track_info", "similar_to"),
     "wikipedia": ("wiki_summary",),
     "musicbrainz": ("albums",),
 }
@@ -315,7 +372,7 @@ def wiki_summary(name: str) -> dict:
                     "summary": re.sub(r"\s+", " ", extract)[:_BIO_MAX],
                     "url": f"https://{lang}.wikipedia.org/wiki/{page['title'].replace(' ', '_')}",
                 }
-    return {"found": False, "name": name}
+    return {"found": False, "name": name, "note": "Wikipedia에 그 이름의 문서가 없습니다. 사용자가 쓴 표기로 다시 불러 볼 수 있습니다."}
 
 
 _MB_URL = "https://musicbrainz.org/ws/2"
@@ -356,7 +413,15 @@ def albums(artist: str) -> dict:
     if key in _mb_cache:
         return _mb_cache[key]
     result: dict = {"found": False, "artist": artist}
-    found = _mb_get("artist/", query=f'artist:"{artist}"', limit=5)
+    # 필드를 지정한 검색에서 못 찾으면 별칭까지 보는 일반 검색을 한 번 더 한다 (예: 영문 표기로 물은 한국 가수)
+    for query in (f'artist:"{artist}"', artist):
+        found = _mb_get("artist/", query=query, limit=5)
+        if found and any(
+            a.get("score", 0) >= 90
+            and (a["name"].lower() == key or any(x.get("name", "").lower() == key for x in a.get("aliases", [])))
+            for a in found.get("artists", [])
+        ):
+            break
     if found:
         hits = [
             a for a in found.get("artists", [])
@@ -588,7 +653,7 @@ TOOLS: dict[str, dict] = {
                 "name": "wiki_summary",
                 "description": (
                     "Wikipedia에서 가수·밴드의 소개를 가져온다. artist_info의 소개글이 비어 있거나 짧을 때, "
-                    "또는 활동 이력·멤버·배경을 더 알고 싶을 때 부른다."
+                    "또는 활동 이력·멤버·배경·사생활을 더 알고 싶을 때 부른다. name에는 사용자가 쓴 이름을 그대로 넣는다."
                 ),
                 "parameters": {
                     "type": "object",
@@ -606,7 +671,7 @@ TOOLS: dict[str, dict] = {
                 "name": "albums",
                 "description": (
                     "가수의 앨범·EP를 발매일 순(최신이 먼저)으로 가져온다. '최근 앨범', '데뷔 앨범', "
-                    "'앨범이 몇 장' 같은 질문에 부른다. 곡 목록이 아니라 앨범 목록이다."
+                    "'앨범이 몇 장' 같은 질문에 부른다. 곡 목록이 아니라 앨범 목록이다. artist에는 사용자가 쓴 이름을 그대로 넣는다."
                 ),
                 "parameters": {
                     "type": "object",
@@ -616,6 +681,56 @@ TOOLS: dict[str, dict] = {
             },
         },
         "run": albums,
+    },
+    "similar_to": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "similar_to",
+                "description": (
+                    "'Slowdive 같은 가수', 'Dagger 같은 노래', '이 곡이랑 비슷한 곡'처럼 특정 가수·곡과 비슷한 "
+                    "곡을 찾아 달라고 할 때 Last.fm이 비슷하다고 한 실제 곡을 돌려준다. 곡 이름을 말했으면 "
+                    "title까지, 가수만 말했으면 title은 비운다. 분위기·장르로 추천하는 용도는 아니다 (그건 top_tracks)."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "artist": {"type": "string", "description": "기준이 되는 가수 (예: Slowdive)"},
+                        "title": {"type": "string", "description": "기준이 되는 곡 제목. 가수만 말했으면 빈 문자열"},
+                    },
+                    "required": ["artist"],
+                },
+            },
+        },
+        "run": similar_to,
+    },
+    "request_source": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "request_source",
+                "description": (
+                    "지금 쓸 수 있는 도구로는 질문에 답할 수 없을 때 부른다: 돌려받은 내용에 답이 없거나, 필요한 "
+                    "도구(앨범 목록, 인물 정보 등)가 안 보일 때. 기억으로 답을 지어내지 말고 이 도구를 불러서 "
+                    "사용자가 다른 출처를 고르게 한다. 부른 뒤에는 찾지 못했다고 한 문장으로만 말한다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "suggest": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": ["wikipedia", "musicbrainz"]},
+                            "description": (
+                                "알맞은 출처. wikipedia: 가수·인물 소개, 활동 이력, 사생활. "
+                                "musicbrainz: 앨범·EP 목록과 발매일"
+                            ),
+                        }
+                    },
+                },
+            },
+        },
+        # 실행은 에이전트 루프가 직접 한다 (사용자에게 선택지를 보이는 일이라 도구가 할 일이 없다)
+        "run": None,
     },
     "propose_definition": {
         "schema": {
@@ -649,27 +764,37 @@ TOOLS: dict[str, dict] = {
 }
 
 # 모드마다 모델에게 보여 주는 도구가 다르다. 작은 모델은 도구가 많을수록 고르기 어려워한다.
-TOOLS_CHAT = ("top_tracks", "find_track", "artist_info", "artist_top_tracks", "track_info", "wiki_summary", "albums")
+TOOLS_CHAT = (
+    "top_tracks", "find_track", "artist_info", "artist_top_tracks", "track_info", "similar_to", "wiki_summary", "albums",
+)
 TOOLS_REFINE = ("propose_definition",)
 
 
+# 처음에는 Last.fm만 쓴다. 거기서 답을 못 찾으면 사용자가 다른 출처를 골라 다시 찾게 한다.
+DEFAULT_SOURCES = ["lastfm"]
+
+
 def tools_for(sources: list[str] | None) -> tuple[str, ...]:
-    """켜진 출처의 도구만. sources가 None이면 전부 켠 것으로 본다."""
-    if sources is None:
-        return TOOLS_CHAT
-    on = {tool for name in sources for tool in SOURCES.get(name, ())}
-    return tuple(t for t in TOOLS_CHAT if t in on)
+    """쓸 수 있는 출처의 도구만. sources가 None이면 기본 출처(Last.fm).
+
+    아직 안 쓴 출처가 남아 있으면 request_source도 준다: 답을 못 찾았을 때 모델이 지어내는 대신
+    사용자에게 다른 출처를 고르게 하는 도구다.
+    """
+    used = DEFAULT_SOURCES if sources is None else sources
+    on = {tool for name in used for tool in SOURCES.get(name, ())}
+    names = tuple(t for t in TOOLS_CHAT if t in on)
+    return names + ("request_source",) if any(name not in used for name in SOURCES) else names
 
 
 def call_tool(name: str, arguments: dict, session: Session, allowed: tuple[str, ...] | None = None) -> object:
     """모델이 고른 도구를 실행한다. 없는 도구나 잘못된 인자는 예외 대신 오류 값으로 돌려줘서
     모델이 스스로 고쳐 다시 시도할 수 있게 한다."""
     tool = TOOLS.get(name)
-    if tool is None or (allowed is not None and name not in allowed):
+    if tool is None or tool["run"] is None or (allowed is not None and name not in allowed):
         return {"error": f"없는 도구: {name}"}
     try:
         run = tool["run"]
-        return run(session, **arguments) if name == "top_tracks" else run(**arguments)
+        return run(session, **arguments) if name in ("top_tracks", "similar_to") else run(**arguments)
     except TypeError as e:
         return {"error": f"인자가 맞지 않습니다: {e}"}
     except Exception as e:  # 네트워크 실패 등 — 모델이 사용자에게 설명할 수 있도록 문구로 전달

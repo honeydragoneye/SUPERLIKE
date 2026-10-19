@@ -17,14 +17,16 @@ const SOURCES = ["lastfm", "wikipedia", "musicbrainz"] as const;
  * Forwards one question and relays the agent's server-sent events as they
  * arrive, so the reply types itself out instead of landing in one piece.
  *
- * Only `question`, `history`, `refine` and `sources` are passed on: the browser does not
+ * Only `question`, `history`, `refine`, `sources` and `taste` are passed on: the browser does not
  * get to address anything else on the agent. `refine` is the tag the
  * conversation is about — its name and what it means now — and turns the chat
  * from recommending songs into settling that tag's definition. `sources` is what
- * the listener has switched on: the agent only gets the tools of those.
+ * the agent may use for this question: left out, it starts with Last.fm alone,
+ * and the listener adds Wikipedia or MusicBrainz when an answer could not be found. `taste`
+ * is the songs the listener liked, and is only there when they chose to share it.
  */
 export async function POST(request: NextRequest) {
-  let body: { question?: unknown; history?: unknown; refine?: unknown; sources?: unknown };
+  let body: { question?: unknown; history?: unknown; refine?: unknown; sources?: unknown; taste?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -54,12 +56,21 @@ export async function POST(request: NextRequest) {
     ? SOURCES.filter((s) => (body.sources as unknown[]).includes(s))
     : undefined;
 
+  const taste = Array.isArray(body.taste)
+    ? body.taste.slice(0, 30).flatMap((t): { title: string; artist: string }[] => {
+        const row = t as { title?: unknown; artist?: unknown };
+        return typeof row.title === "string" && typeof row.artist === "string"
+          ? [{ title: row.title.slice(0, 80), artist: row.artist.slice(0, 80) }]
+          : [];
+      })
+    : undefined;
+
   let upstream: Response;
   try {
     upstream = await fetch(`${AGENT_URL}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, history, refine, sources }),
+      body: JSON.stringify({ question, history, refine, sources, taste }),
       // closing the chat or sending the next question cuts the agent's work short too
       signal: request.signal,
       cache: "no-store",

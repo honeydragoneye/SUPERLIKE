@@ -124,8 +124,11 @@ def _contents(messages: list[dict]) -> tuple[str, list[dict]]:
     return system, contents
 
 
-def chat_stream(messages: list[dict], tools: list[dict]) -> Iterator[dict]:
-    """Gemini 한 번 호출. Ollama와 같은 모양의 조각을 내보낸다."""
+def chat_stream(messages: list[dict], tools: list[dict], force: list[str] | None = None) -> Iterator[dict]:
+    """Gemini 한 번 호출. Ollama와 같은 모양의 조각을 내보낸다.
+
+    force가 있으면 모델은 답하기 전에 그 이름의 도구 중 하나를 반드시 불러야 한다.
+    """
     system, contents = _contents(messages)
     response = _post(
         "streamGenerateContent",
@@ -134,6 +137,11 @@ def chat_stream(messages: list[dict], tools: list[dict]) -> Iterator[dict]:
             "contents": contents,
             # 출처를 모두 끄면 도구가 없다: 빈 선언은 오류가 되니 아예 보내지 않는다
             **({"tools": [{"functionDeclarations": [_declaration(t) for t in tools]}]} if tools else {}),
+            **(
+                {"toolConfig": {"functionCallingConfig": {"mode": "ANY", "allowedFunctionNames": force}}}
+                if force and tools
+                else {}
+            ),
             "generationConfig": {"temperature": config.GENERATION_TEMPERATURE},
         },
         stream=True,

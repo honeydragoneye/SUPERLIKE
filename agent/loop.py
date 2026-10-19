@@ -14,7 +14,7 @@ from collections.abc import Iterator
 import requests
 
 from agent import config, gemini
-from agent.tools import TOOLS, TOOLS_CHAT, TOOLS_REFINE, Session, call_tool, tools_for
+from agent.tools import DEFAULT_SOURCES, SOURCES, TOOLS, TOOLS_CHAT, TOOLS_REFINE, Session, call_tool, tools_for
 
 MAX_STEPS = 4
 
@@ -38,9 +38,12 @@ _NAMED_CARDS = (
 _INFO = (
     "가수나 곡에 대해 묻는 말(어떤 가수·곡인지, 어느 나라인지, 언제 데뷔했는지, 어느 앨범인지, 비슷한 "
     "가수)에는 artist_info나 track_info를 먼저 불러서, 돌려받은 내용으로만 답한다. 가수의 대표곡을 "
-    "물으면 artist_top_tracks를, 앨범이나 발매 이력을 물으면 albums를 부른다. 소개글이 비어 있거나 "
-    "부족하면 wiki_summary로 더 찾아본다 (도구가 보이는 것만 쓸 수 있다). 돌려받은 내용에 없는 것(활동 시기, 멤버, 곡의 분위기, 가사)은 "
-    "아는 척하지 말고 정보가 없다고 말한다. 소개글은 영어라서 한국어로 옮겨 짧게 답한다.\n"
+    "물으면 artist_top_tracks를, '~ 같은 가수/노래', '비슷한 곡'을 물으면 similar_to를 부른다. "
+    "돌려받은 내용에 없는 것(활동 시기, 멤버, 사생활, 앨범, 곡의 분위기, 가사)은 기억으로 지어내거나 "
+    "아는 척하지 않는다. 지금 보이는 도구로 답할 수 없으면 request_source를 불러 사용자가 다른 출처"
+    "(Wikipedia, MusicBrainz)를 고르게 하고, 찾지 못했다고 한 문장으로만 말한다. 답이 없다고 같은 "
+    "도구를 같은 이름으로 다시 부르지 않는다. 소개글은 영어라서 한국어로 옮겨 짧게 답한다. "
+    "묻지 않은 소개를 되풀이하지 않는다.\n"
 )
 # 터미널에서는 글이 곡을 보여 주는 유일한 곳이라 목록을 쓰게 한다
 _RULE_LIST = (
@@ -57,6 +60,8 @@ _RULE_CARDS = (
 _TAIL = (
     "돌려받은 곡이 1~2곡뿐이어도 그 곡을 추천하고, 부족하다고 미리 포기하지 않는다. "
     "돌려받지 않은 곡은 말하지 않는다.\n\n"
+    "너는 청취자의 재생 기록이나 재생 횟수 통계를 볼 수 없다. 그런 걸 물으면 \"재생 기록은 볼 수 없어요\"라고 "
+    "말한다 (좋아요한 곡은 '내 취향' 버튼을 켰을 때만 보인다).\n\n"
     "날씨, 시간, 뉴스처럼 네가 알 수 없는 것은 모른다고 짧게 말하고, 음악 이야기로 돌아오도록 "
     "이끈다."
 )
@@ -66,9 +71,13 @@ SYSTEM_PROMPT_CARDS = _HEAD + _NAMED + _NAMED_CARDS + _INFO + _RULE_CARDS + _TAI
 
 # 곡을 틀거나 찾아 달라는 말, 추천해 달라는 말: 이런 요청은 도구로 확인해야 답할 수 있다
 _NEEDS_TOOL = re.compile(
-    r"(틀어|들려|재생|검색|찾아|추천|play|어떤 (밴드|가수|곡|노래)|누구|어느 나라|언제 (결성|데뷔|나왔)|앨범|대표곡|비슷한)",
+    r"(틀어|들려|재생|검색|찾아|추천|play|어떤 (밴드|가수|곡|노래)|누구|어느 나라|언제 (결성|데뷔|나왔)|앨범|대표곡|비슷한|같은 (노래|곡|가수|밴드))",
     re.IGNORECASE,
 )
+
+
+# 취향을 묻는 말. 취향 정보가 없을 때는 도구를 부르게 되돌리지 않고, 켜는 법을 안내한 답을 그대로 둔다
+_ASKS_TASTE = re.compile(r"내 취향|내가 좋아(할|하는)")
 
 
 def refine_prompt(label: str, definition: str) -> str:
@@ -88,15 +97,42 @@ def refine_prompt(label: str, definition: str) -> str:
     )
 
 
+# 취향 정보 없이 "내 취향"을 묻는 경우: 아무 곡이나 고르지 않고, 켜는 법을 알려 준다
+_NO_TASTE = (
+    "\n\n사용자의 취향 정보는 없다. 사용자가 '내 취향', '내가 좋아할 만한' 곡을 물으면 곡을 고르지 말고, "
+    "챗봇 위쪽의 '내 취향' 버튼을 켜면 좋아요한 곡을 보고 골라 줄 수 있다고 안내한다. "
+    "또는 어떤 가수나 곡을 좋아하는지 물어본다."
+)
+
+
+def _taste_prompt(taste: list[dict]) -> str:
+    """사용자의 좋아요를 모델에게 보여 주는 대목. 가수별로 세어 자주 나오는 가수를 앞에 둔다."""
+    counts: dict[str, int] = {}
+    for t in taste:
+        counts[t["artist"]] = counts.get(t["artist"], 0) + 1
+    favorites = ", ".join(a for a, _ in sorted(counts.items(), key=lambda kv: -kv[1])[:8])
+    recent = "; ".join(f"{t['title']} - {t['artist']}" for t in taste[:15])
+    return (
+        "\n\n사용자가 좋아요한 곡을 알려 주었다 (사용자가 공유를 켰을 때만 보인다).\n"
+        f"좋아요한 가수: {favorites}\n최근 좋아요: {recent}\n"
+        "사용자가 '내 취향', '내가 좋아할 만한', '내가 좋아하는 것 같은' 곡을 물으면 위 가수 중 하나나 둘을 "
+        "골라 similar_to로 비슷한 곡을 가져온다 (여러 가수를 한꺼번에 묻지 말고 가장 어울리는 하나로 시작). "
+        "이미 좋아요한 곡은 도구가 빼 준다. 어떤 취향을 보고 골랐는지 한 문장으로 말한다. "
+        "취향을 묻지 않은 질문에는 이 목록을 꺼내지 않는다."
+    )
+
+
 def _mentions_any(text: str, titles: list[str]) -> bool:
     flat = text.lower()
     return any(t.lower() in flat for t in titles if len(t) >= 2)
 
 
-def _chat_stream(messages: list[dict], model: str | None, tools: tuple[str, ...] = TOOLS_CHAT) -> Iterator[dict]:
+def _chat_stream(
+    messages: list[dict], model: str | None, tools: tuple[str, ...] = TOOLS_CHAT, force: list[str] | None = None
+) -> Iterator[dict]:
     """모델 한 번 호출. 조각은 Ollama /api/chat 모양이고, Gemini도 같은 모양으로 맞춰 내보낸다."""
     if config.uses_gemini(model):
-        yield from gemini.chat_stream(messages, [TOOLS[n]["schema"] for n in tools])
+        yield from gemini.chat_stream(messages, [TOOLS[n]["schema"] for n in tools], force)
         return
     payload = {
         "model": model,
@@ -123,6 +159,7 @@ def run_agent(
     cards: bool = False,
     refine: dict | None = None,
     sources: list[str] | None = None,
+    taste: list[dict] | None = None,
 ) -> Iterator[dict]:
     """이벤트를 하나씩 내보낸다.
 
@@ -135,7 +172,11 @@ def run_agent(
     refine={"label", "definition"}이면 곡 추천이 아니라 그 태그의 기준을 정하는 대화다: 도구는
     propose_definition 하나이고, 곡 이름·추천에 대한 되돌림 검사는 하지 않는다.
 
-    sources가 주어지면 그 출처의 도구만 모델에게 보여 준다.
+    sources는 이번 질문에 쓸 수 있는 출처다(없으면 Last.fm만). 그걸로 답을 못 찾은 모델이 request_source를
+    부르면, 안 쓴 출처 중 알맞은 것을 {"type": "offer", "tried", "options"}로 알려 사용자가 고르게 한다.
+
+    taste는 사용자가 좋아요한 곡들([{"title", "artist"}], 최근순)이다. 사용자가 공유를 켰을 때만 오고,
+    "내 취향에 맞는 곡"을 물으면 이걸 근거로 고르게 하며 이미 좋아요한 곡은 추천에서 뺀다.
 
     cards=True는 곡을 화면이 카드로 보여 주는 경우다. 글이 곡 이름을 말하지 않으니 "곡을
     말했는가"로 하는 재시도 검사는 끄고, 글은 기준 설명만 쓰게 한다.
@@ -157,6 +198,30 @@ def run_agent(
             "실제로 있는 곡인지 확인할 수 없다고 짧게 말하고, 챗봇 위쪽의 출처 버튼을 켜면 할 수 있다고 안내한다. "
             "곡 이름을 지어내 추천하지 않는다."
         )
+    used = DEFAULT_SOURCES if sources is None else sources
+    # request_source가 불린 경우, 사용자에게 고르게 할 출처
+    offer: list[str] | None = None
+
+    def tail(step: int) -> list[dict]:
+        events = [{"type": "offer", "tried": used, "options": offer}] if offer else []
+        return events + [{"type": "done", "steps": step}]
+
+    if tools and not refine and "request_source" not in tools:
+        system += "\n\n더 찾아볼 출처가 남아 있지 않다. 답할 수 없으면 찾지 못했다고만 말하고 지어내지 않는다."
+    picked = [name for name in used if name not in DEFAULT_SOURCES]
+    if picked and not refine:
+        system += (
+            f"\n\n사용자가 {', '.join(picked)} 출처를 골라 같은 질문을 다시 찾아 달라고 했다. "
+            "그 출처의 도구(wikipedia는 wiki_summary, musicbrainz는 albums)를 먼저 불러서 답한다. 이름은 사용자가 쓴 표기 그대로 넣는다."
+        )
+    # 사용자가 출처를 골라 다시 찾는 경우: 기억으로 답하지 못하게, 첫 호출에서 그 출처의 도구를 반드시 부르게 한다
+    force_first = [t for name in picked for t in SOURCES[name] if t in tools] if not refine else []
+    session = Session()
+    if taste and not refine:
+        system += _taste_prompt(taste)
+        session.seen |= {f"{t['title']}|{t['artist']}".lower() for t in taste}
+    elif not refine:
+        system += _NO_TASTE
     messages = [
         {"role": "system", "content": system},
         *history,
@@ -165,8 +230,9 @@ def run_agent(
 
     # 도구가 돌려준 곡 제목들. 답변이 이 중 하나도 말하지 않으면 추천을 못 한 것이다.
     seen_titles: list[str] = []
-    session = Session()
     nudged = False
+    # 도구를 쓰라고 되돌린 직후의 호출: 도구를 부르면 그 답으로 바꾸고, 안 부르면 처음 답을 그대로 둔다
+    after_nudge = False
     # 마지막 top_tracks가 돌려준 곡 수. 0곡이면 답하기 전에 다른 태그로 한 번 더 찾아 본다.
     last_found: int | None = None
     retried_empty = False
@@ -174,27 +240,49 @@ def run_agent(
     for step in range(1, MAX_STEPS + 1):
         content = ""
         calls: list[dict] = []
-        for chunk in _chat_stream(messages, model, tools):
+        for chunk in _chat_stream(messages, model, tools, force_first if step == 1 else None):
             message = chunk.get("message", {})
             if message.get("content"):
                 content += message["content"]
-                yield {"type": "token", "data": message["content"]}
+                # 되돌린 직후의 글은 모아 두기만 한다: 모델이 지시문에 "알겠습니다"라고 답하는 일이 있어서,
+                # 도구를 부른 경우가 아니면 보여 주지 않는다
+                if not after_nudge:
+                    yield {"type": "token", "data": message["content"]}
             calls.extend(message.get("tool_calls") or [])
+
+        if after_nudge:
+            after_nudge = False
+            if not calls:
+                # 도구를 안 쓰기로 했다: 처음 답이 화면에 그대로 남는다
+                yield from tail(step)
+                return
+            # 도구를 쓴다: 처음 답은 버리고 도구 결과로 다시 답한다
+            yield {"type": "retry", "reason": "도구로 확인하지 않아 다시 시도"}
+            content = ""
 
         if not calls:
             # 곡 이름을 말했는데 도구를 부르지 않고 "그런 곡은 없다"거나 아는 척 답하는 경우: 작은 모델이
             # 확인 없이 단정하는 버릇이라, 도구를 먼저 쓰도록 한 번 되돌린다.
-            if tools and not refine and step == 1 and not nudged and _NEEDS_TOOL.search(question):
+            if (
+                tools
+                and not refine
+                and step == 1
+                and not nudged
+                and _NEEDS_TOOL.search(question)
+                and not (not taste and _ASKS_TASTE.search(question))
+            ):
                 nudged = True
-                yield {"type": "retry", "reason": "도구로 확인하지 않아 다시 시도"}
+                after_nudge = True
                 messages.append({"role": "assistant", "content": content})
                 messages.append(
                     {
                         "role": "user",
                         "content": (
                             "도구를 먼저 불러서 확인한 뒤에 답해줘. 곡 이름을 말한 거면 find_track, "
-                            "분위기나 장르를 말한 거면 top_tracks, 가수나 곡에 대한 질문이면 "
-                            "artist_info, track_info, albums 같은 정보 도구를 불러."
+                            "분위기나 장르를 말한 거면 top_tracks, '~같은 곡'이면 similar_to, 가수나 곡에 대한 질문이면 "
+                            "artist_info, track_info, albums, wiki_summary 같은 정보 도구를 불러. "
+                            "필요한 도구가 안 보이거나 도구로 찾고도 답이 없을 때만 request_source로 "
+                            "사용자가 다른 출처를 고르게 해."
                         ),
                     }
                 )
@@ -231,7 +319,7 @@ def run_agent(
                     }
                 )
                 continue
-            yield {"type": "done", "steps": step}
+            yield from tail(step)
             return
 
         # 모델의 도구 호출 요청을 대화에 남겨야 다음 턴에서 "내가 이걸 불렀다"를 안다
@@ -240,7 +328,13 @@ def run_agent(
             fn = call["function"]
             args = fn.get("arguments") or {}
             yield {"type": "tool_call", "name": fn["name"], "arguments": args}
-            result = call_tool(fn["name"], args, session, tools)
+            if fn["name"] == "request_source" and "request_source" in tools:
+                remaining = [name for name in SOURCES if name not in used]
+                suggested = [x for x in (args.get("suggest") or []) if x in remaining]
+                offer = suggested or remaining
+                result = {"ok": True, "note": "사용자에게 출처를 고르는 버튼이 보인다. 찾지 못했다고 한 문장으로만 말한다."}
+            else:
+                result = call_tool(fn["name"], args, session, tools)
             yield {"type": "tool_result", "name": fn["name"], "result": result}
             if isinstance(result, dict) and isinstance(result.get("tracks"), list):
                 seen_titles += [t["title"] for t in result["tracks"] if "title" in t]
@@ -256,4 +350,4 @@ def run_agent(
         text = chunk.get("message", {}).get("content")
         if text:
             yield {"type": "token", "data": text}
-    yield {"type": "done", "steps": MAX_STEPS + 1}
+    yield from tail(MAX_STEPS + 1)
