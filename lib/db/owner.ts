@@ -3,6 +3,7 @@ import { fetchAlbumPage } from "@/lib/spotify/album";
 import type { Resolved } from "@/lib/spotify/tokens";
 import { paletteFromImage } from "@/lib/palette-server";
 import { query } from "./client";
+import { keepWeeklyArtist } from "./weekly";
 
 /**
  * The developer's account, named in OWNER_SPOTIFY_ID.
@@ -66,4 +67,25 @@ export async function keepLatestAlbum(userId: string): Promise<Resolved[]> {
     [albumId, JSON.stringify({ ...page, palette })],
   );
   return resolutions;
+}
+
+/**
+ * Refreshes everything visitors are shown on the developer's behalf: the album
+ * behind Editor's Pick and this week's artist. Each is best effort and fails alone,
+ * so one Spotify hiccup does not cost the other (or the request that called this).
+ */
+export async function keepOwnerCopies(userId: string): Promise<Resolved[]> {
+  if (!isOwner(userId)) return [];
+  const out: Resolved[] = [];
+  for (const [what, job] of [
+    ["album", keepLatestAlbum],
+    ["weekly artist", keepWeeklyArtist],
+  ] as const) {
+    try {
+      out.push(...(await job(userId)));
+    } catch (e) {
+      console.error(`[owner] ${what} copy failed:`, e);
+    }
+  }
+  return out;
 }

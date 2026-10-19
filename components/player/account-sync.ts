@@ -27,7 +27,13 @@ export function localDay(d: Date = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export async function mirrorPlay(play: { trackId: string; title: string; artist: string }): Promise<void> {
+export async function mirrorPlay(play: {
+  trackId: string;
+  title: string;
+  artist: string;
+  artistId: string | null;
+  albumId: string | null;
+}): Promise<void> {
   try {
     await fetch("/api/me/plays", {
       method: "POST",

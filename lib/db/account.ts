@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { COOKIE } from "@/lib/spotify/config";
-import { spotifyGet } from "@/lib/spotify/api";
+import { flushToken, spotifyGet } from "@/lib/spotify/api";
 import type { Resolved } from "@/lib/spotify/tokens";
 import { query } from "./client";
 
@@ -43,4 +44,10 @@ export async function signedInUser(): Promise<SignedInUser> {
   );
   if (key) known.set(key, { id: data.id, name, at: Date.now() });
   return { id: data.id, name, resolved };
+}
+
+/** A refreshed Spotify token must reach the browser whichever call in the request refreshed it. */
+export function withTokens(res: NextResponse, first: Resolved | null, more: Resolved[]): NextResponse {
+  const refreshed = [first, ...more].find((r) => r?.status === "refreshed");
+  return refreshed ? flushToken(res, refreshed) : res;
 }

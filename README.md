@@ -88,6 +88,20 @@ npm run db:migrate        # lib/db/schema.sql 적용 (여러 번 실행해도 �
 로그인해 있을 때 DB에 저장되고, 로그인하지 않은 방문자는 저장된 내용을 봅니다. DB가 없으면 이 기능만 꺼지고
 나머지는 그대로 동작합니다.
 
+## 주간 매거진 메일 (선택)
+
+홈 오른쪽 STAY CONNECTED의 신청을 받아 매주 메일을 보냅니다. 공유 DB가 먼저 필요하고, 발송은 Gmail SMTP(앱 비밀번호)를 씁니다.
+
+1. `.env.local`에 `GMAIL_USER`, `GMAIL_APP_PASSWORD`(앱 비밀번호 16자, 공백 없이), `SITE_URL`을 넣고 `npm run db:migrate`
+2. 구독 신청 → 확인 메일의 링크에서 버튼을 눌러야 구독이 시작됩니다(더블 옵트인). 모든 메일에 해지 링크가 있습니다.
+3. 발송은 사람이 확인한 뒤에만 합니다.
+   - `npm run issue:draft` 이번 주 초안(개발자가 가장 많이 들은 곡 최대 25곡) 만들기, 미리보기 파일 경로를 출력
+   - `npm run issue:send -- --to 내주소@gmail.com` 나에게만 시험 발송 (발송 처리 안 됨)
+   - `npm run issue:send` 받을 사람 목록만 확인
+   - `npm run issue:send -- --confirm` 구독자 전체에게 발송하고 발송 완료로 표시
+
+Gmail 개인 계정은 하루 500통 안팎이라 400명을 넘으면 발송하지 않습니다.
+
 ## 기술 구성
 
 Next.js 16 · React 19 · Tailwind CSS 4 · Spotify Web API / Web Playback SDK ·

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Icon } from "./ui/icon";
 import { useDetail } from "./detail/use-detail";
 import type { EditorsPickData } from "./detail/editors-pick-page";
+import type { WeeklyArtist } from "@/lib/db/weekly";
 
 /**
  * The rail's three blocks share the column height in their design proportions
@@ -113,64 +114,71 @@ function StayConnected() {
         STAY CONNECTED
       </h2>
       <p className="w-full text-[10px] leading-[16px] text-on-bright">
-        매주 금요일, 당신의 취향으로 고른 25곡을
+        매주 금요일, 개발자가 이번 주 들은 곡 중
         <br />
-        메일로 먼저 보내드립니다.
+        앨범 한 장의 이야기를 메일로 보내드립니다.
       </p>
       <p className="w-full text-[8px] tracking-[0.7px] text-on-bright-muted">
-        2.4M SUBSCRIBERS · 무료
+        무료 · 언제든 해지
       </p>
     </section>
   );
 }
 
 function ArtistOfTheWeek() {
+  // the artist the developer played most this week, from the database: the same for every visitor
+  const { data, loading } = useDetail<WeeklyArtist>("/api/weekly-artist");
+  const artist = data?.artist;
+  const palette = artist?.palette ?? null;
+  const name = artist?.name ?? (loading ? "" : "아직 없음");
+  const when = data?.previous ? "지난주" : "이번 주";
+
   return (
     <section className="flex min-h-0 flex-[366_0_366px] flex-col gap-[10px] overflow-hidden bg-lime-soft p-[14px]">
       <p className="h-[10px] shrink-0 whitespace-nowrap text-[8px] leading-[10px] tracking-[1px] text-muted">
-        ARTIST OF THE WEEK
+        ARTIST OF THE WEEK{data?.previous ? " · 지난주" : ""}
       </p>
 
       {/* stays square while absorbing the block's slack: height comes from
           flex, width follows the ratio. 203×203 at the design height. */}
-      <div className="relative aspect-square min-h-0 w-auto max-w-[302px] flex-1 self-center overflow-hidden rounded-[4px] bg-ink">
-        <Icon name="portrait-disc" size={104} className={PORTRAIT_CENTRE} />
-        <Icon name="portrait-ring" size={38} className={PORTRAIT_CENTRE} />
-        <Icon name="portrait-hole" size={11} className={PORTRAIT_CENTRE} />
-        <p className="absolute bottom-[12px] left-[12px] whitespace-nowrap text-[8px] tracking-[0.8px] text-on-dark-muted">
-          LIVE SESSION
-        </p>
+      <div
+        className="relative aspect-square min-h-0 w-auto max-w-[302px] flex-1 self-center overflow-hidden rounded-[4px] bg-ink transition-colors duration-700"
+        // the colour of the photo behind it, so a photo with a margin does not show black
+        style={palette ? { backgroundColor: palette.bg } : undefined}
+      >
+        {artist?.image ? (
+          <Image src={artist.image} alt="" fill sizes="302px" className="object-cover" unoptimized />
+        ) : (
+          <>
+            <Icon name="portrait-disc" size={104} className={PORTRAIT_CENTRE} />
+            <Icon name="portrait-ring" size={38} className={PORTRAIT_CENTRE} />
+            <Icon name="portrait-hole" size={11} className={PORTRAIT_CENTRE} />
+          </>
+        )}
       </div>
 
       <div className="flex h-[41px] w-full shrink-0 flex-col gap-[2px]">
-        <h2 className="whitespace-nowrap text-[21px] font-black leading-[27px] tracking-[-0.7px]">
+        <h2 className="truncate text-[21px] font-black leading-[27px] tracking-[-0.7px]">
           <Link href="/weekly-artist" className="transition-colors hover:text-pink-bright">
-            LUNA DRIFT
+            {name}
           </Link>
         </h2>
-        <p className="w-full text-[9px] leading-[12px] text-muted">
-          서울 기반 4인조. 시티팝과 앰비언트를 오간다.
+        <p className="w-full truncate text-[9px] leading-[12px] text-muted">
+          {artist ? artist.genres.slice(0, 3).join(" · ") : ""}
         </p>
       </div>
 
-      <div className="flex h-[13px] w-full shrink-0 items-center gap-[8px]">
-        <span className="flex shrink-0 items-center gap-[2px]" aria-hidden>
-          {Array.from({ length: 5 }, (_, i) => (
-            <Icon key={i} name="star" size={13} />
-          ))}
-        </span>
-        <p className="tnum whitespace-nowrap text-[8px] tracking-[0.6px] text-muted">
-          4.8 · 128K RATINGS
-        </p>
-      </div>
+      <p className="tnum h-[13px] w-full shrink-0 whitespace-nowrap text-[8px] leading-[13px] tracking-[0.6px] text-muted">
+        {data ? `${when} ${data.plays}회 재생` : ""}
+      </p>
 
       <div className="flex h-[31px] w-full shrink-0 items-center justify-between">
-        <button
-          type="button"
-          className="flex h-[31px] shrink-0 items-center rounded-pill bg-ink px-[18px] text-[11px] leading-none tracking-[0.8px] text-paper"
+        <Link
+          href="/weekly-artist"
+          className="flex h-[31px] shrink-0 items-center rounded-pill bg-ink px-[18px] text-[11px] leading-none tracking-[0.8px] text-paper transition-colors hover:bg-pink-bright"
         >
-          FOLLOW
-        </button>
+          자세히 보기
+        </Link>
       </div>
     </section>
   );

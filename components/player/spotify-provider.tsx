@@ -47,6 +47,8 @@ export type NowPlaying = {
   uri: string;
   title: string;
   artist: string;
+  /** Spotify id of the first artist, for counting plays by artist; null if the SDK gave none */
+  artistId: string | null;
   album: string;
   /** Spotify album id (from the album uri), so a heart can remember which album it came from */
   albumId: string | null;
@@ -318,6 +320,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
           uri: t.uri,
           title: t.name,
           artist: t.artists.map((a) => a.name).join(", "),
+          artistId: t.artists[0]?.uri?.startsWith("spotify:artist:") ? t.artists[0].uri.slice(15) : null,
           album: t.album.name,
           albumId: t.album.uri?.startsWith("spotify:album:") ? t.album.uri.slice(14) : null,
           artwork: t.album.images?.[0]?.url ?? null,

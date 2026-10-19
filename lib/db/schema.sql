@@ -69,3 +69,48 @@ create table if not exists album_cache (
   data       jsonb not null,
   fetched_at timestamptz not null default now()
 );
+
+-- Which artist a play was by: the first artist Spotify names for the track.
+-- Names alone cannot be counted ("A, B" is one string for a track by two), so the
+-- weekly artist is counted by this id. Plays stored before it existed lack it.
+alter table plays_daily add column if not exists artist_id text;
+
+-- Artist of the Week, one row per week, saved while the developer is signed in
+-- for the same reason as album_cache: Spotify only answers with a listener's token.
+create table if not exists weekly_picks (
+  week_start  date primary key,
+  artist_id   text not null,
+  name        text not null,
+  image       text,
+  genres      jsonb not null default '[]',
+  top_tracks  jsonb not null default '[]',
+  palette     jsonb,
+  plays       integer not null,
+  computed_at timestamptz not null default now()
+);
+
+-- The day's chart as it was fetched, top 50, one row per place. A week's ranking is
+-- worked out from the last seven days of these (see lib/chart.ts), so the "this
+-- week" list is a real week's worth rather than one day's snapshot.
+create table if not exists chart_daily (
+  day     date not null,
+  rank    integer not null check (rank > 0),
+  title   text not null,
+  artist  text not null,
+  artwork text,
+  url     text,
+  primary key (day, rank)
+);
+
+-- when the last confirmation mail went out, so the form cannot be used to mail one address over and over
+alter table subscribers add column if not exists last_mailed_at timestamptz;
+
+-- what the subscriber asked to be called in the mails
+alter table subscribers add column if not exists nickname text;
+
+-- the album an issue is about, and the look it was given (see scripts/issue.mjs)
+alter table issues add column if not exists album jsonb;
+alter table issues add column if not exists theme text;
+
+-- the album a played track is on, so a mail can open it in the app
+alter table plays_daily add column if not exists album_id text;

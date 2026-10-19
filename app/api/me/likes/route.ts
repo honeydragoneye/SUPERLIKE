@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { NotConnectedError, SpotifyApiError, flushToken } from "@/lib/spotify/api";
-import { signedInUser } from "@/lib/db/account";
-import { isOwner, keepLatestAlbum } from "@/lib/db/owner";
-import type { Resolved } from "@/lib/spotify/tokens";
+import { NotConnectedError, SpotifyApiError } from "@/lib/spotify/api";
+import { signedInUser, withTokens } from "@/lib/db/account";
+import { keepOwnerCopies } from "@/lib/db/owner";
 import { DatabaseNotConfiguredError, query } from "@/lib/db/client";
 
 type Row = {
@@ -17,26 +16,6 @@ type Row = {
 };
 
 const NO_STORE = { "Cache-Control": "no-store" };
-
-/**
- * The developer's latest heart keeps a copy of its album for Editor's Pick.
- * Best effort: a failure here must not fail the heart itself.
- */
-async function keepAlbumIfOwner(userId: string): Promise<Resolved[]> {
-  if (!isOwner(userId)) return [];
-  try {
-    return await keepLatestAlbum(userId);
-  } catch (e) {
-    console.error("[likes] album copy failed:", e);
-    return [];
-  }
-}
-
-/** A refreshed Spotify token must reach the browser whichever call in the request refreshed it. */
-function withTokens(res: NextResponse, first: Resolved | null, more: Resolved[]): NextResponse {
-  const refreshed = [first, ...more].find((r) => r?.status === "refreshed");
-  return refreshed ? flushToken(res, refreshed) : res;
-}
 
 function failure(e: unknown): NextResponse {
   if (e instanceof NotConnectedError) return NextResponse.json({ error: "not_connected" }, { status: 401 });
@@ -56,7 +35,7 @@ export async function GET() {
          from likes where user_id = $1 order by liked_at desc limit 500`,
       [user.id],
     );
-    const more = await keepAlbumIfOwner(user.id);
+    const more = await keepOwnerCopies(user.id);
     const res = NextResponse.json(
       {
         tracks: rows.map((r) => ({
@@ -124,7 +103,7 @@ export async function POST(request: NextRequest) {
         ],
       );
     }
-    const more = body.liked ? await keepAlbumIfOwner(user.id) : [];
+    const more = body.liked ? await keepOwnerCopies(user.id) : [];
     const res = NextResponse.json({ ok: true }, { headers: NO_STORE });
     return withTokens(res, user.resolved, more);
   } catch (e) {

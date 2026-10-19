@@ -1,19 +1,14 @@
-import { Placeholder } from "@/components/detail/placeholder";
+import { SubscribePage } from "@/components/detail/subscribe-page";
 
 /**
- * Where STAY CONNECTED's 신청하기 button lands.
- *
- * Routed and empty on purpose: the rail has been advertising a newsletter
- * since the first frame, and a button that goes nowhere reads as a broken
- * screen rather than an unbuilt one. No planned list — what the signup asks
- * for is not decided yet, and inventing fields here would commit the design.
+ * Where STAY CONNECTED's 신청하기 button lands, and where the links in the
+ * mails land (?confirm= / ?unsubscribe=).
  */
-export default function Subscribe() {
-  return (
-    <Placeholder
-      eyebrow="SUBSCRIBE"
-      title="신청하기"
-      subtitle="매주 금요일, 취향으로 고른 25곡"
-    />
-  );
+export default async function Subscribe({
+  searchParams,
+}: {
+  searchParams: Promise<{ confirm?: string; unsubscribe?: string }>;
+}) {
+  const { confirm, unsubscribe } = await searchParams;
+  return <SubscribePage confirm={confirm} unsubscribe={unsubscribe} />;
 }
