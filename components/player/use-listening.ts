@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { record, serverSnapshot, subscribe, weekSnapshot } from "@/lib/listening";
 import {
   PLAY_THRESHOLD_MS,
@@ -11,6 +11,7 @@ import {
   totalSnapshot,
   weekSnapshot as weekPlays,
 } from "@/lib/plays";
+import { mirrorPlay } from "./account-sync";
 import { useSpotify } from "./spotify-provider";
 
 /** Often enough that closing the tab loses seconds, rarely enough to be free. */
@@ -38,6 +39,11 @@ export function useRecordListening(): void {
   const { now } = useSpotify();
   const uri = now?.uri ?? null;
   const playing = Boolean(uri) && now?.paused === false;
+  /** the track's name for the account's copy of the tally, read when a play is counted */
+  const meta = useRef({ title: "", artist: "" });
+  useEffect(() => {
+    meta.current = { title: now?.title ?? "", artist: now?.artist ?? "" };
+  }, [now?.title, now?.artist]);
 
   /**
    * The uri is a dependency, so a track change tears this down and sets it up
@@ -63,6 +69,8 @@ export function useRecordListening(): void {
       if (!counted && heard >= PLAY_THRESHOLD_MS) {
         counted = true;
         countPlay(id);
+        const { title, artist } = meta.current;
+        if (title && artist) void mirrorPlay({ trackId: id, title, artist });
       }
     };
 

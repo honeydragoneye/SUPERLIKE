@@ -73,6 +73,21 @@ npm run agent                                 # http://127.0.0.1:8765 에서 대
 `LASTFM_API_KEY`는 위 `.env.local` 값을 그대로 씁니다. 에이전트를 켜지 않으면 챗봇 패널에 안내 문구가 나오고
 나머지 기능은 그대로 동작합니다. 구조와 실험 스크립트는 [agent/README.md](./agent/README.md) 참고.
 
+## 공유 DB (선택)
+
+좋아요와 재생 기록은 기본적으로 브라우저에만 저장됩니다. `.env.local`에 `DATABASE_URL`(Neon 같은 Postgres)을
+넣으면 로그인한 Spotify 계정별로 DB에도 저장되고, 다른 기기에서도 같은 좋아요가 보입니다. 처음 한 번 테이블을
+만듭니다.
+
+```bash
+npm run db:migrate        # lib/db/schema.sql 적용 (여러 번 실행해도 안전)
+```
+
+`OWNER_SPOTIFY_ID`(개발자 계정의 Spotify 사용자 ID, 로그인한 채로 `/api/spotify/me`에서 확인)를 넣으면 홈의
+**Editor's Pick**이 그 계정이 가장 최근에 좋아요한 곡의 앨범을 보여 줍니다. 앨범 정보와 표지에서 뽑은 색은 개발자가
+로그인해 있을 때 DB에 저장되고, 로그인하지 않은 방문자는 저장된 내용을 봅니다. DB가 없으면 이 기능만 꺼지고
+나머지는 그대로 동작합니다.
+
 ## 기술 구성
 
 Next.js 16 · React 19 · Tailwind CSS 4 · Spotify Web API / Web Playback SDK ·

@@ -1,19 +1,9 @@
-import { Placeholder } from "@/components/detail/placeholder";
+import { EditorsPickPage } from "@/components/detail/editors-pick-page";
 
 /**
- * Where the rail's EDITOR'S PICK block lands.
- *
- * Routed and empty on purpose, like the signup screen: the block has been on
- * the home screen since the first frame with nothing behind it. No planned
- * list — what a pick consists of is not decided yet, and inventing sections
- * here would commit the design.
+ * Where the rail's EDITOR'S PICK block lands: the album of the song the
+ * developer (honeydragoneye) hearted most recently.
  */
 export default function EditorsPick() {
-  return (
-    <Placeholder
-      eyebrow="EDITOR'S PICK"
-      title="에디터스 픽"
-      subtitle="이번 주에 고른 플레이리스트"
-    />
-  );
+  return <EditorsPickPage />;
 }

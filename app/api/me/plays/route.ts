@@ -1,0 +1,52 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { NotConnectedError, SpotifyApiError, flushToken } from "@/lib/spotify/api";
+import { signedInUser } from "@/lib/db/account";
+import { DatabaseNotConfiguredError, query } from "@/lib/db/client";
+
+const NO_STORE = { "Cache-Control": "no-store" };
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * One play: the track was heard past the threshold (see lib/plays).
+ *
+ * `day` is the listener's own calendar day, the same one the browser's tally
+ * uses, so the weekly figure here agrees with the one on the home screen. It
+ * is only accepted within a day of the server's clock either way: a wrong
+ * value would put a play in a week it was not heard in.
+ */
+export async function POST(request: NextRequest) {
+  let body: { trackId?: unknown; title?: unknown; artist?: unknown; day?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  }
+  const { trackId, title, artist, day } = body;
+  const text = (v: unknown, max: number) => typeof v === "string" && v.length > 0 && v.length <= max;
+  if (
+    !text(trackId, 40) || !/^[A-Za-z0-9]+$/.test(trackId as string) ||
+    !text(title, 300) || !text(artist, 300) ||
+    typeof day !== "string" || !DAY.test(day) ||
+    Math.abs(Date.parse(day) - Date.now()) > 2 * 24 * 60 * 60 * 1000
+  ) {
+    return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  }
+
+  try {
+    const user = await signedInUser();
+    await query(
+      `insert into plays_daily (user_id, day, track_id, title, artist, count)
+       values ($1, $2::date, $3, $4, $5, 1)
+       on conflict (user_id, day, track_id) do update set count = plays_daily.count + 1`,
+      [user.id, day, trackId, title, artist],
+    );
+    const res = NextResponse.json({ ok: true }, { headers: NO_STORE });
+    return user.resolved ? flushToken(res, user.resolved) : res;
+  } catch (e) {
+    if (e instanceof NotConnectedError) return NextResponse.json({ error: "not_connected" }, { status: 401 });
+    if (e instanceof DatabaseNotConfiguredError) return NextResponse.json({ error: "database_off" }, { status: 503 });
+    if (e instanceof SpotifyApiError) return NextResponse.json({ error: e.message }, { status: 502 });
+    console.error("[plays]", e);
+    return NextResponse.json({ error: "failed" }, { status: 500 });
+  }
+}

@@ -22,6 +22,8 @@ export type LikedTrack = {
   artist: string;
   artwork: string | null;
   durationMs: number;
+  /** which album the track is on; hearts made before it was kept lack it */
+  albumId?: string | null;
   /** epoch ms, so the list can be shown newest first */
   at: number;
 };
@@ -154,6 +156,21 @@ export function toggle(track: Omit<LikedTrack, "at">): boolean {
   map[track.id] = { ...track, at: stamp() };
   persist(map);
   return true;
+}
+
+/**
+ * Takes a list from the database as the whole truth: what is not in it is gone.
+ *
+ * Used once a browser has been brought over to the account (see
+ * components/player/use-account-sync), so a heart removed on another device does
+ * not come back from this one's copy.
+ */
+export function replaceAll(tracks: LikedTrack[]): void {
+  const map: Record<string, LikedTrack> = {};
+  for (const t of tracks) if (valid(t)) map[t.id] = t;
+  byId = map;
+  for (const row of tracks) lastAt = Math.max(lastAt, row.at);
+  persist(map);
 }
 
 /** Used by 마이페이지 to clear the list; harmless when it is already empty. */

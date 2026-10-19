@@ -6,6 +6,7 @@ import { NowPlayingPanel } from "./now-playing-panel";
 import { RightRail } from "./right-rail";
 import { SiteHeader } from "./site-header";
 import { useRecordListening } from "./player/use-listening";
+import { useAccountSync } from "./player/use-account-sync";
 import { TagSpace } from "./tag-space";
 import { Ticker } from "./ticker";
 import { TagFilter } from "./station/tag-filter";
@@ -70,6 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
    * would book every second of playback twice.
    */
   useRecordListening();
+  useAccountSync();
 
   return (
     /*

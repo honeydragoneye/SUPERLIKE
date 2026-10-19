@@ -10,6 +10,7 @@ import {
   type LikedTrack,
 } from "@/lib/likes";
 import { useSpotify } from "./spotify-provider";
+import { mirrorLike } from "./account-sync";
 
 /**
  * The liked list, newest first.
@@ -52,6 +53,7 @@ export function useLikeNowPlaying(): {
           artist: now.artist,
           artwork: now.artwork,
           durationMs: now.durationMs,
+          albumId: now.albumId,
         }
       : null;
 
@@ -66,10 +68,13 @@ export function useLikeNowPlaying(): {
   );
 
   const toggleLike = useCallback(() => {
-    if (track) toggle(track);
+    if (!track) return;
+    const nowLiked = toggle(track);
+    // mirrored to the account when there is one; the local heart does not wait for it
+    void mirrorLike(track, nowLiked);
     // `track` is rebuilt each render; its fields are what matter, not identity
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track?.id, track?.uri, track?.title, track?.artist, track?.artwork, track?.durationMs]);
+  }, [track?.id, track?.uri, track?.title, track?.artist, track?.artwork, track?.durationMs, track?.albumId]);
 
   return { track, liked, toggleLike };
 }

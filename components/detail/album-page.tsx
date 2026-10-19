@@ -23,8 +23,32 @@ function releaseLabel(date: string, precision: string): string {
   return `${date.slice(0, 4)}년 ${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일`;
 }
 
+/** The album screen for an id: fetches the album, then shows it. */
 export function AlbumPage({ id }: { id: string }) {
   const { data, loading, error } = useDetail<Album>(`/api/spotify/album/${id}`);
+  return <AlbumView data={data} loading={loading} error={error} />;
+}
+
+/**
+ * An album already in hand, shown as the album screen.
+ *
+ * Split from the fetching so Editor's Pick can show the copy the database
+ * keeps — a visitor who is not connected to Spotify has no token to fetch with.
+ */
+export function AlbumView({
+  data,
+  loading,
+  error,
+  eyebrow = "ALBUM",
+  note,
+}: {
+  data: Album | null;
+  loading: boolean;
+  error: string | null;
+  eyebrow?: string;
+  /** a line above the album, e.g. why it is being shown */
+  note?: string;
+}) {
   const { play } = useSpotify();
   const router = useRouter();
 
@@ -48,8 +72,8 @@ export function AlbumPage({ id }: { id: string }) {
 
   return (
     <DetailShell
-      eyebrow="ALBUM"
-      title={data?.name ?? <LoadingDots size={8} />}
+      eyebrow={eyebrow}
+      title={data?.name ?? (loading ? <LoadingDots size={8} /> : "")}
       subtitle={
         data
           ? [
@@ -74,6 +98,7 @@ export function AlbumPage({ id }: { id: string }) {
       }
     >
       <DetailStatus loading={loading} error={error} />
+      {note && data && <p className="shrink-0 text-[10px] tracking-[0.3px] text-on-bright-muted">{note}</p>}
 
       {data && (
         <div className="flex w-full flex-1 flex-col gap-[14px]">

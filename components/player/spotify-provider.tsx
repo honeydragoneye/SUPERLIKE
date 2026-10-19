@@ -48,6 +48,8 @@ export type NowPlaying = {
   title: string;
   artist: string;
   album: string;
+  /** Spotify album id (from the album uri), so a heart can remember which album it came from */
+  albumId: string | null;
   artwork: string | null;
   durationMs: number;
   positionMs: number;
@@ -317,6 +319,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
           title: t.name,
           artist: t.artists.map((a) => a.name).join(", "),
           album: t.album.name,
+          albumId: t.album.uri?.startsWith("spotify:album:") ? t.album.uri.slice(14) : null,
           artwork: t.album.images?.[0]?.url ?? null,
           durationMs: state.duration,
           positionMs: state.position,
