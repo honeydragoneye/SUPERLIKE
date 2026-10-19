@@ -2,6 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSpotify } from "./player/spotify-provider";
 import { Icon } from "./ui/icon";
 import { useDetail } from "./detail/use-detail";
 import type { EditorsPickData } from "./detail/editors-pick-page";
@@ -24,6 +26,27 @@ function EditorsPick() {
   // what the developer hearted last, from the database: the same for every visitor
   const { data, loading } = useDetail<EditorsPickData>("/api/editors-pick");
   const album = data?.album;
+  const router = useRouter();
+  const { play } = useSpotify();
+  /**
+   * Opens the album's page and starts it in the same press. The press is what
+   * lets the browser start audio; without a connected player `play` answers
+   * "unavailable" and the page the press opened is where the connection is asked for.
+   */
+  const open = () => {
+    router.push("/editors-pick");
+    if (!album) return;
+    void play({
+      contextUri: album.uri,
+      tracks: album.tracks.map((t) => ({
+        uri: t.uri,
+        title: t.name,
+        artist: t.artist,
+        artwork: album.artwork,
+        durationMs: t.durationMs,
+      })),
+    });
+  };
   const palette = data?.palette ?? null;
   const title = album?.name ?? (loading ? "" : "아직 고른 앨범이 없습니다");
   const runtime = album?.tracks.reduce((sum, t) => sum + t.durationMs, 0) ?? 0;
@@ -86,16 +109,15 @@ function EditorsPick() {
           ? `${album.artists.map((a) => a.name).join(", ")} · ${album.totalTracks}곡 · ${minutes}분`
           : ""}
       </p>
-      {/* opens the pick rather than playing it: the page has the whole album,
-          and playing it needs a connected account anyway */}
-      <Link
-        href="/editors-pick"
-        aria-label="에디터스 픽 열기"
-        title="에디터스 픽 열기"
-        className="absolute bottom-[14px] right-[14px] flex size-[46px] items-center justify-center rounded-pill bg-pink transition-colors hover:bg-gold"
+      <button
+        type="button"
+        onClick={open}
+        aria-label="에디터스 픽 재생"
+        title="앨범 재생"
+        className="absolute bottom-[14px] right-[14px] flex size-[46px] cursor-pointer items-center justify-center rounded-pill bg-pink transition-colors hover:bg-gold"
       >
         <Icon name="play-md" size={17} />
-      </Link>
+      </button>
     </section>
   );
 }
