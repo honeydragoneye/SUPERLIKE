@@ -241,6 +241,10 @@ def run_agent(
         content = ""
         calls: list[dict] = []
         for chunk in _chat_stream(messages, model, tools, force_first if step == 1 else None):
+            if "rate_wait" in chunk:
+                # 모델이 한도에 걸려 기다리는 중: 멈춘 게 아니라는 걸 화면에 알린다
+                yield {"type": "waiting", "seconds": chunk["rate_wait"]}
+                continue
             message = chunk.get("message", {})
             if message.get("content"):
                 content += message["content"]

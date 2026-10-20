@@ -104,6 +104,8 @@ type Ctx = {
   maxWidth: number;
   /** the listener picked where to look next, for the question this answer was about */
   searchWith: (messageId: string, source: ChatSource) => void;
+  /** asks again the question an answer gave up on, in place of the failed pair */
+  retry: (messageId: string) => void;
   /** whether the liked songs are shared with the agent, and the switch for it */
   shareTaste: boolean;
   toggleTaste: () => void;
@@ -554,6 +556,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 m.text += String(event.data ?? "");
               });
               break;
+            case "waiting":
+              // the model is at its per-minute limit and the agent is sitting it out: not stuck
+              patch(reply, (m) => {
+                m.status = `요청이 몰려서 ${Math.max(1, Math.round(Number(event.seconds) || 0))}초 기다리는 중…`;
+              });
+              break;
             case "error":
               patch(reply, (m) => {
                 m.error = String(event.message ?? "에이전트가 응답하지 못했습니다.");
@@ -597,6 +605,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       void run(m.question, { sources: tried, via, before: Math.max(0, at - 1) });
     },
     [run, patch],
+  );
+
+  const retry = useCallback(
+    (id: string) => {
+      const at = messagesRef.current.findIndex((x) => x.id === id);
+      const m = messagesRef.current[at];
+      if (at < 1 || !m || m.role !== "assistant" || !m.error || abortRef.current) return;
+      // the failed question and its answer are dropped; run() reads the list for the history right away
+      const kept = messagesRef.current.slice(0, at - 1);
+      messagesRef.current = kept;
+      setMessages(kept);
+      void run(m.question);
+    },
+    [run],
   );
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
@@ -662,11 +684,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Ctx>(
     () => ({
       open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
-      applyProposal, dismissProposal, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, shareTaste, toggleTaste, shareHistory, toggleHistory,
+      applyProposal, dismissProposal, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, retry, shareTaste, toggleTaste, shareHistory, toggleHistory,
     }),
     [
       open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
-      applyProposal, dismissProposal, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, shareTaste, toggleTaste, shareHistory, toggleHistory,
+      applyProposal, dismissProposal, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, retry, shareTaste, toggleTaste, shareHistory, toggleHistory,
     ],
   );
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

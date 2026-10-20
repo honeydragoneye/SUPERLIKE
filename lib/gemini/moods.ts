@@ -106,7 +106,12 @@ async function ask(tracks: MoodAsk[], custom?: CustomMoodSpec): Promise<(MoodKey
 }
 
 function describe(e: unknown): string {
-  if (e instanceof RateLimitedError) return "Gemini 요청 제한을 초과했습니다";
+  if (e instanceof RateLimitedError) {
+    // Google's day turns over at midnight Pacific time: 4 or 5 pm in Seoul
+    return e.daily
+      ? "Gemini 하루 사용 한도를 다 썼습니다. 한국 시간 오후 4~5시쯤 새로 시작돼요"
+      : `Gemini 요청이 몰렸습니다. ${e.retryAfterSec}초쯤 뒤에 다시 시도해 주세요`;
+  }
   if (e instanceof Error && e.message.includes("GEMINI_API_KEY")) {
     return "Gemini API 키가 설정되지 않았습니다";
   }

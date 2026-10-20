@@ -144,7 +144,7 @@ function UserBubble({ text }: { text: string }) {
 }
 
 function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }> }) {
-  const { searchWith, busy } = useChat();
+  const { searchWith, retry, busy } = useChat();
   const text = m.tracks.length ? withoutList(m.text) : m.text;
   const waiting = m.streaming && !text && !m.status && !m.proposal && !m.error;
   return (
@@ -198,7 +198,16 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
             </div>
           </div>
         )}
-        {m.error && <p className="text-[10px] leading-[15px] text-alert">{m.error}</p>}
+        {m.error && (
+          <div className="flex flex-col items-start gap-[6px]">
+            <p className="text-[10px] leading-[15px] text-alert">{m.error}</p>
+            {!m.streaming && (
+              <Pill disabled={busy} title="같은 질문을 다시 보냅니다" onClick={() => retry(m.id)}>
+                다시 시도
+              </Pill>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

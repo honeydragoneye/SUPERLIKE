@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 
 import requests
 
@@ -24,20 +24,35 @@ _RETRIES = 3
 _MAX_WAIT = 30.0
 
 
-def _retry_delay(response: requests.Response) -> float | None:
+def _limit(response: requests.Response) -> tuple[float | None, bool]:
+    """429 본문에서 (다시 시도해도 되는 시점까지의 초, 하루 한도인지)를 읽는다.
+
+    하루 한도(QuotaFailure의 quotaId에 PerDay)는 기다려서 풀리는 게 아니다: 기다리지 않고 바로 알려야 한다.
+    """
+    delay: float | None = None
+    daily = False
     try:
         for d in response.json()["error"].get("details", []):
-            if d.get("@type", "").endswith("RetryInfo"):
-                return float(d["retryDelay"].rstrip("s")) + 0.5
-    except (ValueError, KeyError, TypeError):
+            kind = d.get("@type", "")
+            if kind.endswith("RetryInfo"):
+                delay = float(d["retryDelay"].rstrip("s")) + 0.5
+            elif kind.endswith("QuotaFailure"):
+                daily = daily or any("PerDay" in v.get("quotaId", "") for v in d.get("violations", []))
+    except (ValueError, KeyError, TypeError, AttributeError):
         pass
-    return None
+    return delay, daily
 
 
 class GeminiError(RuntimeError):
-    def __init__(self, message: str, status: int | None = None) -> None:
+    def __init__(
+        self, message: str, status: int | None = None, *, daily: bool = False, retry_after: float | None = None
+    ) -> None:
         super().__init__(message)
         self.status = status
+        # 하루 한도를 다 쓴 경우: 기다려도 풀리지 않는다
+        self.daily = daily
+        # 한도가 풀릴 때까지 서버가 알려 준 초
+        self.retry_after = retry_after
 
 
 def _headers() -> dict:
@@ -46,18 +61,42 @@ def _headers() -> dict:
     return {"x-goog-api-key": config.GEMINI_API_KEY, "Content-Type": "application/json"}
 
 
-def _post(method: str, payload: dict, stream: bool = False) -> requests.Response:
+def _post_events(method: str, payload: dict, stream: bool = False) -> Generator[dict, None, requests.Response]:
+    """호출하고, 한도에 걸려 기다리는 동안은 {"rate_wait": 초}를 내보낸다. 끝나면 응답을 돌려준다."""
     url = f"{_BASE}/{config.GEMINI_MODEL}:{method}" + ("?alt=sse" if stream else "")
     for attempt in range(_RETRIES + 1):
         response = requests.post(url, headers=_headers(), json=payload, stream=stream, timeout=120)
         if response.status_code not in _RETRY_STATUS or attempt == _RETRIES:
             break
-        wait = _retry_delay(response) or 1.5 * (attempt + 1)
+        delay, daily = (None, False)
+        if response.status_code == 429:
+            delay, daily = _limit(response)
+            # 하루 한도, 또는 기다릴 수 없을 만큼 긴 대기: 90초를 기다린 뒤 알리지 말고 바로 알린다
+            if daily or (delay is not None and delay > _MAX_WAIT):
+                break
+        wait = min(delay or 1.5 * (attempt + 1), _MAX_WAIT)
         response.close()
-        time.sleep(min(wait, _MAX_WAIT))
+        if response.status_code == 429:
+            yield {"rate_wait": round(wait)}
+        time.sleep(wait)
     if not response.ok:
-        raise GeminiError(f"Gemini {response.status_code}: {response.text[:300]}", response.status_code)
+        daily, delay = False, None
+        if response.status_code == 429:
+            delay, daily = _limit(response)
+        raise GeminiError(
+            f"Gemini {response.status_code}: {response.text[:300]}", response.status_code, daily=daily, retry_after=delay
+        )
     return response
+
+
+def _post(method: str, payload: dict, stream: bool = False) -> requests.Response:
+    """_post_events에서 기다림 알림만 빼고 응답을 받는다 (화면에 알릴 곳이 없는 호출용)."""
+    events = _post_events(method, payload, stream)
+    while True:
+        try:
+            next(events)
+        except StopIteration as done:
+            return done.value
 
 
 def generate_json(system: str, question: str, schema: dict) -> str:
@@ -124,13 +163,13 @@ def _contents(messages: list[dict]) -> tuple[str, list[dict]]:
     return system, contents
 
 
-def chat_stream(messages: list[dict], tools: list[dict], force: list[str] | None = None) -> Iterator[dict]:
+def chat_stream(messages: list[dict], tools: list[dict], force: list[str] | None = None) -> Generator[dict, None, None]:
     """Gemini 한 번 호출. Ollama와 같은 모양의 조각을 내보낸다.
 
     force가 있으면 모델은 답하기 전에 그 이름의 도구 중 하나를 반드시 불러야 한다.
     """
     system, contents = _contents(messages)
-    response = _post(
+    response = yield from _post_events(
         "streamGenerateContent",
         {
             "systemInstruction": {"parts": [{"text": system}]},

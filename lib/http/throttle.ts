@@ -31,9 +31,42 @@ export type ThrottleOptions = {
 };
 
 export class RateLimitedError extends Error {
-  constructor(readonly retryAfterSec: number) {
-    super(`rate_limited (retry after ${retryAfterSec}s)`);
+  constructor(
+    readonly retryAfterSec: number,
+    /** the day's quota is spent: waiting a minute will not help */
+    readonly daily = false,
+  ) {
+    super(`rate_limited (retry after ${retryAfterSec}s${daily ? ", daily quota" : ""})`);
   }
+}
+
+/** How often a spent daily quota is tried again, so the next call after it resets is not refused for hours. */
+const DAILY_RECHECK_SEC = 30 * 60;
+
+/**
+ * How long a 429 asks us to wait, and whether it is the day's quota.
+ *
+ * Spotify says so in a `Retry-After` header. Gemini does not: it puts a
+ * `RetryInfo` ("12s") and, for a spent daily quota, a `QuotaFailure` whose
+ * quota id ends in PerDay in the JSON body. Reading only the header made every
+ * Gemini 429 look like "wait one second", so a daily limit was retried, and
+ * failed, on every call.
+ */
+async function limitOf(res: Response): Promise<{ retryAfterSec: number; daily: boolean }> {
+  let retryAfterSec = Number(res.headers.get("Retry-After")) || 0;
+  let daily = false;
+  try {
+    const body = (await res.clone().json()) as {
+      error?: { details?: { "@type"?: string; retryDelay?: string; violations?: { quotaId?: string }[] }[] };
+    };
+    for (const d of body.error?.details ?? []) {
+      if (d["@type"]?.endsWith("RetryInfo") && !retryAfterSec) retryAfterSec = Math.ceil(parseFloat(d.retryDelay ?? "0")) || 0;
+      if (d["@type"]?.endsWith("QuotaFailure") && d.violations?.some((v) => v.quotaId?.includes("PerDay"))) daily = true;
+    }
+  } catch {
+    // not JSON, or not an error body: the header (or one second) is all there is
+  }
+  return { retryAfterSec: retryAfterSec || 1, daily };
 }
 
 /** Longest we will sit on a 429 before surfacing it. */
@@ -52,6 +85,7 @@ export function createThrottled(options: ThrottleOptions) {
    * of spending ninety seconds discovering the same thing.
    */
   let blockedUntil = 0;
+  let blockedDaily = false;
 
   const {
     minGapMs,
@@ -104,22 +138,24 @@ export function createThrottled(options: ThrottleOptions) {
 
   return async function request(url: string, init?: RequestInit): Promise<Response> {
     const waitLeft = Math.ceil((blockedUntil - Date.now()) / 1000);
-    if (waitLeft > 0) throw new RateLimitedError(waitLeft);
+    if (waitLeft > 0) throw new RateLimitedError(waitLeft, blockedDaily);
 
     for (let attempt = 0; ; attempt++) {
       const res = await paced(() => once(url, init));
 
       if (res.status === 429) {
-        const retryAfterSec = Number(res.headers.get("Retry-After") ?? "1") || 1;
+        const limit = await limitOf(res);
+        const retryAfterSec = limit.daily ? Math.max(limit.retryAfterSec, DAILY_RECHECK_SEC) : limit.retryAfterSec;
 
         // longer than we could ever sit out: record it and stop trying
         if (retryAfterSec * 1000 > MAX_BACKOFF_MS) {
           blockedUntil = Date.now() + retryAfterSec * 1000;
+          blockedDaily = limit.daily;
           console.warn(
             `[throttle] ${new URL(url).pathname} locked out for ${retryAfterSec}s — ` +
               `failing fast until ${new Date(blockedUntil).toLocaleString("ko-KR")}`,
           );
-          throw new RateLimitedError(retryAfterSec);
+          throw new RateLimitedError(retryAfterSec, limit.daily);
         }
 
         if (!retryOn429 || attempt >= maxRetries) {
@@ -147,7 +183,10 @@ export function createThrottled(options: ThrottleOptions) {
         continue;
       }
 
-      if (res.ok) blockedUntil = 0;
+      if (res.ok) {
+        blockedUntil = 0;
+        blockedDaily = false;
+      }
       return res;
     }
   };

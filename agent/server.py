@@ -142,8 +142,14 @@ class Handler(BaseHTTPRequestHandler):
             )
         except GeminiError as e:
             print(f"[agent] gemini: {e}", flush=True)
-            if e.status == 429:
-                self._try_send_error("rate_limited", "Gemini 사용 한도를 넘었어요. 잠시 뒤에 다시 시도해 주세요.")
+            if e.status == 429 and e.daily:
+                # 기다려서 풀리는 한도가 아니다. 구글의 하루는 태평양 시간 자정에 바뀐다(한국 시간 오후 4~5시쯤)
+                self._try_send_error(
+                    "rate_limited", "Gemini 하루 사용 한도를 다 썼어요. 한국 시간 오후 4~5시쯤 새로 시작돼요."
+                )
+            elif e.status == 429:
+                wait = f" {round(e.retry_after)}초쯤 뒤에" if e.retry_after else " 잠시 뒤에"
+                self._try_send_error("rate_limited", f"요청이 몰려서 지금은 답하지 못해요.{wait} 다시 시도해 주세요.")
             else:
                 self._try_send_error("agent_error", "Gemini가 응답하지 못했습니다.")
         except Exception as e:  # 에이전트 안의 예기치 못한 오류도 화면에 이유가 보이게 한다
