@@ -98,6 +98,7 @@ export async function GET(request: NextRequest) {
       artist: t.artists.map((a) => a.name).join(", "),
       album: t.album?.name ?? "",
       artwork: pick(t.album?.images, 64),
+      artworkLarge: pick(t.album?.images, 300),
       durationMs: t.duration_ms,
       explicit: t.explicit,
       popularity: t.popularity,

@@ -28,7 +28,7 @@ export function EditorsPickPage() {
       // the shared message for 404 reads "not found"; here it means nothing has been picked
       error={error === "찾을 수 없습니다" ? "아직 고른 앨범이 없습니다" : error}
       eyebrow="EDITOR'S PICK"
-      note={data ? `개발자(honeydragoneye)가 가장 최근에 좋아요한 곡: ${data.track.title} — ${data.track.artist}` : undefined}
+      note={data ? `용눈이가 가장 최근에 좋아요한 곡: ${data.track.title} — ${data.track.artist}` : undefined}
     />
   );
 }

@@ -5,7 +5,7 @@ import { useSpotify } from "@/components/player/spotify-provider";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useHydrated } from "@/components/ui/use-hydrated";
 
-type Seed = Parameters<ReturnType<typeof useSpotify>["startStation"]>[0];
+export type Seed = Parameters<ReturnType<typeof useSpotify>["startStation"]>[0];
 
 /** A song as a list names it: by title and artist, with no Spotify id yet. */
 export type TrackCardTrack = {
@@ -20,21 +20,34 @@ export type TrackCardTrack = {
  * looks the song up once through the search the rest of the app uses, so it can
  * be played and can seed a station.
  */
-const lookups = new Map<string, Promise<Seed | null>>();
+export type Found = Seed & {
+  /** a cover sized for a card; `artwork` is the small one a list row uses */
+  artworkLarge: string | null;
+};
 
-function lookUp(track: TrackCardTrack): Promise<Seed | null> {
+const lookups = new Map<string, Promise<Found | null>>();
+
+export function lookUp(track: TrackCardTrack): Promise<Found | null> {
   const key = `${track.title}|${track.artist}`.toLowerCase();
   const known = lookups.get(key);
   if (known) return known;
 
-  const pending = (async (): Promise<Seed | null> => {
+  const pending = (async (): Promise<Found | null> => {
     const q = encodeURIComponent(`${track.title} ${track.artist}`);
     const res = await fetch(`/api/spotify/search?q=${q}&type=track&limit=1`, { cache: "no-store" });
     if (!res.ok) throw new Error(String(res.status));
-    const data = (await res.json()) as { tracks?: (Seed & { artwork: string | null })[] };
+    const data = (await res.json()) as { tracks?: (Seed & { artwork: string | null; artworkLarge?: string | null })[] };
     const first = data.tracks?.[0];
     return first
-      ? { id: first.id, uri: first.uri, name: first.name, artist: first.artist, artwork: first.artwork, durationMs: first.durationMs }
+      ? {
+          id: first.id,
+          uri: first.uri,
+          name: first.name,
+          artist: first.artist,
+          artwork: first.artwork,
+          artworkLarge: first.artworkLarge ?? first.artwork,
+          durationMs: first.durationMs,
+        }
       : null;
   })();
   // a failed lookup is not remembered, so the next card for the same song tries again

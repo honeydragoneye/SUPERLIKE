@@ -31,10 +31,13 @@ function startOfWeek(): number {
 }
 
 /**
- * The user's own listening history. Falls back to placeholder rows until
- * Spotify is connected so the block never collapses during design review.
+ * The user's own listening history.
+ *
+ * `contained` keeps the list to the height it is given and scrolls inside it;
+ * without it the list is as long as its rows and the page does the scrolling,
+ * which is what the mypage wants.
  */
-export function RecentlyPlayed() {
+export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
   const { connected: session, recent, recentLive: live, recentLoaded: loaded, recentError } = useSpotify();
   const chat = useChat();
   /**
@@ -109,7 +112,9 @@ export function RecentlyPlayed() {
             : "이번 주 재생한 곡이 없습니다";
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-[10px] overflow-hidden bg-chart p-[16px]">
+    <section
+      className={`flex flex-1 flex-col gap-[10px] bg-chart p-[16px] ${contained ? "min-h-0 overflow-hidden" : "min-h-[560px]"}`}
+    >
       <div className="flex w-full shrink-0 items-center justify-between gap-[10px]">
         <div className="flex shrink-0 flex-col gap-px">
           <h2 className="text-[26px] font-black tracking-[-1px]">최근 재생 목록</h2>
@@ -149,7 +154,7 @@ export function RecentlyPlayed() {
 
       {/* the page behind it still does not scroll; this list does, so a ranking
           can be read past the fold instead of being cut at whatever fits */}
-      <div className="scroll-y scroll-y-ink min-h-0 w-full flex-1">
+      <div className={contained ? "scroll-y scroll-y-ink min-h-0 w-full flex-1" : "w-full flex-1"}>
         {emptyNote ? (
           <div className="flex h-full min-h-[160px] flex-col items-start justify-center gap-[10px] pr-[8px]">
             <p className="text-[15px] font-black tracking-[-0.3px]">{emptyNote.head}</p>

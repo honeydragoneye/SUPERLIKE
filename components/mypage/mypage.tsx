@@ -1,13 +1,14 @@
 "use client";
 
 import { AccountBanner } from "./account-banner";
-import { LikedTracks } from "./liked-tracks";
-import { PlaylistShelf } from "./playlist-shelf";
+import { RecentlyPlayed } from "@/components/recently-played";
 import { FollowCounts, Listeners, ThemeMode } from "./side-panels";
 
 /**
- * 마이페이지: the account across the top, what the listener keeps on the left,
- * the people and settings around them on the right.
+ * 마이페이지: the account across the top, the listening history on the left,
+ * the people and settings around it on the right.
+ *
+ * The hearted songs and the playlists moved to home, under the taste block.
  *
  * The panels meet edge to edge and are told apart by 1.5px seams rather than
  * gaps, so the screen reads as one sheet ruled into fields. The seams are
@@ -21,8 +22,7 @@ export function Mypage() {
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col border-r-[1.5px] border-ink">
-          <LikedTracks />
-          <PlaylistShelf />
+          <RecentlyPlayed />
         </div>
 
         <aside className="flex w-[341px] shrink-0 flex-col">

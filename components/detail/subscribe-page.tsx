@@ -126,7 +126,7 @@ function Form() {
  */
 export function SubscribePage({ confirm, unsubscribe }: { confirm?: string; unsubscribe?: string }) {
   return (
-    <DetailShell eyebrow="SUBSCRIBE" title="신청하기" subtitle="매주 금요일, 개발자가 고른 앨범 이야기 · 무료 · 언제든 해지">
+    <DetailShell eyebrow="SUBSCRIBE" title="신청하기" subtitle="매주 금요일, 용눈이가 고른 앨범 이야기 · 무료 · 언제든 해지">
       <div className="flex w-full flex-1 flex-col items-start justify-start gap-[14px] py-[24px]">
         {confirm ? (
           <Settle token={confirm} action="confirm" />

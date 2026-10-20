@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSpotify } from "./player/spotify-provider";
 import { Icon } from "./ui/icon";
+import { weekTheme } from "@/lib/week-theme";
 import { useDetail } from "./detail/use-detail";
 import type { EditorsPickData } from "./detail/editors-pick-page";
 import type { WeeklyArtist } from "@/lib/db/weekly";
@@ -123,26 +124,40 @@ function EditorsPick() {
 }
 
 function StayConnected() {
+  // the mail rotates through four themes; this is the one going out this week
+  const theme = weekTheme();
   return (
-    <section className="flex min-h-0 flex-[186_0_186px] flex-col gap-[10px] overflow-hidden bg-pink p-[16px]">
-      <Link
-        href="/subscribe"
-        className="flex h-[36px] shrink-0 items-center gap-[8px] self-start rounded-pill bg-paper pl-[12px] pr-[14px] transition-colors hover:bg-gold rule"
-      >
-        <Icon name="mail" size={17} />
-        <span className="whitespace-nowrap text-[12px]">신청하기</span>
-      </Link>
-      <h2 className="w-full text-[19px] font-black tracking-[-0.5px] text-on-bright">
-        STAY CONNECTED
-      </h2>
-      <p className="w-full text-[10px] leading-[16px] text-on-bright">
-        매주 금요일, 개발자가 이번 주 들은 곡 중
+    <section className="relative flex min-h-0 flex-[186_0_186px] flex-col overflow-hidden bg-paper-solid px-[20px] py-[18px]">
+      {/* the stamp's perforated edge */}
+      <div aria-hidden className="pointer-events-none absolute inset-[8px] border border-dashed border-ink/45" />
+      <p className="text-[8px] tracking-[0.8px] text-pink-bright">{theme} · 이번 주 컨셉</p>
+      <h2 className="mt-[6px] text-[24px] font-black leading-[28px] tracking-[-0.5px] text-on-bright">
+        금요일의
         <br />
-        앨범 한 장의 이야기를 메일로 보내드립니다.
+        앨범 편지
+      </h2>
+      <div
+        aria-hidden
+        className="absolute right-[20px] top-[18px] flex h-[66px] w-[56px] flex-col items-center justify-center border border-dashed border-pink-bright text-pink-bright"
+      >
+        <span className="text-[18px] font-black leading-none">FRI</span>
+        <span className="mt-[6px] text-[7px] tracking-[0.4px]">00:00 KST</span>
+        <span className="mt-[2px] text-[8px] tracking-[0.4px]">매주</span>
+      </div>
+      <p className="mt-auto text-[9px] leading-[14px] text-on-bright/70">
+        용눈이가 이번 주 들은 곡 중 앨범 한 장의 이야기를
+        <br />
+        메일로 보내드립니다.
       </p>
-      <p className="w-full text-[8px] tracking-[0.7px] text-on-bright-muted">
-        무료 · 언제든 해지
-      </p>
+      <div className="mt-[10px] flex items-center gap-[14px]">
+        <Link
+          href="/subscribe"
+          className="flex h-[28px] items-center whitespace-nowrap rounded-pill bg-ink px-[18px] text-[10px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-pink-bright"
+        >
+          신청하기 →
+        </Link>
+        <span className="text-[8px] tracking-[0.6px] text-on-bright-muted">무료 · 언제든 해지</span>
+      </div>
     </section>
   );
 }

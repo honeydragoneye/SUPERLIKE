@@ -65,6 +65,8 @@ export type SearchTrack = {
   artist: string;
   album: string;
   artwork: string | null;
+  /** a cover big enough for a card, where `artwork` is sized for a list row */
+  artworkLarge: string | null;
   durationMs: number;
   explicit: boolean;
   popularity: number;

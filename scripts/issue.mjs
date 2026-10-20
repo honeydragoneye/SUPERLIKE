@@ -39,7 +39,7 @@ const getJson = (url, init = {}) => fetch(url, { ...init, headers: { ...UA, ...i
 
 /** The look changes week by week: a name for the week's idea, and its colours. */
 const THEMES = [
-  { name: "A SIDE", line: "이번 주 개발자의 턴테이블에 올라간 앨범", bg: "#ffe000", ink: "#111111", sub: "#5c5200", card: "#fffbe0" },
+  { name: "A SIDE", line: "이번 주 용눈이의 턴테이블에 올라간 앨범", bg: "#ffe000", ink: "#111111", sub: "#5c5200", card: "#fffbe0" },
   { name: "LINER NOTES", line: "앨범 뒷면에 적혀 있을 법한 이야기", bg: "#f78fc0", ink: "#1a0a12", sub: "#6b2f4a", card: "#fff0f7" },
   { name: "SPOTLIGHT", line: "이 앨범을 만든 사람들 이야기", bg: "#b8f26b", ink: "#0f1a00", sub: "#3d5a10", card: "#f4ffe0" },
   { name: "NIGHT SHIFT", line: "밤에 꺼내 듣기 좋은 한 장", bg: "#1d1d2b", ink: "#ffffff", sub: "#b9b9d0", card: "#2a2a3d" },
@@ -177,8 +177,8 @@ function render(issue, who, unsubscribeUrl, faceSrc) {
   ${issue.albumIntro ? block("ABOUT THE ALBUM", para(issue.albumIntro.text) + credit(issue.albumIntro)) : ""}
   ${trackList ? block("TRACKLIST", trackList) : ""}
   ${issue.artistIntro ? block(`ABOUT ${esc(a.artist.toUpperCase())}`, para(issue.artistIntro.text) + credit(issue.artistIntro)) : ""}
-  ${heard ? block("이번 주 개발자가 들은 곡", `<ul style="margin:10px 0 0;padding-left:20px;font-size:13px;line-height:1.8;color:${t.ink}">${heard}</ul>`) : ""}
-  <tr><td style="padding:28px;font-size:12px;color:${t.sub}">개발자(honeydragoneye)가 이번 주 들은 곡 중에서 고른 앨범입니다.<br><a href="${esc(unsubscribeUrl)}" style="color:${t.sub}">구독 해지</a></td></tr>
+  ${heard ? block("이번 주 용눈이가 들은 곡", `<ul style="margin:10px 0 0;padding-left:20px;font-size:13px;line-height:1.8;color:${t.ink}">${heard}</ul>`) : ""}
+  <tr><td style="padding:28px;font-size:12px;color:${t.sub}">용눈이가 이번 주 들은 곡 중에서 고른 앨범입니다.<br><a href="${esc(unsubscribeUrl)}" style="color:${t.sub}">구독 해지</a></td></tr>
 </table></td></tr></table></body></html>`;
 
   const text =
