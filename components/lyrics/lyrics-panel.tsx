@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import { usePlaybackPosition, useSpotify } from "@/components/player/spotify-provider";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import { useLyricsView } from "./lyrics-view";
 
 type Line = { ms: number; text: string };
 type Lyrics = { instrumental: boolean | null; lines: Line[]; plain: string[] };
@@ -11,7 +10,7 @@ type Lyrics = { instrumental: boolean | null; lines: Line[]; plain: string[] };
 const EMPTY: Lyrics = { instrumental: null, lines: [], plain: [] };
 
 /**
- * Lyrics for whatever is playing, beside the player.
+ * Lyrics for whatever is playing, in the popover over the player bar.
  *
  * Timed lines when LRCLIB has them: the line being sung is the last one whose
  * stamp is behind the playback position the panel already receives every
@@ -22,10 +21,9 @@ const EMPTY: Lyrics = { instrumental: null, lines: [], plain: [] };
  * With only plain text the lines still all show, unhighlighted — a lyric sheet
  * rather than a follow-along.
  */
-export function LyricsPanel() {
+export const LyricsPopover = forwardRef<HTMLDivElement>(function LyricsPopover(_, ref) {
   const { now } = useSpotify();
   const positionMs = usePlaybackPosition();
-  const { close } = useLyricsView();
 
   const [held, setHeld] = useState<{ uri: string; data: Lyrics } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -82,46 +80,51 @@ export function LyricsPanel() {
     -1,
   );
 
-  // follow the song rather than making the listener scroll with it
+  /**
+   * Follow the song rather than making the listener scroll with it.
+   *
+   * Scrolls the list itself: scrollIntoView would also move every scrollable
+   * ancestor, and this list sits in a popover over the page.
+   */
   useEffect(() => {
-    currentRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const list = listRef.current;
+    const line = currentRef.current;
+    if (!list || !line) return;
+    list.scrollTo({
+      top: line.offsetTop - list.clientHeight / 2 + line.clientHeight / 2,
+      behavior: "smooth",
+    });
   }, [current]);
 
   const nothing = !loading && timed.length === 0 && plain.length === 0;
 
   return (
-    <section className="flex h-full w-full flex-col gap-[12px] overflow-hidden bg-chart p-[16px]">
-      <div className="flex w-full shrink-0 items-start justify-between gap-[8px]">
-        <div className="flex min-w-0 flex-col gap-px">
-          <p className="text-[8px] tracking-[0.9px] text-on-bright-muted">LYRICS</p>
-          <p className="truncate text-[19px] font-black tracking-[-0.5px]" title={now?.title}>
-            {now?.title ?? "재생 중인 곡 없음"}
-          </p>
-          <p className="truncate text-[9px] text-on-bright-muted">{now?.artist ?? ""}</p>
-        </div>
-        <button
-          type="button"
-          onClick={close}
-          aria-label="가사 닫기"
-          title="가사 닫기"
-          className="shrink-0 rounded-pill px-[6px] text-[12px] leading-none text-muted transition-colors hover:text-ink"
-        >
-          ×
-        </button>
+    <div
+      ref={ref}
+      role="dialog"
+      aria-label="가사"
+      className="absolute bottom-[calc(100%+8px)] right-[16px] z-30 flex w-[380px] flex-col gap-[12px] rounded-[8px] bg-ink p-[16px] text-on-dark shadow-[0_-4px_20px_rgba(0,0,0,0.35)]"
+    >
+      <div className="flex w-full shrink-0 items-center justify-between gap-[12px] whitespace-nowrap">
+        <p className="text-[10px] tracking-[1px]">LYRICS</p>
+        <p className="truncate text-[10px] tracking-[0.5px] text-on-dark-muted" title={now?.title}>
+          {now ? `${now.title} · ${timed.length ? "싱크 가사" : "가사"}` : "재생 중인 곡 없음"}
+        </p>
       </div>
 
-      <div className="h-[1.5px] w-full shrink-0 bg-ink" />
-
-      <div ref={listRef} className="scroll-y scroll-y-ink flex min-h-0 w-full flex-1 flex-col gap-[12px]">
+      <div
+        ref={listRef}
+        className="scroll-y relative flex h-[232px] w-full flex-col gap-[12px]"
+      >
         {loading && (
-          <p className="flex shrink-0 items-center gap-[8px] text-[10px] text-on-bright-muted">
+          <p className="flex shrink-0 items-center gap-[8px] text-[10px] text-on-dark-muted">
             불러오는 중
             <LoadingDots size={4} />
           </p>
         )}
 
         {nothing && (
-          <p className="shrink-0 py-[20px] text-center text-[14px] font-black tracking-[1px] text-on-bright-muted">
+          <p className="shrink-0 py-[20px] text-center text-[14px] font-black tracking-[1px] text-on-dark-muted">
             No LYRICS
           </p>
         )}
@@ -133,25 +136,25 @@ export function LyricsPanel() {
             className={
               i === current
                 ? "shrink-0 text-[13.2px] font-black leading-[19px] text-pink-bright"
-                : "shrink-0 text-[12px] leading-[17px] text-on-bright-muted"
+                : "shrink-0 text-[12px] leading-[17px] text-on-dark-muted"
             }
           >
-            {line.text || " "}
+            {line.text || " "}
           </p>
         ))}
 
         {/* no timings: the sheet, without a line to follow */}
         {timed.length === 0 &&
           plain.map((line, i) => (
-            <p key={i} className="shrink-0 text-[12px] leading-[17px] text-on-bright-muted">
+            <p key={i} className="shrink-0 text-[12px] leading-[17px] text-on-dark-muted">
               {line}
             </p>
           ))}
       </div>
 
-      <p className="shrink-0 text-[8px] tracking-[0.5px] text-on-bright-muted">
+      <p className="shrink-0 text-[8px] tracking-[0.5px] text-on-dark-muted">
         출처: LRCLIB{timed.length ? " · 싱크 가사" : ""}
       </p>
-    </section>
+    </div>
   );
-}
+});

@@ -13,16 +13,13 @@ import { TagFilter } from "./station/tag-filter";
 import { ChatPanel } from "./chat/chat-panel";
 import { ChatResizer } from "./chat/chat-resizer";
 import { useChat } from "./chat/chat-provider";
-import { LyricsPanel } from "./lyrics/lyrics-panel";
-import { useLyricsView } from "./lyrics/lyrics-view";
-import { useEffect } from "react";
 
 /**
  * Everything that is not the page.
  *
  * This lives in the root layout, so navigating only ever swaps the middle
- * column. The Now Playing column is mounted once for the session: it keeps its
- * position, its scroll and its state across every route, and the Spotify player
+ * column. The player bar along the bottom is mounted once for the session: it
+ * keeps its state across every route, and the Spotify player
  * it talks to is never torn down — the behaviour every streaming app has, where
  * the transport is independent of whatever page you are reading.
  *
@@ -49,22 +46,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname.startsWith("/editors-pick") ||
     pathname.startsWith("/weekly-artist");
   const rail = !railless;
-  /**
-   * Lyrics take a column to the left of the page, next to the player they
-   * belong to, and stand in for the rail while they are up: two 330px columns
-   * would leave the page itself too narrow to read.
-   */
-  const { open: lyricsOpen } = useLyricsView();
-  /**
-   * The chat takes the rail's column, at the width it was dragged to. The
-   * lyrics column and the chat want the same room, so the chat steps aside
-   * while lyrics are up (and opening the chat closes the lyrics).
-   */
-  const { open: chatOpen, width: chatWidth, close: closeChat } = useChat();
-  const chat = chatOpen && !lyricsOpen;
-  useEffect(() => {
-    if (lyricsOpen) closeChat();
-  }, [lyricsOpen, closeChat]);
+  /** The chat takes the rail's column, at the width it was dragged to. */
+  const { open: chat, width: chatWidth } = useChat();
 
   /**
    * Mounted here, once, because it writes rather than reads: a second copy
@@ -95,34 +78,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <SiteHeader />
 
       <div className="flex min-h-0 flex-1">
-        {/* mounted once: never remounted by navigation */}
-        <div className="h-full w-[263px] shrink-0">
-          <NowPlayingPanel />
-        </div>
-
         <div
           className="grid min-h-0 min-w-0 flex-1"
           style={{
-            gridTemplateColumns: lyricsOpen
-              ? "330px minmax(0, 1fr)"
-              : chat
-                ? `minmax(0, 1fr) ${chatWidth}px`
-                : rail
-                  ? "minmax(0, 1fr) 330px"
-                  : "minmax(0, 1fr)",
+            gridTemplateColumns: chat
+              ? `minmax(0, 1fr) ${chatWidth}px`
+              : rail
+                ? "minmax(0, 1fr) 330px"
+                : "minmax(0, 1fr)",
             gridTemplateRows: "76px minmax(0, 1fr)",
           }}
         >
           <div
             className="min-w-0"
             style={{
-              gridColumn: lyricsOpen
-                ? "1 / 3"
-                : chat
-                  ? "1 / 3"
-                  : home || railless
-                    ? "1 / 2"
-                    : "1 / 3",
+              gridColumn: chat ? "1 / 3" : home || railless ? "1 / 2" : "1 / 3",
               gridRow: "1 / 2",
             }}
           >
@@ -130,35 +100,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           {/*
-            Home is sized to the window and does not scroll: its blocks measure
-            themselves and show what fits, handing the rest to /history. Every
-            other screen is as long as its content and scrolls here — one
-            surface, never a list scrolling inside a scrolling page.
+            Every screen is as long as its content and scrolls here — one
+            surface, never a list scrolling inside a scrolling page. Home is
+            no exception now: taste, hearted songs and playlists stack down
+            the column, and only the rail beside it keeps to the window.
           */}
           <div
-            className={
-              home
-                ? "min-h-0 min-w-0 overflow-hidden"
-                : "scroll-y scroll-y-ink min-h-0 min-w-0"
-            }
+            className="scroll-y scroll-y-ink min-h-0 min-w-0"
             style={{
-              gridColumn: lyricsOpen ? "2 / 3" : "1 / 2",
+              gridColumn: "1 / 2",
               gridRow: "2 / 3",
             }}
           >
-            <div className={`flex flex-col ${home ? "h-full" : "min-h-full"}`}>
+            <div className="flex min-h-full flex-col">
               {children}
             </div>
           </div>
-
-          {lyricsOpen && (
-            <div
-              className="min-h-0 overflow-hidden"
-              style={{ gridColumn: "1 / 2", gridRow: "2 / 3" }}
-            >
-              <LyricsPanel />
-            </div>
-          )}
 
           {chat && (
             <div
@@ -170,7 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           )}
 
-          {rail && !lyricsOpen && !chat && (
+          {rail && !chat && (
             <div
               className="min-h-0 overflow-hidden"
               style={{ gridColumn: "2 / 3", gridRow: home ? "1 / 3" : "2 / 3" }}
@@ -179,6 +136,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* mounted once: never remounted by navigation */}
+      <div className="h-[72px] shrink-0">
+        <NowPlayingPanel />
       </div>
     </main>
   );

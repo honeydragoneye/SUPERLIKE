@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { Icon, TintedIcon } from "./ui/icon";
 import { QueueItem } from "./ui/queue-item";
 import { usePlaybackPosition, useSpotify } from "./player/spotify-provider";
@@ -10,6 +10,7 @@ import { useHydrated } from "./ui/use-hydrated";
 import { LoadingDots } from "./ui/loading-dots";
 import { useRouter } from "next/navigation";
 import { useLyricsView } from "./lyrics/lyrics-view";
+import { LyricsPopover } from "./lyrics/lyrics-panel";
 import { clock } from "@/lib/time";
 import type { Track } from "@/lib/data";
 import { moodLabel } from "@/lib/station/custom-tags";
@@ -94,7 +95,7 @@ export function NowPlayingPanel() {
   } = useSpotify();
 
   const router = useRouter();
-  const { open: lyricsOpen, toggle: toggleLyrics } = useLyricsView();
+  const { open: lyricsOpen, toggle: toggleLyrics, close: closeLyrics } = useLyricsView();
   // the only subscriber to the per-second position, so the ticker re-renders
   // this panel alone rather than the whole grid
   const positionMs = usePlaybackPosition();
@@ -146,6 +147,37 @@ export function NowPlayingPanel() {
     setMenu((open) => (open ? null : { track, anchor }));
   };
 
+  /**
+   * The queue and the lyrics each live in a popover over the bar rather than a
+   * column: the bar is the whole player now, and a list is only wanted when it
+   * is asked for. They share the one place above the bar, so opening either
+   * closes the other. Escape or a press anywhere outside closes it.
+   */
+  const [queueOpen, setQueueOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const popover = queueOpen || lyricsOpen;
+  useEffect(() => {
+    if (!popover) return;
+    const shut = () => {
+      setQueueOpen(false);
+      closeLyrics();
+    };
+    const onDown = (e: globalThis.MouseEvent) => {
+      const target = e.target as Element;
+      if (popoverRef.current?.contains(target)) return;
+      // the toggles handle their own press, or they would close and reopen at once
+      if (target.closest?.("[data-popover-toggle]")) return;
+      shut();
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && shut();
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [popover, closeLyrics]);
+
   const likeable = hydrated && likeTrack !== null;
   const likedNow = likeable && liked;
   const live = now !== null;
@@ -156,7 +188,7 @@ export function NowPlayingPanel() {
     ? `${now.artist} · ${now.album}`
     : (last?.artist ??
       (connected ? "최근 재생 기록이 없습니다" : "Spotify를 연결해 주세요"));
-  // the panel renders at 231px, so the fallback uses the panel-sized art
+  // the cover is 48px, but the larger art stays sharp on a 2x screen
   const artwork = now?.artwork ?? last?.artworkLarge ?? last?.artwork ?? null;
   const durationMs = now?.durationMs ?? last?.durationMs ?? 0;
   const elapsed = clock(positionMs);
@@ -247,34 +279,125 @@ export function NowPlayingPanel() {
   };
 
   return (
-    <section className="flex h-full min-h-0 flex-col gap-[12px] overflow-hidden bg-panel p-[16px]">
-      <div className="relative aspect-square w-full shrink-0 overflow-hidden rounded-[4px] bg-artwork">
-        {artwork && (
-          <Image
-            src={artwork}
-            alt={`${title} 앨범 커버`}
-            fill
-            sizes="231px"
-            className="object-cover"
-            unoptimized
-          />
-        )}
+    <section className="relative flex h-full w-full items-center gap-[24px] bg-panel px-[16px] text-on-dark">
+      <div className="flex w-[340px] shrink-0 items-center gap-[12px]">
+        <div className="relative size-[48px] shrink-0 overflow-hidden rounded-[3px] bg-artwork">
+          {artwork && (
+            <Image
+              src={artwork}
+              alt={`${title} 앨범 커버`}
+              fill
+              sizes="48px"
+              className="object-cover"
+              unoptimized
+            />
+          )}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
+          <p className="w-full truncate text-[15px] tracking-[-0.2px]" title={title}>
+            {title}
+          </p>
+          {/* a failure replaces the artist line: the bar has no room for a third row */}
+          <p
+            className={`w-full truncate text-[9px] tracking-[0.6px] ${
+              error ? "text-pink-bright" : "text-on-dark-muted"
+            }`}
+            title={error ?? meta}
+          >
+            {error ?? meta}
+          </p>
+        </div>
+        {/* was pinned to heart-filled, so it read as liked whatever was playing */}
+        <RoundButton
+          name={likedNow ? "heart-filled" : "heart-outline"}
+          label={
+            !likeable ? "재생 중인 곡이 없습니다" : likedNow ? "좋아요 취소" : "좋아요"
+          }
+          size={30}
+          icon={14}
+          pressed={likedNow}
+          disabled={!likeable}
+          onClick={toggleLike}
+        />
       </div>
 
-      <div className="flex w-full shrink-0 flex-col gap-[3px] text-on-dark">
-        {/* the panel is 231px wide, so both lines clip — hover for the full text */}
-        <p className="w-full truncate text-[26px] tracking-[-0.8px]" title={title}>
-          {title}
-        </p>
-        <p
-          className="w-full truncate text-[10px] tracking-[0.6px] text-on-dark-muted"
-          title={meta}
-        >
-          {meta}
-        </p>
-      </div>
+      <div className="flex min-w-0 flex-1 items-center gap-[16px]">
+        <div className="flex shrink-0 items-center gap-[14px]">
+          <button
+            type="button"
+            aria-label={shuffle ? "셔플 끄기" : "셔플 켜기"}
+            aria-pressed={shuffle}
+            title={
+              stationActive
+                ? shuffle
+                  ? "셔플 켜짐 — 다시 누르면 해제"
+                  : "셔플 — 대기열을 무작위로 재정렬"
+                : shuffle
+                  ? "셔플 켜짐"
+                  : "셔플 꺼짐"
+            }
+            disabled={!live && !stationActive}
+            onClick={() => void toggleShuffle()}
+            className={`transition-colors disabled:opacity-30 ${
+              shuffle ? "text-pink-bright" : "text-on-dark-muted"
+            }`}
+          >
+            <TintedIcon name="shuffle" size={18} />
+          </button>
 
-      <div className="flex w-full shrink-0 flex-col gap-[6px]">
+          <button
+            type="button"
+            aria-label="이전 곡"
+            disabled={!live && !stationActive}
+            onClick={() => void previous()}
+            className="text-on-dark disabled:opacity-30"
+          >
+            <TintedIcon name="prev" size={20} />
+          </button>
+
+          <button
+            type="button"
+            aria-label={isPlaying ? "일시정지" : "재생"}
+            disabled={connected && !ready}
+            onClick={() =>
+              void (live ? toggle() : play(last?.uri ? { uris: [last.uri] } : {}))
+            }
+            className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-pink rule disabled:opacity-60"
+          >
+            <Icon name={isPlaying ? "pause-lg" : "play-lg"} size={16} />
+          </button>
+
+          <button
+            type="button"
+            aria-label="다음 곡"
+            disabled={!live && !stationActive}
+            onClick={() => void next()}
+            className="text-on-dark disabled:opacity-30"
+          >
+            <TintedIcon name="next" size={20} />
+          </button>
+
+          <button
+            type="button"
+            aria-label={repeatLabel}
+            title={repeatLabel}
+            disabled={!live}
+            onClick={() => void cycleRepeat()}
+            className={`relative transition-colors disabled:opacity-30 ${
+              repeatMode > 0 ? "text-pink-bright" : "text-on-dark-muted"
+            }`}
+          >
+            <TintedIcon name="repeat" size={18} />
+            {repeatMode === 2 && (
+              <span className="tnum absolute -right-[3px] -top-[3px] text-[8px] leading-none">
+                1
+              </span>
+            )}
+          </button>
+        </div>
+
+        <span className="tnum w-[32px] shrink-0 text-right text-[9px]">{elapsed}</span>
+        {/* the hit area is taller than the 5px line it draws, so it can be clicked */}
         <div
           role="progressbar"
           aria-valuenow={Math.round(progress)}
@@ -287,220 +410,166 @@ export function NowPlayingPanel() {
             const pct = (e.clientX - box.left) / box.width;
             void seek(Math.round(pct * now.durationMs));
           }}
-          className="h-[5px] w-full overflow-hidden rounded-[3px] bg-muted"
+          className={`flex h-[20px] min-w-0 flex-1 items-center ${live ? "cursor-pointer" : ""}`}
         >
-          <div
-            className="h-full rounded-[3px] bg-pink transition-[width] duration-500"
-            style={{ width: `${progress}%` }}
-          />
+          <div className="h-[5px] w-full overflow-hidden rounded-[3px] bg-muted">
+            <div
+              className="h-full rounded-[3px] bg-pink transition-[width] duration-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
-        <div className="tnum flex w-full items-start justify-between text-[9px]">
-          <span className="text-on-dark">{elapsed}</span>
-          <span className="text-on-dark-muted">{duration}</span>
-        </div>
+        <span className="tnum w-[32px] shrink-0 text-[9px] text-on-dark-muted">{duration}</span>
       </div>
 
-      <div className="flex w-full shrink-0 items-center justify-center gap-[16px] py-[2px]">
+      <div className="flex w-[330px] shrink-0 items-center justify-end gap-[6px]">
         <button
           type="button"
-          aria-label={shuffle ? "셔플 끄기" : "셔플 켜기"}
-          aria-pressed={shuffle}
-          title={
-            stationActive
-              ? shuffle
-                ? "셔플 켜짐 — 다시 누르면 해제"
-                : "셔플 — 대기열을 무작위로 재정렬"
-              : shuffle
-                ? "셔플 켜짐"
-                : "셔플 꺼짐"
-          }
-          disabled={!live && !stationActive}
-          onClick={() => void toggleShuffle()}
-          className={`transition-colors disabled:opacity-30 ${
-            shuffle ? "text-pink-bright" : "text-on-dark-muted"
+          aria-label="다음에 재생할 곡"
+          aria-expanded={queueOpen}
+          title="다음에 재생할 곡"
+          data-popover-toggle
+          onClick={() => {
+            closeLyrics();
+            setQueueOpen((v) => !v);
+          }}
+          className={`flex h-[30px] shrink-0 cursor-pointer items-center gap-[6px] rounded-pill px-[14px] text-[9px] tracking-[0.8px] transition-colors ${
+            queueOpen ? "bg-pink text-paper-solid" : "bg-white/12 text-on-dark"
           }`}
         >
-          <TintedIcon name="shuffle" size={18} />
-        </button>
-
-        <button
-          type="button"
-          aria-label="이전 곡"
-          disabled={!live && !stationActive}
-          onClick={() => void previous()}
-          className="text-on-dark disabled:opacity-30"
-        >
-          <TintedIcon name="prev" size={20} />
-        </button>
-
-        <button
-          type="button"
-          aria-label={isPlaying ? "일시정지" : "재생"}
-          disabled={connected && !ready}
-          onClick={() =>
-            void (live ? toggle() : play(last?.uri ? { uris: [last.uri] } : {}))
-          }
-          className="flex size-[52px] shrink-0 items-center justify-center rounded-pill bg-pink rule disabled:opacity-60"
-        >
-          <Icon name={isPlaying ? "pause-lg" : "play-lg"} size={20} />
-        </button>
-
-        <button
-          type="button"
-          aria-label="다음 곡"
-          disabled={!live && !stationActive}
-          onClick={() => void next()}
-          className="text-on-dark disabled:opacity-30"
-        >
-          <TintedIcon name="next" size={20} />
-        </button>
-
-        <button
-          type="button"
-          aria-label={repeatLabel}
-          title={repeatLabel}
-          disabled={!live}
-          onClick={() => void cycleRepeat()}
-          className={`relative transition-colors disabled:opacity-30 ${
-            repeatMode > 0 ? "text-pink-bright" : "text-on-dark-muted"
-          }`}
-        >
-          <TintedIcon name="repeat" size={18} />
-          {repeatMode === 2 && (
-            <span className="tnum absolute -right-[3px] -top-[3px] text-[8px] leading-none">
-              1
-            </span>
-          )}
-        </button>
-      </div>
-
-      {error && (
-        <p className="shrink-0 text-[9px] leading-[12px] text-pink-bright">{error}</p>
-      )}
-
-      {/* the status itself opens the station screen; STOP stays a separate
-          control beside it, since a button cannot be nested inside a button */}
-      {stationActive && (
-        <div className="flex w-full shrink-0 items-center gap-[8px] rounded-[4px] bg-white/10 px-[8px] py-[6px]">
-          <button
-            type="button"
-            onClick={() => router.push("/station")}
-            title="스테이션 화면 열기"
-            className="flex min-w-0 flex-1 cursor-pointer items-center gap-[8px] text-left transition-opacity hover:opacity-70"
-          >
+          {stationActive && (
             <span
               className={`size-[6px] shrink-0 rounded-pill ${
                 stationBusy ? "animate-pulse bg-pink-bright" : "bg-mint"
               }`}
               aria-hidden
             />
-            <span className="flex min-w-0 flex-1 flex-col gap-px">
-              <span className="flex items-center gap-[8px] text-[10px] tracking-[0.5px] text-on-dark-muted">
-                {stationBusy ? (
-                  <>
-                    {stationBusy}
-                    <LoadingDots size={4} label={stationBusy} />
-                  </>
-                ) : stationQueue.length ? (
-                  "STATION 재생 중"
-                ) : (
-                  "유사곡을 찾지 못했습니다"
-                )}
-              </span>
-              <span className="truncate text-[9px] text-on-dark">{stationSeed}</span>
-            </span>
-            <span
-              aria-hidden
-              className="shrink-0 text-[11px] leading-none text-on-dark-muted"
-            >
-              →
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              stopStation();
-              router.push("/");
-            }}
-            title="스테이션 종료"
-            className="shrink-0 rounded-pill bg-on-dark-muted px-[8px] py-[4px] text-[8px] tracking-[0.6px] text-panel"
-          >
-            STOP
-          </button>
+          )}
+          UP NEXT
+          <span className={queueOpen ? "" : "text-on-dark-muted"}>{upNext.length}</span>
+        </button>
+        {/* a word rather than a glyph: there is no icon in the set for this,
+            and "가사" is shorter to read than any mark would be to learn */}
+        <button
+          type="button"
+          aria-label={lyricsOpen ? "가사 닫기" : "가사 보기"}
+          aria-pressed={lyricsOpen}
+          title={lyricsOpen ? "가사 닫기" : "가사 보기"}
+          disabled={!live}
+          data-popover-toggle
+          onClick={() => {
+            setQueueOpen(false);
+            toggleLyrics();
+          }}
+          className={`flex h-[30px] shrink-0 items-center rounded-pill px-[12px] text-[10px] leading-none transition-colors rule disabled:opacity-40 ${
+            lyricsOpen
+              ? "bg-pink-bright text-paper-solid"
+              : "bg-[rgba(237,235,228,0.82)] text-ink"
+          }`}
+        >
+          가사
+        </button>
+        <RoundButton name="plus" label="보관함에 추가" size={30} icon={14} />
+        <RoundButton name="share" label="공유" size={30} icon={14} />
+        <RoundButton
+          name="more"
+          label={rejectable ? "세부 기능" : "더 보기"}
+          size={30}
+          icon={14}
+          pressed={rejectable && menu !== null}
+          onClick={rejectable ? openMenu : undefined}
+        />
+      </div>
+
+      {queueOpen && (
+        <div
+          ref={popoverRef}
+          role="dialog"
+          aria-label="다음에 재생할 곡"
+          className="absolute bottom-[calc(100%+8px)] right-[16px] z-30 flex w-[380px] flex-col gap-[12px] rounded-[8px] bg-ink p-[16px] shadow-[0_-4px_20px_rgba(0,0,0,0.35)]"
+        >
+          {/* the status itself opens the station screen; STOP stays a separate
+              control beside it, since a button cannot be nested inside a button */}
+          {stationActive && (
+            <div className="flex w-full shrink-0 items-center gap-[8px] rounded-[4px] bg-white/10 px-[8px] py-[6px]">
+              <button
+                type="button"
+                onClick={() => {
+                  setQueueOpen(false);
+                  router.push("/station");
+                }}
+                title="스테이션 화면 열기"
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-[8px] text-left transition-opacity hover:opacity-70"
+              >
+                <span
+                  className={`size-[6px] shrink-0 rounded-pill ${
+                    stationBusy ? "animate-pulse bg-pink-bright" : "bg-mint"
+                  }`}
+                  aria-hidden
+                />
+                <span className="flex min-w-0 flex-1 flex-col gap-px">
+                  <span className="flex items-center gap-[8px] text-[10px] tracking-[0.5px] text-on-dark-muted">
+                    {stationBusy ? (
+                      <>
+                        {stationBusy}
+                        <LoadingDots size={4} label={stationBusy} />
+                      </>
+                    ) : stationQueue.length ? (
+                      "STATION 재생 중"
+                    ) : (
+                      "유사곡을 찾지 못했습니다"
+                    )}
+                  </span>
+                  <span className="truncate text-[9px] text-on-dark">{stationSeed}</span>
+                </span>
+                <span aria-hidden className="shrink-0 text-[11px] leading-none text-on-dark-muted">
+                  →
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  stopStation();
+                  setQueueOpen(false);
+                  router.push("/");
+                }}
+                title="스테이션 종료"
+                className="shrink-0 rounded-pill bg-on-dark-muted px-[8px] py-[4px] text-[8px] tracking-[0.6px] text-panel"
+              >
+                STOP
+              </button>
+            </div>
+          )}
+
+          <div className="flex w-full shrink-0 items-center justify-between whitespace-nowrap">
+            <p className="text-[10px] tracking-[1px] text-on-dark">UP NEXT</p>
+            <p className="flex items-center gap-[8px] text-[10px] tracking-[0.5px] text-on-dark-muted">
+              {upNext.length ? (
+                `${upNext.length} TRACKS · ${stationActive ? "STATION" : `SHUFFLE ${shuffle ? "ON" : "OFF"}`}`
+              ) : stationBusy ? (
+                <>
+                  채우는 중
+                  <LoadingDots size={4} label="채우는 중" />
+                </>
+              ) : (
+                "대기열 없음"
+              )}
+            </p>
+          </div>
+
+          <ul className="scroll-y flex max-h-[min(340px,50vh)] w-full flex-col">
+            {upNext.map(({ uri, track }) => (
+              <QueueItem
+                key={`${track.index}-${track.title}`}
+                track={track}
+                onPlay={uri ? () => playRow(uri) : undefined}
+              />
+            ))}
+          </ul>
         </div>
       )}
 
-      <div className="h-[1.5px] w-full shrink-0 bg-on-dark-muted" />
-
-      <div className="flex w-full shrink-0 items-center justify-between whitespace-nowrap">
-        <p className="text-[10px] tracking-[1px] text-on-dark">UP NEXT</p>
-        <p className="flex items-center gap-[8px] text-[10px] tracking-[0.5px] text-on-dark-muted">
-          {upNext.length ? (
-            `${upNext.length} TRACKS · ${stationActive ? "STATION" : `SHUFFLE ${shuffle ? "ON" : "OFF"}`}`
-          ) : stationBusy ? (
-            <>
-              채우는 중
-              <LoadingDots size={4} label="채우는 중" />
-            </>
-          ) : (
-            "대기열 없음"
-          )}
-        </p>
-      </div>
-
-      <ul className="scroll-y flex min-h-0 w-full flex-1 flex-col">
-        {upNext.map(({ uri, track }) => (
-          <QueueItem
-            key={`${track.index}-${track.title}`}
-            track={track}
-            onPlay={uri ? () => playRow(uri) : undefined}
-          />
-        ))}
-      </ul>
-
-      <div className="flex w-full shrink-0 items-center justify-between">
-        {/* was pinned to heart-filled, so it read as liked whatever was playing */}
-        <RoundButton
-          name={likedNow ? "heart-filled" : "heart-outline"}
-          label={
-            !likeable ? "재생 중인 곡이 없습니다" : likedNow ? "좋아요 취소" : "좋아요"
-          }
-          size={36}
-          icon={16}
-          pressed={likedNow}
-          disabled={!likeable}
-          onClick={toggleLike}
-        />
-        <div className="flex shrink-0 items-center gap-[6px]">
-          {/* a word rather than a glyph: there is no icon in the set for this,
-              and "가사" is shorter to read than any mark would be to learn */}
-          <button
-            type="button"
-            aria-label={lyricsOpen ? "가사 닫기" : "가사 보기"}
-            aria-pressed={lyricsOpen}
-            title={lyricsOpen ? "가사 닫기" : "가사 보기"}
-            disabled={!live}
-            onClick={toggleLyrics}
-            className={`flex h-[30px] shrink-0 items-center rounded-pill px-[12px] text-[10px] leading-none transition-colors rule disabled:opacity-40 ${
-              lyricsOpen
-                ? "bg-pink-bright text-paper-solid"
-                : "bg-[rgba(237,235,228,0.82)] text-ink"
-            }`}
-          >
-            가사
-          </button>
-          <RoundButton name="plus" label="보관함에 추가" size={30} icon={14} />
-          <RoundButton name="share" label="공유" size={30} icon={14} />
-          <RoundButton
-            name="more"
-            label={rejectable ? "세부 기능" : "더 보기"}
-            size={30}
-            icon={14}
-            pressed={rejectable && menu !== null}
-            onClick={rejectable ? openMenu : undefined}
-          />
-        </div>
-      </div>
+      {lyricsOpen && <LyricsPopover ref={popoverRef} />}
 
       <TrackMenu
         // closes by itself when the tag goes off, the station stops or the track moves on

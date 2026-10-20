@@ -7,11 +7,10 @@ type Ctx = { open: boolean; toggle: () => void; close: () => void };
 const LyricsViewContext = createContext<Ctx | null>(null);
 
 /**
- * Whether the lyrics column is showing.
+ * Whether the lyrics popover is showing.
  *
- * Held here because the control and the panel live apart: the button is in the
- * Now Playing column, the panel is a column of the grid. Both are mounted for
- * the whole session, so this state outlives any page.
+ * Held above the pages so it outlives them: the lyrics stay open while you move
+ * between screens, like the player they belong to.
  */
 export function LyricsViewProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
