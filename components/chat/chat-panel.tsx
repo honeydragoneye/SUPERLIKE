@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { useLikedTracks } from "@/components/player/use-likes";
+import { useSpotify } from "@/components/player/spotify-provider";
 import { useCustomTags } from "@/components/station/use-custom-tags";
 import { boldSpans } from "@/lib/chat/inline";
 import { TrackCard } from "@/components/ui/track-card";
+import { ChatHistory, ClockIcon } from "./chat-history";
 import { CHAT_SOURCES, useChat, type ChatMessage, type ChatProposal, type ChatTrack } from "./chat-provider";
 
 /** What the box offers when the listener is settling what one of their tags means. */
@@ -209,12 +211,32 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
  * its 16px margin rather than introducing a second look for the right-hand side.
  */
 export function ChatPanel() {
-  const { messages, busy, send, stop, clear, close, refine, openRefine, leaveRefine, shareTaste, toggleTaste } = useChat();
+  const { messages, busy, send, stop, clear, close, refine, openRefine, leaveRefine, shareTaste, toggleTaste, shareHistory, toggleHistory } = useChat();
+  const { connected: session } = useSpotify();
   const liked = useLikedTracks();
   const tags = useCustomTags();
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const hydrated = useHydrated();
+
+  /** Escape or a press outside closes the saved-conversations list; its own button handles its press. */
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!historyOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Element;
+      if (historyRef.current?.contains(target) || target.closest?.("[data-history-toggle]")) return;
+      setHistoryOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setHistoryOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [historyOpen]);
 
   // follow the reply as it is written
   useEffect(() => {
@@ -232,7 +254,7 @@ export function ChatPanel() {
   return (
     <section
       aria-label="챗봇"
-      className="flex h-full w-full min-w-0 flex-col gap-[12px] overflow-hidden bg-[#d9d9d9] p-[16px]"
+      className="relative flex h-full w-full min-w-0 flex-col gap-[12px] overflow-hidden bg-[#d9d9d9] p-[16px]"
     >
       <div className="flex w-full shrink-0 items-center justify-between gap-[10px]">
         <div className="flex min-w-0 flex-col gap-px">
@@ -240,6 +262,22 @@ export function ChatPanel() {
           <p className="truncate text-[8px] tracking-[0.7px] text-on-bright-muted">음악 에이전트</p>
         </div>
         <div className="flex shrink-0 items-center gap-[6px]">
+          {/* saved to the account, so only for a listener who is connected; a tag conversation is not kept */}
+          {hydrated && session && !refine && (
+            <button
+              type="button"
+              data-history-toggle
+              aria-label="대화 이력"
+              aria-expanded={historyOpen}
+              title="대화 이력"
+              onClick={() => setHistoryOpen((v) => !v)}
+              className={`flex size-[25px] shrink-0 cursor-pointer items-center justify-center rounded-pill transition-colors rule ${
+                historyOpen ? "bg-ink text-paper-solid" : "bg-paper-solid text-on-bright hover:bg-gold"
+              }`}
+            >
+              <ClockIcon />
+            </button>
+          )}
           {hydrated && messages.length > 0 && (
             <Pill onClick={clear} title="대화를 지우고 새로 시작">
               NEW
@@ -249,48 +287,76 @@ export function ChatPanel() {
         </div>
       </div>
 
+      {historyOpen && hydrated && session && !refine && (
+        <ChatHistory onClose={() => setHistoryOpen(false)} popoverRef={historyRef} />
+      )}
+
       {!refine && (
         <div className="flex w-full shrink-0 flex-wrap items-center gap-[6px]" role="group" aria-label="내 취향">
           <p className="text-[8px] tracking-[0.6px] text-on-bright-muted">내 취향</p>
           {(() => {
-            const none = hydrated && liked.length === 0;
-            const on = hydrated && shareTaste && !none;
+            const noLikes = hydrated && liked.length === 0;
+            const likesOn = hydrated && shareTaste && !noLikes;
+            const noHistory = hydrated && !session;
+            const historyOn = hydrated && shareHistory && !noHistory;
+            const pill = (on: boolean, none: boolean) =>
+              `shrink-0 whitespace-nowrap rounded-pill px-[10px] py-[4px] text-[8px] tracking-[0.6px] transition-colors rule ${
+                none
+                  ? "cursor-default bg-paper-solid text-on-bright-muted opacity-60"
+                  : on
+                    ? "cursor-pointer bg-ink text-paper-solid hover:bg-pink-bright"
+                    : "cursor-pointer bg-paper-solid text-on-bright-muted hover:bg-gold"
+              }`;
             return (
-              <button
-                type="button"
-                aria-pressed={on}
-                aria-disabled={none}
-                title={
-                  none
-                    ? "좋아요한 곡이 없어요"
-                    : on
-                      ? "좋아요한 곡 공유 끄기"
-                      : "최근 좋아요한 곡을 챗봇에게 보여 줘서 내 취향에 맞는 곡을 추천받기"
-                }
-                onClick={() => {
-                  if (!none) toggleTaste();
-                }}
-                className={`shrink-0 whitespace-nowrap rounded-pill px-[10px] py-[4px] text-[8px] tracking-[0.6px] transition-colors rule ${
-                  none
-                    ? "cursor-default bg-paper-solid text-on-bright-muted opacity-60"
-                    : on
-                      ? "cursor-pointer bg-ink text-paper-solid hover:bg-pink-bright"
-                      : "cursor-pointer bg-paper-solid text-on-bright-muted hover:bg-gold"
-                }`}
-              >
-                {!hydrated
-                  ? "좋아요한 곡 공유"
-                  : none
-                    ? "좋아요한 곡 없음"
-                    : `좋아요한 곡 ${Math.min(liked.length, 30)}곡 · ${on ? "공유 중" : "공유 안 함"}`}
-              </button>
+              <>
+                <button
+                  type="button"
+                  aria-pressed={likesOn}
+                  aria-disabled={noLikes}
+                  title={
+                    noLikes
+                      ? "좋아요한 곡이 없어요"
+                      : likesOn
+                        ? "좋아요한 곡 공유 끄기"
+                        : "최근 좋아요한 곡을 챗봇에게 보여 줘서 내 취향에 맞는 곡을 추천받기"
+                  }
+                  onClick={() => {
+                    if (!noLikes) toggleTaste();
+                  }}
+                  className={pill(likesOn, noLikes)}
+                >
+                  {!hydrated
+                    ? "좋아요한 곡 공유"
+                    : noLikes
+                      ? "좋아요한 곡 없음"
+                      : `좋아요 ${Math.min(liked.length, 30)}곡 · ${likesOn ? "공유 중" : "공유 안 함"}`}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={historyOn}
+                  aria-disabled={noHistory}
+                  title={
+                    noHistory
+                      ? "Spotify를 연결하면 쓸 수 있어요"
+                      : historyOn
+                        ? "재생 기록 공유 끄기"
+                        : "최근 4주 동안 많이 들은 곡을 챗봇에게 보여 줘서 내 취향에 맞는 곡을 추천받기"
+                  }
+                  onClick={() => {
+                    if (!noHistory) toggleHistory();
+                  }}
+                  className={pill(historyOn, noHistory)}
+                >
+                  {!hydrated ? "재생 기록 공유" : `재생 기록 4주 · ${historyOn ? "공유 중" : "공유 안 함"}`}
+                </button>
+              </>
             );
           })()}
           {hydrated && (
             <p className="w-full text-[8px] leading-[12px] text-on-bright-muted">
-              {shareTaste && liked.length > 0
-                ? "챗봇이 최근 좋아요한 곡을 보고 내 취향에 맞는 곡을 골라 줘요."
-                : "켜면 최근 좋아요한 곡을 챗봇에게 보여 줘서 내 취향에 맞는 곡을 추천받을 수 있어요."}
+              {(shareTaste && liked.length > 0) || (shareHistory && session)
+                ? "공유한 곡을 보고 내 취향에 맞는 곡을 골라 줘요. 곡 정보가 모델(Gemini)로 전달돼요."
+                : "켜면 좋아요한 곡이나 최근 4주 동안 많이 들은 곡을 챗봇에게 보여 줘서 내 취향에 맞는 곡을 추천받을 수 있어요. 곡 정보가 모델(Gemini)로 전달되므로 기본은 꺼져 있어요."}
             </p>
           )}
         </div>
@@ -341,7 +407,7 @@ export function ChatPanel() {
                   {s}
                 </Pill>
               ))}
-              {hydrated && shareTaste && liked.length > 0 && (
+              {hydrated && ((shareTaste && liked.length > 0) || (shareHistory && session)) && (
                 <Pill onClick={() => void send("내 취향에 맞는 곡 추천해줘")}>내 취향에 맞는 곡 추천해줘</Pill>
               )}
             </div>

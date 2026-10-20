@@ -10,17 +10,19 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { useSpotify } from "@/components/player/spotify-provider";
 import { useCustomTags } from "@/components/station/use-custom-tags";
+import { saveChat } from "@/lib/chat/history";
 import { snapshot as likedSnapshot } from "@/lib/likes";
 import { updateCustomDefinition } from "@/lib/station/custom-tags";
 import type { CustomMoodKey } from "@/lib/station/filter";
-import { useLyricsView } from "@/components/lyrics/lyrics-view";
 
 /** The width the chat column starts at, and the narrowest it can be dragged to. */
 export const CHAT_MIN_WIDTH = 330;
 const WIDTH_KEY = "superlike:chat-width:v1";
 const TASTE_KEY = "superlike:chat-taste:v1";
-/** How many of the newest liked songs go to the agent when the listener shares them. */
+const HISTORY_KEY = "superlike:chat-taste-history:v1";
+/** How many songs (liked, played, or both together) go to the agent when the listener shares them. */
 const TASTE_MAX = 30;
 
 /** Where the agent may look things up. The listener switches them on and off. */
@@ -94,6 +96,8 @@ type Ctx = {
   send: (question: string) => Promise<void>;
   stop: () => void;
   clear: () => void;
+  /** opens a saved conversation in place of the current one (which is saved first) */
+  restore: (chatId: string, messages: ChatMessage[]) => void;
   width: number;
   /** clamped to [CHAT_MIN_WIDTH, half the window] */
   setWidth: (px: number) => void;
@@ -103,6 +107,9 @@ type Ctx = {
   /** whether the liked songs are shared with the agent, and the switch for it */
   shareTaste: boolean;
   toggleTaste: () => void;
+  /** the same for the songs played most lately (the server works them out from the play history) */
+  shareHistory: boolean;
+  toggleHistory: () => void;
 };
 
 const ChatContext = createContext<Ctx | null>(null);
@@ -156,36 +163,78 @@ function writeSavedWidth(px: number): void {
 }
 
 /**
- * Whether the liked songs are shared with the agent. Off until the listener
- * turns it on: the songs leave this browser for the model, so it is a choice.
+ * Whether the liked songs, and separately the recently played ones, are shared
+ * with the agent. Both are off until the listener turns them on: the songs
+ * leave this browser for the model, so it is a choice.
  */
-let savedTaste: boolean | undefined; // undefined = not read yet
-const tasteListeners = new Set<() => void>();
+function sharing(key: string) {
+  let saved: boolean | undefined; // undefined = not read yet
+  const listeners = new Set<() => void>();
+  return {
+    read(): boolean {
+      if (saved === undefined) {
+        try {
+          saved = localStorage.getItem(key) === "1";
+        } catch {
+          saved = false;
+        }
+      }
+      return saved;
+    },
+    subscribe(onChange: () => void): () => void {
+      listeners.add(onChange);
+      return () => void listeners.delete(onChange);
+    },
+    write(on: boolean): void {
+      saved = on;
+      try {
+        localStorage.setItem(key, on ? "1" : "0");
+      } catch {
+        // still applies for this session
+      }
+      for (const fn of listeners) fn();
+    },
+  };
+}
 
-function readTaste(): boolean {
-  if (savedTaste === undefined) {
+const likesShare = sharing(TASTE_KEY);
+const historyShare = sharing(HISTORY_KEY);
+const readTaste = likesShare.read;
+const subscribeTaste = likesShare.subscribe;
+const writeTaste = likesShare.write;
+const readHistory = historyShare.read;
+const subscribeHistory = historyShare.subscribe;
+const writeHistory = historyShare.write;
+
+/**
+ * The songs the agent is told about: what was played most (worked out on the
+ * server from the play history) ahead of what was hearted, without repeats.
+ * A history that cannot be fetched leaves the likes alone rather than failing
+ * the question.
+ */
+async function tasteForAgent(): Promise<{ title: string; artist: string }[] | undefined> {
+  const seen = new Set<string>();
+  const out: { title: string; artist: string }[] = [];
+  const add = (t: { title: string; artist: string }) => {
+    const key = `${t.title}|${t.artist}`.toLowerCase();
+    if (seen.has(key) || out.length >= TASTE_MAX) return;
+    seen.add(key);
+    out.push({ title: t.title, artist: t.artist });
+  };
+
+  if (readHistory()) {
     try {
-      savedTaste = localStorage.getItem(TASTE_KEY) === "1";
+      const res = await fetch("/api/me/taste?recs=0", { cache: "no-store" });
+      if (res.ok) {
+        const data = (await res.json()) as { ready?: boolean; tracks?: { title: string; artist: string }[] };
+        if (data.ready) data.tracks?.slice(0, TASTE_MAX).forEach(add);
+      }
     } catch {
-      savedTaste = false;
+      // the likes, if shared, still go
     }
   }
-  return savedTaste;
-}
-
-function subscribeTaste(onChange: () => void): () => void {
-  tasteListeners.add(onChange);
-  return () => void tasteListeners.delete(onChange);
-}
-
-function writeTaste(on: boolean): void {
-  savedTaste = on;
-  try {
-    localStorage.setItem(TASTE_KEY, on ? "1" : "0");
-  } catch {
-    // still applies for this session
-  }
-  for (const fn of tasteListeners) fn();
+  if (readTaste()) likedSnapshot().slice(0, TASTE_MAX).forEach(add);
+  return out.length ? out : undefined;
 }
 
 /** The window's own size, as an external store: it changes when the window does. */
@@ -241,18 +290,23 @@ function historyOf(messages: ChatMessage[]): { role: "user" | "assistant"; conte
   return out;
 }
 
+/** Enough to tell whether a conversation has changed since it was saved. */
+function signature(list: ChatMessage[]): string {
+  const last = list[list.length - 1];
+  return last ? `${list.length}:${last.role}${last.text.length}` : "";
+}
+
 let seq = 0;
 const nextId = () => `m${Date.now().toString(36)}${(seq++).toString(36)}`;
 
 /**
  * The conversation with the music agent, and whether and how wide its column is.
  *
- * Held above the pages, like the lyrics view: the chat keeps its messages while
+ * Held above the pages: the chat keeps its messages while
  * you move between screens, and a reply that is still arriving does not stop
  * because you navigated.
  */
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const lyrics = useLyricsView();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
@@ -274,6 +328,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const width = clamp(saved, maxWidth);
   const shareTaste = useSyncExternalStore(subscribeTaste, readTaste, () => false);
   const toggleTaste = useCallback(() => writeTaste(!readTaste()), []);
+  const shareHistory = useSyncExternalStore(subscribeHistory, readHistory, () => false);
+  const toggleHistory = useCallback(() => writeHistory(!readHistory()), []);
 
   const messagesRef = useRef<ChatMessage[]>([]);
   useEffect(() => {
@@ -281,14 +337,63 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [messages]);
   const abortRef = useRef<AbortController | null>(null);
 
+  /**
+   * Saving the conversation, to the account, when it is put down.
+   *
+   * "Put down" is the chat closing or NEW pressed (or another conversation
+   * being opened), so nothing is sent while the listener is typing. Each
+   * conversation has a number; the id the database gave it is kept against that
+   * number, so closing and carrying on saves over the same row instead of
+   * adding a copy, and a save that lands after the chat has moved on to
+   * another conversation cannot attach its id to that one.
+   */
+  const { connected } = useSpotify();
+  const connectedRef = useRef(false);
+  useEffect(() => {
+    connectedRef.current = connected;
+  }, [connected]);
+  const conversation = useRef(0);
+  const savedIds = useRef(new Map<number, string | null>([[0, null]]));
+  const savedKey = useRef("");
+  const queue = useRef<Promise<void>>(Promise.resolve());
+
+  const persist = useCallback(() => {
+    // a half-written reply is not saved; the next save has the whole of it
+    const list = messagesRef.current.filter((m) => !(m.role === "assistant" && m.streaming));
+    // a tag conversation is about a tag, not about songs: it is not kept
+    if (!connectedRef.current || refineRef.current || !list.some((m) => m.role === "user")) return;
+    const key = signature(list);
+    if (key === savedKey.current) return;
+    savedKey.current = key;
+
+    const mine = conversation.current;
+    // one at a time, so a second save of the same conversation sees the id the first one got
+    queue.current = queue.current.then(async () => {
+      try {
+        savedIds.current.set(mine, await saveChat(savedIds.current.get(mine) ?? null, list));
+      } catch {
+        // let the next close or NEW try again
+        if (conversation.current === mine) savedKey.current = "";
+      }
+    });
+  }, []);
+
+  /** Starts a new conversation: its own number, and the id of the saved one it continues if there is one. */
+  const beginConversation = useCallback((savedAs: string | null, key: string) => {
+    conversation.current += 1;
+    savedIds.current.set(conversation.current, savedAs);
+    savedKey.current = key;
+  }, []);
+
+  // closed, and nothing is being written: whatever is unsaved goes now (a reply that finished after the chat was closed too)
+  useEffect(() => {
+    if (!open && !busy) persist();
+  }, [open, busy, messages, persist]);
+
   const setWidth = useCallback((px: number) => writeSavedWidth(clamp(px, maxChatWidth())), []);
 
   const close = useCallback(() => setOpen(false), []);
-  const toggle = useCallback(() => {
-    // the lyrics column takes the same place; one at a time
-    if (!open) lyrics.close();
-    setOpen(!open);
-  }, [open, lyrics]);
+  const toggle = useCallback(() => setOpen(!open), [open]);
 
   const patch = useCallback((id: string, change: (m: Extract<ChatMessage, { role: "assistant" }>) => void) => {
     setMessages((all) =>
@@ -323,6 +428,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setBusy(true);
 
       try {
+        // read when sending, so a heart pressed a second ago is already in
+        const taste = await tasteForAgent();
         const res = await fetch("/api/agent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -331,10 +438,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             history,
             refine: refineRef.current && { label: refineRef.current.label, definition: refineRef.current.definition },
             sources: opts?.sources,
-            // read when sending, so a heart pressed a second ago is already in
-            taste: readTaste()
-              ? likedSnapshot().slice(0, TASTE_MAX).map((t) => ({ title: t.title, artist: t.artist }))
-              : undefined,
+            taste,
           }),
           signal: controller.signal,
         });
@@ -521,35 +625,48 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const dismissProposal = useCallback((id: string) => setProposalState(id, "dismissed"), [setProposalState]);
 
   const clear = useCallback(() => {
+    persist();
     abortRef.current?.abort();
+    beginConversation(null, "");
     setMessages([]);
-  }, []);
+  }, [persist, beginConversation]);
 
-  const openRefine = useCallback(
-    (key: CustomMoodKey) => {
-      // a new subject is a new conversation: what was said about songs is not about this tag
+  const restore = useCallback(
+    (chatId: string, saved: ChatMessage[]) => {
+      persist();
       abortRef.current?.abort();
-      setMessages([]);
-      setRefineKey(key);
-      lyrics.close();
-      setOpen(true);
+      // what was just loaded is already saved: it is only saved again once it changes
+      beginConversation(chatId, signature(saved));
+      setRefineKey(null);
+      setMessages(saved);
     },
-    [lyrics],
+    [persist, beginConversation],
   );
+
+  const openRefine = useCallback((key: CustomMoodKey) => {
+    // a new subject is a new conversation: what was said about songs is not about this tag
+    persist();
+    abortRef.current?.abort();
+    beginConversation(null, "");
+    setMessages([]);
+    setRefineKey(key);
+    setOpen(true);
+  }, [persist, beginConversation]);
   const leaveRefine = useCallback(() => {
     abortRef.current?.abort();
+    beginConversation(null, "");
     setMessages([]);
     setRefineKey(null);
-  }, []);
+  }, [beginConversation]);
 
   const value = useMemo<Ctx>(
     () => ({
       open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
-      applyProposal, dismissProposal, send, stop, clear, width, setWidth, maxWidth, searchWith, shareTaste, toggleTaste,
+      applyProposal, dismissProposal, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, shareTaste, toggleTaste, shareHistory, toggleHistory,
     }),
     [
       open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
-      applyProposal, dismissProposal, send, stop, clear, width, setWidth, maxWidth, searchWith, shareTaste, toggleTaste,
+      applyProposal, dismissProposal, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, shareTaste, toggleTaste, shareHistory, toggleHistory,
     ],
   );
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

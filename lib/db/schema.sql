@@ -114,3 +114,18 @@ alter table issues add column if not exists theme text;
 
 -- the album a played track is on, so a mail can open it in the app
 alter table plays_daily add column if not exists album_id text;
+
+-- A conversation with the chatbot, kept when the chat is closed or a new one is
+-- started. Per user like everything above: every read and write is scoped to the
+-- signed-in account, and only the newest 20 per account are kept (lib/db/chats).
+-- `messages` holds the texts and the songs the agent named, nothing else.
+create table if not exists chats (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       text not null references users (spotify_id) on delete cascade,
+  title         text not null,
+  messages      jsonb not null,
+  message_count integer not null,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+create index if not exists chats_user_recent on chats (user_id, updated_at desc);
