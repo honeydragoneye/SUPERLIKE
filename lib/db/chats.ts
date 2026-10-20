@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatTrack } from "@/components/chat/chat-provider";
+import type { ChatLink, ChatMessage, ChatTrack } from "@/components/chat/chat-provider";
 import { query } from "./client";
 
 /** Conversations kept per account; saving one more drops the oldest. */
@@ -24,6 +24,21 @@ function tracks(raw: unknown): ChatTrack[] {
     .filter((t) => t.title);
 }
 
+function links(raw: unknown): ChatLink[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, 6)
+    .flatMap((l): ChatLink[] => {
+      const k = (l as ChatLink)?.kind;
+      const name = text((l as ChatLink)?.name, 300);
+      const artist = text((l as ChatLink)?.artist, 300);
+      const alias = text((l as ChatLink)?.alias, 300);
+      return (k === "artist" || k === "album") && name
+        ? [{ kind: k, name, ...(artist ? { artist } : {}), ...(alias ? { alias } : {}) }]
+        : [];
+    });
+}
+
 /**
  * What the browser sent, rebuilt from only the fields a saved conversation
  * needs. Nothing else is trusted into the table: no proposals, no errors, no
@@ -45,6 +60,7 @@ export function cleanMessages(raw: unknown): ChatMessage[] | null {
         text: text(a.text),
         status: typeof a.status === "string" ? text(a.status, 200) : null,
         tracks: tracks(a.tracks),
+        links: links(a.links),
         proposal: null,
         question: text(a.question, 2000),
         offer: null,

@@ -9,6 +9,7 @@ import { useCustomTags } from "@/components/station/use-custom-tags";
 import { boldSpans } from "@/lib/chat/inline";
 import { TrackCard } from "@/components/ui/track-card";
 import { ChatHistory, ClockIcon } from "./chat-history";
+import { LinkCard } from "./link-card";
 import { CHAT_SOURCES, useChat, type ChatMessage, type ChatProposal, type ChatTrack } from "./chat-provider";
 
 /** What the box offers when the listener is settling what one of their tags means. */
@@ -180,6 +181,13 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
           <ul className="flex flex-col gap-[6px]">
             {m.tracks.map((t) => (
               <TrackCard key={`${t.title}|${t.artist}`} track={t} />
+            ))}
+          </ul>
+        )}
+        {m.links.length > 0 && (
+          <ul className="flex flex-col gap-[6px]">
+            {m.links.map((l) => (
+              <LinkCard key={`${l.kind}|${l.name}`} link={l} />
             ))}
           </ul>
         )}

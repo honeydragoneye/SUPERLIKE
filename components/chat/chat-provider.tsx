@@ -67,6 +67,8 @@ export type ChatMessage =
       /** what the agent is doing, or just did: "후보 20곡 확인 → 3곡 통과" */
       status: string | null;
       tracks: ChatTrack[];
+      /** pages the answer points to: an artist asked about, the album of a song asked about */
+      links: ChatLink[];
       proposal: ChatProposal | null;
       /** the question as asked, so the same one can be asked again with another source */
       question: string;
@@ -75,6 +77,15 @@ export type ChatMessage =
       error: string | null;
       streaming: boolean;
     };
+
+/** A page of this app an answer is about: the artist, or the album a song is on. Found by name when shown. */
+export type ChatLink = {
+  kind: "artist" | "album";
+  name: string;
+  artist?: string;
+  /** what the agent asked the tool for, when that is not how the tool named it: 검정치마 is The Black Skirts to Spotify */
+  alias?: string;
+};
 
 /** The tag a conversation is about, as it reads right now. */
 export type ChatRefine = { key: CustomMoodKey; label: string; definition: string };
@@ -420,7 +431,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         ...all,
         { id: nextId(), role: "user", text: opts?.via ? `${question} · ${opts.via}에서 찾기` : question },
         {
-          id: reply, role: "assistant", text: "", status: null, tracks: [], proposal: null,
+          id: reply, role: "assistant", text: "", status: null, tracks: [], links: [], proposal: null,
           question, offer: null, error: null, streaming: true,
         },
       ]);
@@ -428,6 +439,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const controller = new AbortController();
       abortRef.current = controller;
       setBusy(true);
+      // what the agent asked each tool for, to pair with the name the tool answers under
+      const asked = new Map<string, string>();
 
       try {
         // read when sending, so a heart pressed a second ago is already in
@@ -453,7 +466,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
         for await (const event of eventsOf(res)) {
           switch (event.type) {
-            case "tool_call":
+            case "tool_call": {
+              const args = event.arguments as { artist?: unknown; title?: unknown } | undefined;
+              const wanted = typeof args?.artist === "string" ? args.artist : typeof args?.title === "string" ? args.title : "";
+              if (wanted) asked.set(String(event.name), wanted);
               patch(reply, (m) => {
                 m.status =
                   event.name === "top_tracks"
@@ -469,10 +485,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                         : "곡을 확인하는 중…";
               });
               break;
+            }
             case "tool_result": {
               const result = event.result as
                 | {
                     found?: boolean;
+                    /** artist_info and albums: the artist as Last.fm / MusicBrainz name it */
+                    artist?: string;
+                    /** track_info */
+                    title?: string;
+                    album?: string | null;
                     based_on?: string;
                     tracks?: ChatTrack[];
                     checked?: number;
@@ -504,7 +526,28 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               if (note && result && !Array.isArray(result.tracks)) {
                 // an answer about an artist or a song: say where it came from, or that nothing was there
                 patch(reply, (m) => {
-                  m.status = result.found === false ? `${note}에 정보가 없었어요` : `${note} 참고`;
+                  // one of two artists not being known does not take back what was found for the other
+                  if (result.found === false) {
+                    if (m.links.length === 0) m.status = `${note}에 정보가 없었어요`;
+                    return;
+                  }
+                  m.status = `${note} 참고`;
+                  const add = (link: ChatLink) => {
+                    // asking about two artists runs the tool twice: each gets its card, and none twice
+                    const same = (l: ChatLink) => l.kind === link.kind && l.name.toLowerCase() === link.name.toLowerCase();
+                    if (link.name && !m.links.some(same)) m.links = [...m.links, link];
+                  };
+                  const name = event.name;
+                  // only names the tool itself returned: a model's own wording never becomes a link
+                  if ((name === "artist_info" || name === "albums") && result.artist) {
+                    const said = asked.get(String(name));
+                    add({ kind: "artist", name: String(result.artist), ...(said && said.toLowerCase() !== String(result.artist).toLowerCase() ? { alias: said } : {}) });
+                  } else if (name === "track_info" && result.title && result.artist) {
+                    // there is no page for one song: the song's card plays it, its album's page lists it
+                    const song = { title: String(result.title), artist: String(result.artist) };
+                    if (!m.tracks.some((t) => t.title === song.title && t.artist === song.artist)) m.tracks = [...m.tracks, song];
+                    if (result.album) add({ kind: "album", name: String(result.album), artist: song.artist });
+                  }
                 });
                 break;
               }
@@ -660,7 +703,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       // what was just loaded is already saved: it is only saved again once it changes
       beginConversation(chatId, signature(saved));
       setRefineKey(null);
-      setMessages(saved);
+      // conversations saved before links existed have none
+      setMessages(saved.map((m) => (m.role === "assistant" ? { ...m, links: m.links ?? [] } : m)));
     },
     [persist, beginConversation],
   );

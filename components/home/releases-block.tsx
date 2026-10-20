@@ -9,6 +9,7 @@ import { Icon } from "@/components/ui/icon";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { SLEEVE_TONES } from "@/lib/data";
+import { squash } from "@/lib/names";
 import type { Country, Release } from "@/lib/releases";
 
 const TABS: { key: Country; label: string }[] = [
@@ -31,7 +32,6 @@ const day = (iso: string) => iso.slice(5).replace("-", ".");
 
 /** What the chart calls "X - EP" is "X" to Spotify. */
 const bare = (title: string) => title.replace(/\s-\s(?:EP|Single)$/i, "").trim();
-const squash = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
 /** One answer per album, so a second press does not search again. */
 const found = new Map<string, Promise<string | null>>();
