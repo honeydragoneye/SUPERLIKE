@@ -3,6 +3,29 @@
 import { useState } from "react";
 import { DetailShell } from "./detail-shell";
 
+/** What the mail is, in three lines: shown under the signup form here, and in the rail beside the mail archive. */
+export const MAIL_STEPS = [
+  "매주 금요일 아침, 이번 주 들은 앨범 한 장이 메일로 와요",
+  "메일마다 디자인 컨셉이 바뀌어요 (A\u00a0SIDE · LINER\u00a0NOTES · SPOTLIGHT · NIGHT\u00a0SHIFT)",
+  "이 페이지에서 지난 호를 언제든 다시 볼 수 있어요",
+];
+
+function HowItWorks() {
+  return (
+    <section className="flex w-full flex-col gap-[18px] pt-[12px]">
+      <h3 className="text-[11px] tracking-[0.8px] text-accent-bright">이렇게 와요</h3>
+      <ol className="flex max-w-[600px] flex-col gap-[14px]">
+        {MAIL_STEPS.map((step, i) => (
+          <li key={step} className="flex items-start gap-[14px]">
+            <span className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-ink text-[12px] font-bold text-paper-solid">{i + 1}</span>
+            <span className="text-[14px] leading-[22px]">{step}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 export type Phase = "idle" | "busy" | "done" | "error";
 
 export const MESSAGE: Record<string, string> = {
@@ -133,7 +156,10 @@ export function SubscribePage({ confirm, unsubscribe }: { confirm?: string; unsu
         ) : unsubscribe ? (
           <Settle token={unsubscribe} action="unsubscribe" />
         ) : (
-          <Form />
+          <>
+            <Form />
+            <HowItWorks />
+          </>
         )}
       </div>
     </DetailShell>

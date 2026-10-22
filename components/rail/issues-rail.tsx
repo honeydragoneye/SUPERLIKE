@@ -1,14 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { MESSAGE, post, type Phase } from "@/components/detail/subscribe-page";
+import { MAIL_STEPS, MESSAGE, post, type Phase } from "@/components/detail/subscribe-page";
 import { StayConnected } from "@/components/right-rail";
-
-const STEPS = [
-  "매주 금요일 아침, 이번 주 들은 앨범 한 장이 메일로 와요",
-  "메일마다 디자인 컨셉이 바뀌어요 (A SIDE · LINER NOTES · SPOTLIGHT · NIGHT SHIFT)",
-  "이 페이지에서 지난 호를 언제든 다시 볼 수 있어요",
-];
 
 function Field({
   label,
@@ -97,7 +91,7 @@ export function IssuesRail() {
         <section className="flex flex-col gap-[10px] p-[20px]">
           <h3 className="text-[8px] tracking-[0.8px] text-accent-bright">이렇게 와요</h3>
           <ol className="flex flex-col gap-[10px]">
-            {STEPS.map((s, i) => (
+            {MAIL_STEPS.map((s, i) => (
               <li key={s} className="flex items-start gap-[10px]">
                 <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-ink text-[8px] font-bold text-paper-solid">{i + 1}</span>
                 <span className="text-[9px] leading-[14px]">{s}</span>
