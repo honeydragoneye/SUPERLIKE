@@ -1,3 +1,5 @@
+import { paletteFromImage } from "@/lib/palette-server";
+import type { Palette } from "@/lib/palette";
 import { query } from "./client";
 
 /** What one account may keep, so a script cannot fill the table. */
@@ -21,8 +23,8 @@ export type PlaylistSummary = {
   name: string;
   isPublic: boolean;
   count: number;
-  /** up to four covers, for the mosaic */
-  covers: string[];
+  /** the colours of the first song's album, null while the playlist is empty */
+  palette: Palette | null;
   /** whether the track asked about is already in it */
   has: boolean;
   updatedAt: string;
@@ -50,6 +52,25 @@ export function cleanName(raw: unknown): string | null {
   return name || null;
 }
 
+const httpUrl = (v: unknown): string | null => {
+  const url = str(v, 500);
+  return url && /^https:\/\//.test(url) ? url : null;
+};
+
+/**
+ * The colours are read by fetching the cover, and the cover's address came from
+ * the browser. Only Spotify's own image hosts are fetched, so a request cannot
+ * make the server open anything else.
+ */
+function spotifyImage(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === "scdn.co" || host.endsWith(".scdn.co") || host.endsWith(".spotifycdn.com");
+  } catch {
+    return false;
+  }
+}
+
 /** Only what a Spotify track row has; anything else in the body is dropped. */
 export function cleanTrack(raw: unknown): PlaylistTrack | null {
   const t = (raw ?? {}) as Record<string, unknown>;
@@ -63,23 +84,53 @@ export function cleanTrack(raw: unknown): PlaylistTrack | null {
     uri,
     title,
     artist: typeof t.artist === "string" ? t.artist.slice(0, 300) : "",
-    artwork: str(t.artwork, 500),
+    artwork: httpUrl(t.artwork),
     durationMs: Math.min(duration, 86_400_000),
     albumId: str(t.albumId, 40),
   };
 }
 
+/** The cover of the song that was added first, which is what colours the playlist. */
+async function firstArtwork(playlistId: string): Promise<{ id: string; artwork: string | null } | null> {
+  const [row] = await query<{ id: string; artwork: string | null }>(
+    "select track_id as id, artwork from playlist_tracks where playlist_id = $1 order by added_at, track_id limit 1",
+    [playlistId],
+  );
+  return row ?? null;
+}
+
+/** Works the colours out again from the first song, and stores them (or clears them when it is empty). */
+async function refreshPalette(playlistId: string): Promise<Palette | null> {
+  const first = await firstArtwork(playlistId);
+  const palette =
+    first?.artwork && spotifyImage(first.artwork)
+      ? await paletteFromImage(first.artwork).catch(() => null)
+      : null;
+  await query("update playlists set palette = $2::jsonb where id = $1", [
+    playlistId,
+    palette ? JSON.stringify(palette) : null,
+  ]);
+  return palette;
+}
+
+/** Playlists made before covers had colours get theirs the first time they are listed. */
+const BACKFILL_AT_A_TIME = 6;
+
 export async function listPlaylists(userId: string, trackId: string | null): Promise<PlaylistSummary[]> {
-  return query<PlaylistSummary>(
-    `select p.id, p.name, p.is_public as "isPublic", p.updated_at as "updatedAt",
+  const rows = await query<PlaylistSummary>(
+    `select p.id, p.name, p.is_public as "isPublic", p.updated_at as "updatedAt", p.palette,
             (select count(*)::int from playlist_tracks t where t.playlist_id = p.id) as count,
-            array(select t.artwork from playlist_tracks t
-                   where t.playlist_id = p.id and t.artwork is not null
-                   order by t.added_at limit 4) as covers,
             exists (select 1 from playlist_tracks t where t.playlist_id = p.id and t.track_id = $2) as has
        from playlists p where p.user_id = $1 order by p.updated_at desc`,
     [userId, trackId],
   );
+  const missing = rows.filter((r) => r.palette === null && r.count > 0).slice(0, BACKFILL_AT_A_TIME);
+  await Promise.all(
+    missing.map(async (r) => {
+      r.palette = await refreshPalette(r.id).catch(() => null);
+    }),
+  );
+  return rows;
 }
 
 async function owns(userId: string, id: string): Promise<boolean> {
@@ -123,7 +174,10 @@ export async function createPlaylist(
     "insert into playlists (user_id, name, is_public) values ($1, $2, $3) returning id",
     [userId, name, isPublic],
   );
-  if (first) await insertTrack(row.id, first);
+  if (first) {
+    await insertTrack(row.id, first);
+    await refreshPalette(row.id);
+  }
   return row.id;
 }
 
@@ -133,13 +187,18 @@ export async function addTrack(userId: string, id: string, track: PlaylistTrack)
   const [{ n }] = await query<{ n: number }>("select count(*)::int as n from playlist_tracks where playlist_id = $1", [id]);
   if (n >= MAX_TRACKS) throw new PlaylistLimitError("tracks");
   await insertTrack(id, track);
+  // the first song colours the playlist, so only the song that makes it non-empty matters
+  if (n === 0) await refreshPalette(id);
   return true;
 }
 
 export async function removeTrack(userId: string, id: string, trackId: string): Promise<boolean> {
   if (!(await owns(userId, id))) return false;
+  const before = await firstArtwork(id);
   await query("delete from playlist_tracks where playlist_id = $1 and track_id = $2", [id, trackId]);
   await query("update playlists set updated_at = now() where id = $1", [id]);
+  // taking out the first song moves the colours to whichever is first now (or to none)
+  if (before?.id === trackId) await refreshPalette(id);
   return true;
 }
 

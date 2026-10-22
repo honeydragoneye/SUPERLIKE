@@ -94,7 +94,7 @@ export function PlaylistShelf() {
             {mine?.map((p) => (
               <li key={p.id} className="w-[150px]">
                 <Link href={`/playlist/${p.id}`} className="group flex flex-col gap-[8px]">
-                  <PlaylistCover covers={p.covers} size={150} tone="bg-ink/10" />
+                  <PlaylistCover palette={p.palette} size={150} tone="bg-ink/10 text-ink" />
                   <span className="flex min-w-0 flex-col gap-px">
                     <span className="truncate text-[13px] group-hover:underline">{p.name}</span>
                     <span className="text-[8px] tracking-[0.8px] text-on-bright-muted">

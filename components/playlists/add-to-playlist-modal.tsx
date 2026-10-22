@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import type { Palette } from "@/lib/palette";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -13,29 +14,68 @@ import {
   type PlaylistTrack,
 } from "@/lib/playlists";
 
-/** A mosaic of up to four covers, or a flat tile while a playlist is empty. */
+/**
+ * A playlist's cover: the colours of its first song's album, painted the way the
+ * Editor's Pick block is — the album's colour fading to a darker corner, with a
+ * record resting over the top right. An empty playlist is a plain tile with the
+ * outline of a record, until a song gives it colour.
+ *
+ * Everything is measured from `size`, so the one drawing serves the 150px card
+ * and the 40px row.
+ */
 export function PlaylistCover({
-  covers,
+  palette,
   size,
   tone = "bg-white/15",
 }: {
-  covers: string[];
+  palette: Palette | null;
   size: number;
-  /** the tile behind an empty slot, so it reads on a dark or a light surface */
+  /** the tile behind an empty playlist, so it reads on a dark or a light surface */
   tone?: string;
 }) {
-  const half = size / 2;
+  if (!palette) {
+    return (
+      <span
+        className={`relative block shrink-0 overflow-hidden rounded-[2px] ${tone}`}
+        style={{ width: size, height: size }}
+        aria-hidden
+      >
+        <span
+          className="absolute rounded-full border-current opacity-35"
+          style={{ inset: size * 0.25, borderWidth: Math.max(1, size / 75) }}
+        />
+        <span
+          className="absolute rounded-full bg-current opacity-35"
+          style={{ inset: size * 0.45 }}
+        />
+      </span>
+    );
+  }
+
+  const disc = size * 0.78;
+  const ring = (k: number) => ({
+    inset: (disc - disc * k) / 2,
+    boxShadow: `inset 0 0 0 ${Math.max(0.6, size / 150)}px rgba(0,0,0,0.14)`,
+  });
   return (
     <span
-      className={`relative grid shrink-0 grid-cols-2 grid-rows-2 overflow-hidden rounded-[2px] ${tone}`}
-      style={{ width: size, height: size }}
+      className="relative block shrink-0 overflow-hidden rounded-[2px]"
+      style={{ width: size, height: size, backgroundColor: palette.bg }}
       aria-hidden
     >
-      {covers.slice(0, 4).map((src, i) => (
-        <span key={`${src}-${i}`} className="relative" style={{ width: half, height: half }}>
-          <Image src={src} alt="" fill sizes={`${half}px`} className="object-cover" unoptimized />
-        </span>
-      ))}
+      <span
+        className="absolute inset-0"
+        style={{ background: `linear-gradient(150deg, transparent 30%, ${palette.bgDeep} 100%)` }}
+      />
+      <span
+        className="absolute rounded-full"
+        style={{ width: disc, height: disc, left: size * 0.34, top: -size * 0.2, backgroundColor: palette.disc }}
+      >
+        <span className="absolute rounded-full" style={ring(0.8)} />
+        <span className="absolute rounded-full" style={ring(0.58)} />
+        <span className="absolute rounded-full bg-pink-bright/90" style={{ inset: disc * 0.39 }} />
+        <span className="absolute rounded-full bg-black" style={{ inset: disc * 0.475 }} />
+      </span>
     </span>
   );
 }
@@ -268,7 +308,7 @@ export function AddToPlaylistModal({ track, onClose }: { track: PlaylistTrack; o
               )}
               {playlists?.map((p) => (
                 <li key={p.id} className="flex items-center gap-[12px] py-[5px]">
-                  <PlaylistCover covers={p.covers} size={40} />
+                  <PlaylistCover palette={p.palette} size={40} />
                   <span className="flex min-w-0 flex-1 flex-col gap-px">
                     <span className="truncate text-[13px]">{p.name}</span>
                     <span className="text-[9px] text-on-dark-muted">

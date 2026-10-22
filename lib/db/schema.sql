@@ -157,3 +157,7 @@ create table if not exists playlist_tracks (
   primary key (playlist_id, track_id)
 );
 create index if not exists playlist_tracks_order on playlist_tracks (playlist_id, added_at);
+
+-- the cover colours of a playlist, taken from the album of its first song (lib/palette-server);
+-- null while it is empty
+alter table playlists add column if not exists palette jsonb;
