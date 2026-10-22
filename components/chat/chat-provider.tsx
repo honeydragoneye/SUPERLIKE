@@ -83,6 +83,8 @@ export type ChatLink = {
   kind: "artist" | "album";
   name: string;
   artist?: string;
+  /** an album card made from a song: the song's title, so the card can use what Spotify said about that song */
+  song?: string;
   /** what the agent asked the tool for, when that is not how the tool named it: 검정치마 is The Black Skirts to Spotify */
   alias?: string;
 };
@@ -552,6 +554,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               const result = event.result as
                 | {
                     found?: boolean;
+                    /** find_track: the title was not found, and these are the artist's own best-known songs instead */
+                    substitute?: boolean;
                     /** artist_info and albums: the artist as Last.fm / MusicBrainz name it */
                     artist?: string;
                     /** track_info */
@@ -608,7 +612,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     // there is no page for one song: the song's card plays it, its album's page lists it
                     const song = { title: String(result.title), artist: String(result.artist) };
                     if (!m.tracks.some((t) => t.title === song.title && t.artist === song.artist)) m.tracks = [...m.tracks, song];
-                    if (result.album) add({ kind: "album", name: String(result.album), artist: song.artist });
+                    if (result.album) add({ kind: "album", name: String(result.album), artist: song.artist, song: song.title });
                   }
                 });
                 break;
@@ -618,8 +622,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 patch(reply, (m) => {
                   m.tracks = found;
                   if (event.name === "find_track") {
-                    // asked for one named song: it is either found, or it is not
-                    m.status = found.length ? "곡을 찾았어요" : "곡을 찾지 못했어요";
+                    // asked for one named song: it is either found, or it is not — or the artist's own songs stand in for it
+                    m.status = result.substitute
+                      ? `그 제목은 없지만 ${String(result.artist ?? "")}의 대표곡이에요`
+                      : found.length
+                        ? "곡을 찾았어요"
+                        : "곡을 찾지 못했어요";
                   } else if (event.name === "similar_to") {
                     m.status = found.length
                       ? `비슷한 곡 · ${String(result.based_on ?? "")}`

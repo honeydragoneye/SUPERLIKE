@@ -146,33 +146,153 @@ def _search(title: str, artist: str, limit: int) -> list[dict]:
     return response.json().get("results", {}).get("trackmatches", {}).get("track", [])
 
 
+def _title_variants(title: str) -> list[str]:
+    """같은 곡의 표기 차이: 괄호 설명, 띄어쓰기, 대소문자. 원래 표기가 항상 먼저다."""
+    plain = re.sub(r"\s*[\(\[].*?[\)\]]\s*", " ", title).strip()
+    joined = re.sub(r"\s+", "", plain)
+    out: list[str] = []
+    for v in (title, plain, joined, plain.lower()):
+        if v and v not in out:
+            out.append(v)
+    return out
+
+
+def _top_tracks(artist: str, limit: int = 50) -> tuple[str, list[dict]]:
+    """Last.fm이 아는 이름(autocorrect)과 그 가수의 인기곡. 모르는 이름이면 ('', [])."""
+    response = requests.get(
+        _LASTFM_URL,
+        params={"method": "artist.gettoptracks", "artist": artist, "autocorrect": 1, "limit": limit, "api_key": config.LASTFM_API_KEY, "format": "json"},
+        timeout=10,
+    )
+    data = response.json()
+    found = (data.get("toptracks") or {}).get("track", [])
+    if not found:
+        return "", []
+    name = (data["toptracks"].get("@attr") or {}).get("artist", artist)
+    return name, found
+
+
+def _resolve_artist(name: str) -> str:
+    """Last.fm이 부르는 가수 이름. 표기가 달라 바로 못 찾으면 가수 검색에서 같은 이름을 찾는다
+    (띄어쓰기·대소문자·The 같은 차이: 'the blackskirts' → 'The Black Skirts'). 없으면 빈 문자열."""
+    canonical, tracks = _top_tracks(name, 1)
+    if tracks:
+        return canonical
+    response = requests.get(
+        _LASTFM_URL,
+        params={"method": "artist.search", "artist": name, "limit": 8, "api_key": config.LASTFM_API_KEY, "format": "json"},
+        timeout=10,
+    )
+    hits = (response.json().get("results") or {}).get("artistmatches", {}).get("artist", [])
+    for h in hits:
+        if _norm(h.get("name", "")) == _norm(name):
+            return h["name"]
+    return ""
+
+
+_alias_cache: dict[str, list[str]] = {}
+
+
+def _alias_names(name: str) -> list[str]:
+    """MusicBrainz가 아는 그 가수의 다른 표기(한글 '웨이브 투 어스' → 'wave to earth').
+    Last.fm은 같은 가수를 표기마다 따로 두는 일이 있어서, 곡이 다른 표기 쪽에 있을 때 찾아가는 길이다."""
+    key = _norm(name)
+    if key in _alias_cache:
+        return _alias_cache[key]
+    names: list[str] = []
+    data = _mb_get("artist/", query=f'artist:"{name}" OR alias:"{name}"', limit=5)
+    for a in (data or {}).get("artists", []):
+        known = [a.get("name", "")] + [al.get("name", "") for al in a.get("aliases", []) or []]
+        if any(_norm(k) == key for k in known if k) and a.get("name") and a["name"] not in names:
+            names.append(a["name"])
+    _alias_cache[key] = names
+    return names
+
+
 def find_track(title: str, artist: str = "") -> dict:
     """사용자가 말한 곡이 실제로 있는지 Last.fm에서 확인한다.
 
     찾으면 `tracks`에 그 곡 하나를 담아 돌려준다 — 곡 목록을 주는 top_tracks와 같은 모양이라
     화면이 같은 방식으로 카드를 만든다. 못 찾으면 `tracks`는 빈 목록이다.
 
-    가수 표기가 Last.fm과 달라서(한글/영문 등) 제목+가수 검색이 빈손일 수 있어, 그때는 제목만으로
-    다시 찾고 가수가 비슷한지로 거른다.
+    "못 찾았다"고 하기 전에 표기를 바꿔 가며 여러 길을 시도한다: 제목·가수 검색 → 제목 표기를 바꿔 검색
+    (띄어쓰기·괄호) → Last.fm이 부르는 가수 이름으로 다시 검색 → 그 가수의 인기곡 안에서 찾기 →
+    제목만으로 검색하고 가수가 비슷한지로 거르기. `tried`에 무엇을 해 봤는지 남긴다.
     """
     if not config.LASTFM_API_KEY:
         raise RuntimeError("LASTFM_API_KEY가 설정되지 않았습니다")
 
+    def hit(t: dict) -> dict:
+        return {"found": True, "title": t["name"], "artist": t["artist"], "tracks": [{"title": t["name"], "artist": t["artist"]}]}
+
+    tried: list[str] = []
     with_artist = _search(title, artist, 5) if artist else []
+    tried.append("제목·가수 검색")
     for t in with_artist:
         if _same_title(title, t["name"]):
-            return {"found": True, "title": t["name"], "artist": t["artist"], "tracks": [{"title": t["name"], "artist": t["artist"]}]}
+            return hit(t)
 
+    canonical = ""
+    if artist:
+        # 제목 표기를 바꿔서, 그리고 Last.fm이 부르는 가수 이름으로 다시
+        canonical = _resolve_artist(artist)
+        names = [artist] + ([canonical] if canonical and canonical != artist else [])
+        tried.append("제목 표기 바꿔 검색")
+        for who in names:
+            for variant in _title_variants(title):
+                if (who, variant) == (artist, title):
+                    continue
+                for t in _search(variant, who, 5):
+                    if _same_title(title, t["name"]) and (_same_artist(who, t["artist"]) or _same_artist(artist, t["artist"])):
+                        return hit(t)
+        if canonical:
+            tried.append("가수 인기곡에서 찾기")
+            _, top = _top_tracks(canonical, 50)
+            for t in top:
+                if _same_title(title, t["name"]):
+                    return hit({"name": t["name"], "artist": t["artist"]["name"]})
+
+    if artist:
+        # 같은 가수가 Last.fm에 다른 표기로 따로 올라 있을 수 있다: MusicBrainz가 아는 다른 이름으로 찾는다
+        tried.append("다른 표기(MusicBrainz)로 검색")
+        for other in _alias_names(artist):
+            if _norm(other) in (_norm(artist), _norm(canonical)):
+                continue
+            for variant in _title_variants(title):
+                for t in _search(variant, other, 5):
+                    if _same_title(title, t["name"]) and _same_artist(other, t["artist"]):
+                        return hit(t)
+
+    tried.append("제목만 검색")
     by_title = _search(title, "", 10)
     for t in by_title:
         if _same_title(title, t["name"]) and (not artist or _same_artist(artist, t["artist"])):
-            return {"found": True, "title": t["name"], "artist": t["artist"], "tracks": [{"title": t["name"], "artist": t["artist"]}]}
+            return hit(t)
+    if artist and canonical:
+        for t in by_title:
+            if _same_title(title, t["name"]) and _same_artist(canonical, t["artist"]):
+                return hit(t)
 
-    result: dict = {"found": False, "title": title, "artist": artist, "tracks": []}
+    result: dict = {"found": False, "title": title, "artist": artist, "tracks": [], "tried": tried}
     if with_artist:
         # 제목은 틀렸지만 가수는 맞을 수 있다: 가수의 실제 곡을 알려줘서 다시 고르게 한다
         top = with_artist[0]
         result["note"] = f"그 제목의 곡은 없습니다. {top['artist']}의 다른 곡으로 '{top['name']}'이 있습니다."
+    if artist:
+        # 가수가 아는 사람이면 제목을 못 찾았어도 빈손으로 돌려보내지 않는다: 그 가수의 대표곡을 대신 준다.
+        # 모델이 제목을 짐작해서 틀린 경우("노래 있어?")에도 곡이 나오게 하는 안전망이다.
+        try:
+            top_tracks = artist_top_tracks(artist)
+        except Exception:  # noqa: BLE001 — Last.fm이 안 되면 원래대로 못 찾았다고 한다
+            top_tracks = {"tracks": []}
+        if top_tracks.get("tracks"):
+            result["tracks"] = top_tracks["tracks"]
+            result["substitute"] = True
+            result["artist"] = top_tracks.get("artist", artist)
+            result["note"] = (
+                f"'{title}'이라는 제목은 찾지 못했지만 {result['artist']}의 대표곡은 찾았습니다. "
+                "사용자에게 그 제목은 못 찾았고 대신 대표곡을 카드로 보여 준다고 한 문장으로 말한다."
+            )
     return result
 
 
@@ -225,20 +345,21 @@ def artist_info(artist: str) -> dict:
 
 
 def artist_top_tracks(artist: str) -> dict:
-    """가수의 대표곡(Last.fm 인기순 5곡). `tracks`에 담아 돌려줘서 화면이 카드로 보여 준다."""
+    """가수의 대표곡(Last.fm 인기순 5곡). `tracks`에 담아 돌려줘서 화면이 카드로 보여 준다.
+
+    이름으로 바로 못 찾으면 표기가 다른 것일 수 있어(띄어쓰기·대소문자·The), 가수 검색에서 같은 이름을 찾아
+    그 이름으로 다시 부른다.
+    """
     if not config.LASTFM_API_KEY:
         raise RuntimeError("LASTFM_API_KEY가 설정되지 않았습니다")
-    response = requests.get(
-        _LASTFM_URL,
-        params={"method": "artist.gettoptracks", "artist": artist, "autocorrect": 1, "limit": 5, "api_key": config.LASTFM_API_KEY, "format": "json"},
-        timeout=10,
-    )
-    data = response.json()
-    found = (data.get("toptracks") or {}).get("track", [])
+    name, found = _top_tracks(artist, 5)
     if not found:
-        return {"found": False, "artist": artist, "tracks": []}
-    name = (data["toptracks"].get("@attr") or {}).get("artist", artist)
-    return {"found": True, "artist": name, "tracks": [{"title": t["name"], "artist": t["artist"]["name"]} for t in found]}
+        canonical = _resolve_artist(artist)
+        if canonical:
+            name, found = _top_tracks(canonical, 5)
+    if not found:
+        return {"found": False, "artist": artist, "tracks": [], "tried": ["가수 이름 그대로", "표기 바꿔 가수 검색"]}
+    return {"found": True, "artist": name or artist, "tracks": [{"title": t["name"], "artist": t["artist"]["name"]} for t in found]}
 
 
 def now_playing(session: Session) -> dict:
@@ -594,6 +715,7 @@ TOOLS: dict[str, dict] = {
                 "description": (
                     "사용자가 곡 이름을 말했을 때 그 곡이 실제로 있는지 확인한다 "
                     "(예: 'wave to earth의 hyang'). 가수를 모르면 artist는 비운다. "
+                    "사용자가 말하지 않은 제목을 짐작해서 넣지 않는다. 가수만 말했으면 artist_top_tracks를 쓴다. "
                     "분위기로 곡을 추천하는 용도는 아니다 (그건 top_tracks)."
                 ),
                 "parameters": {
@@ -669,8 +791,9 @@ TOOLS: dict[str, dict] = {
             "function": {
                 "name": "artist_top_tracks",
                 "description": (
-                    "특정 가수의 대표곡·인기곡을 알려 달라고 할 때 그 가수의 실제 인기곡 5곡을 가져온다 "
-                    "(예: '10CM 대표곡'). 분위기로 곡을 추천하는 용도는 아니다 (그건 top_tracks)."
+                    "특정 가수의 곡을 알려 달라고 하거나(예: '10CM 대표곡', '유재하 노래 있어?', '아이유 노래 틀어줘') "
+                    "곡 제목 없이 가수만 말했을 때 그 가수의 실제 인기곡 5곡을 가져온다. "
+                    "분위기로 곡을 추천하는 용도는 아니다 (그건 top_tracks)."
                 ),
                 "parameters": {
                     "type": "object",

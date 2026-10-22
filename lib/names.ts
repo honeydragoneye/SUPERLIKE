@@ -82,3 +82,18 @@ export function nameMatch(wanted: string[], found: string): number | null {
   }
   return best;
 }
+
+/**
+ * Whether two song titles are the same song written two ways: the same letters
+ * once squashed ("밤 편지" and "밤편지", "Yellow" and "yellow"), one holding the
+ * other whole ("Creep (Remastered)" holds "Creep"), or a slip of a letter.
+ * A title of one or two letters has to be exact: "Up" is in half the catalogue.
+ */
+export function sameTitle(a: string, b: string): boolean {
+  const x = squash(a.replace(/[\(\[].*?[\)\]]/g, " "));
+  const y = squash(b.replace(/[\(\[].*?[\)\]]/g, " "));
+  if (!x || !y) return false;
+  if (x === y) return true;
+  if (Math.min(x.length, y.length) >= 3 && (x.includes(y) || y.includes(x))) return true;
+  return nameGap(x, y) !== null;
+}

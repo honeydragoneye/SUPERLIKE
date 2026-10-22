@@ -31,8 +31,8 @@ function pick(images: Img[] | null | undefined, atLeast: number): string | null 
 type RawTrack = {
   id: string; uri: string; name: string; duration_ms: number;
   explicit: boolean; popularity: number; preview_url: string | null;
-  artists: { name: string }[];
-  album: { name: string; images: Img[] };
+  artists: { id?: string; name: string }[];
+  album: { id?: string; name: string; images: Img[] };
 };
 type RawAlbum = {
   id: string; uri: string; name: string; images: Img[];
@@ -103,6 +103,9 @@ export async function GET(request: NextRequest) {
       explicit: t.explicit,
       popularity: t.popularity,
       previewUrl: t.preview_url,
+      albumId: t.album?.id ?? null,
+      artistId: t.artists[0]?.id ?? null,
+      artistName: t.artists[0]?.name ?? "",
     }));
 
     const albums: SearchAlbum[] = present(data.albums?.items).map((a) => ({

@@ -72,6 +72,11 @@ export type SearchTrack = {
   popularity: number;
   /** 30s clip; absent for much of the catalogue */
   previewUrl: string | null;
+  /** the album and the first artist, as Spotify ids: a song found by name leads to both pages without another search */
+  albumId?: string | null;
+  artistId?: string | null;
+  /** the first artist alone, where `artist` joins them all */
+  artistName?: string;
 };
 
 export type SearchAlbum = {

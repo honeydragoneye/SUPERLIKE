@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useHydrated } from "@/components/ui/use-hydrated";
+import { nameMatch, sameTitle } from "@/lib/names";
 
 export type Seed = Parameters<ReturnType<typeof useSpotify>["startStation"]>[0];
 
@@ -23,9 +24,22 @@ export type TrackCardTrack = {
 export type Found = Seed & {
   /** a cover sized for a card; `artwork` is the small one a list row uses */
   artworkLarge: string | null;
+  /** what Spotify says the song belongs to: the album, and the first artist, by id and name */
+  album: string;
+  albumId: string | null;
+  artistId: string | null;
+  artistName: string;
 };
 
 const lookups = new Map<string, Promise<Found | null>>();
+/** The songs that have been found, so the pages around them can be linked from what Spotify already said. */
+const resolved = new Set<Found>();
+
+/** Waits for every song being looked up right now, and hands back all the songs found so far. */
+export async function foundSongs(): Promise<Found[]> {
+  await Promise.allSettled([...lookups.values()]);
+  return [...resolved];
+}
 
 export function lookUp(track: TrackCardTrack): Promise<Found | null> {
   const key = `${track.title}|${track.artist}`.toLowerCase();
@@ -33,22 +47,81 @@ export function lookUp(track: TrackCardTrack): Promise<Found | null> {
   if (known) return known;
 
   const pending = (async (): Promise<Found | null> => {
-    const q = encodeURIComponent(`${track.title} ${track.artist}`);
-    const res = await fetch(`/api/spotify/search?q=${q}&type=track&limit=1`, { cache: "no-store" });
-    if (!res.ok) throw new Error(String(res.status));
-    const data = (await res.json()) as { tracks?: (Seed & { artwork: string | null; artworkLarge?: string | null })[] };
-    const first = data.tracks?.[0];
-    return first
-      ? {
-          id: first.id,
-          uri: first.uri,
-          name: first.name,
-          artist: first.artist,
-          artwork: first.artwork,
-          artworkLarge: first.artworkLarge ?? first.artwork,
-          durationMs: first.durationMs,
-        }
-      : null;
+    type Raw = Seed & {
+      artwork: string | null;
+      artworkLarge?: string | null;
+      album?: string;
+      albumId?: string | null;
+      artistId?: string | null;
+      artistName?: string;
+    };
+    const search = async (q: string, limit: number): Promise<Raw[]> => {
+      const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}&type=track&limit=${limit}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(String(res.status));
+      return ((await res.json()) as { tracks?: Raw[] }).tracks ?? [];
+    };
+    /*
+      Spotify files Korean artists under romanised names (아이유 is IU), so a Hangul artist is asked about first:
+      the name Spotify ranks first for it is accepted, and searched, as well as the one the agent gave.
+    */
+    const artistNames = [track.artist];
+    if (/[\u3131-\u318e\uac00-\ud7a3]/.test(track.artist)) {
+      const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(track.artist)}&type=artist&limit=3`, { cache: "no-store" });
+      if (res.ok) {
+        const top = ((await res.json()) as { artists?: { name: string }[] }).artists?.[0];
+        if (top && !artistNames.includes(top.name)) artistNames.push(top.name);
+      }
+    }
+    const sameArtist = (t: Raw) => artistNames.some((n) => nameMatch([n], t.artistName ?? t.artist) !== null || nameMatch([n], t.artist) !== null);
+    const isSong = (t: Raw) => sameTitle(track.title, t.name);
+
+    /*
+      A song the agent names is a song that exists, so a miss here is a failure
+      of the search and not of the song. The name is tried several ways before
+      giving up, from the exact one outward: with Spotify's own title and artist
+      fields; as plain words; by title alone, keeping the ones by this artist;
+      and by artist alone, keeping the ones with this title. The first try that
+      finds a song whose title says the same thing wins.
+    */
+    const tries: { q: string; limit: number; keep: (t: Raw) => boolean }[] = artistNames.flatMap((name) => [
+      { q: `track:"${track.title}" artist:"${name}"`, limit: 5, keep: (t: Raw) => isSong(t) && (name === track.artist || sameArtist(t)) },
+      { q: `${track.title} ${name}`, limit: 5, keep: (t: Raw) => isSong(t) && sameArtist(t) },
+    ]);
+    tries.push(
+      { q: track.title, limit: 10, keep: (t) => isSong(t) && sameArtist(t) },
+      ...artistNames.map((name) => ({ q: `artist:"${name}"`, limit: 10, keep: isSong })),
+    );
+    /*
+      Last resort, for a Hangul title: Spotify often lists the song under an English title (밤편지 is "Through the
+      Night"), so no title can be compared. It still finds the song by the Hangul, so the first result by this artist wins.
+    */
+    if (/[\u3131-\u318e\uac00-\ud7a3]/.test(track.title)) {
+      tries.push(...artistNames.map((name) => ({ q: `${track.title} ${name}`, limit: 5, keep: sameArtist })));
+    }
+    let first: Raw | undefined;
+    for (const t of tries) {
+      const found = (await search(t.q, t.limit)).find(t.keep);
+      if (found) {
+        first = found;
+        break;
+      }
+    }
+    if (!first) return null;
+    const song: Found = {
+      id: first.id,
+      uri: first.uri,
+      name: first.name,
+      artist: first.artist,
+      artwork: first.artwork,
+      artworkLarge: first.artworkLarge ?? first.artwork,
+      durationMs: first.durationMs,
+      album: first.album ?? "",
+      albumId: first.albumId ?? null,
+      artistId: first.artistId ?? null,
+      artistName: first.artistName ?? first.artist,
+    };
+    resolved.add(song);
+    return song;
   })();
   // a failed lookup is not remembered, so the next card for the same song tries again
   pending.catch(() => lookups.delete(key));

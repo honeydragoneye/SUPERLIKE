@@ -33,8 +33,9 @@ function links(raw: unknown): ChatLink[] {
       const name = text((l as ChatLink)?.name, 300);
       const artist = text((l as ChatLink)?.artist, 300);
       const alias = text((l as ChatLink)?.alias, 300);
+      const song = text((l as ChatLink)?.song, 300);
       return (k === "artist" || k === "album") && name
-        ? [{ kind: k, name, ...(artist ? { artist } : {}), ...(alias ? { alias } : {}) }]
+        ? [{ kind: k, name, ...(artist ? { artist } : {}), ...(song ? { song } : {}), ...(alias ? { alias } : {}) }]
         : [];
     });
 }

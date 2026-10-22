@@ -7,10 +7,13 @@ import { useSpotify } from "@/components/player/spotify-provider";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import type { SearchAlbum, SearchArtist } from "@/lib/data";
 import { nameMatch, squash } from "@/lib/names";
+import { foundSongs, lookUp as lookUpSong } from "@/components/ui/track-card";
 import type { ChatLink } from "./chat-provider";
 
+const HANGUL = /[\u3131-\u318e\uac00-\ud7a3]/;
+
 type Found = { id: string; name: string; image: string | null; sub: string };
-type Lookup = { found: Found | null; /** another artist Spotify ranks above the match: "did you mean" */ maybe: Found | null };
+export type Lookup = { found: Found | null; /** another artist Spotify ranks above the match: "did you mean" */ maybe: Found | null };
 
 
 /** One answer per name, so the same artist named twice in a conversation is searched once. */
@@ -22,12 +25,33 @@ const found = new Map<string, Promise<Lookup>>();
  * result only counts when its name says the same thing: a wrong artist's page
  * opened is worse than no link.
  */
-function lookUp(link: ChatLink): Promise<Lookup> {
+export function lookUpLink(link: ChatLink): Promise<Lookup> {
   const key = `${link.kind}|${link.name}|${link.artist ?? ""}|${link.alias ?? ""}`.toLowerCase();
   const known = found.get(key);
   if (known) return known;
 
   const pending = (async (): Promise<Lookup> => {
+    /*
+      A song found on Spotify already says which album and which artist it
+      belongs to, by id. When the card is about that song's album, that is the
+      answer: searching the album by name again only fails where the two
+      catalogues spell the name differently.
+    */
+    if (link.kind === "album" && link.song && link.artist) {
+      const song = await lookUpSong({ title: link.song, artist: link.artist }).catch(() => null);
+      if (song?.albumId) {
+        return {
+          found: {
+            id: song.albumId,
+            name: song.album || link.name,
+            image: song.artworkLarge ?? song.artwork,
+            sub: `앨범 · ${song.artistName || song.artist}`,
+          },
+          maybe: null,
+        };
+      }
+    }
+
     const search = async (name: string) => {
       const q = encodeURIComponent(link.kind === "album" && link.artist ? `${name} ${link.artist}` : name);
       const res = await fetch(`/api/spotify/search?q=${q}&type=${link.kind}&limit=10`, { cache: "no-store" });
@@ -52,6 +76,15 @@ function lookUp(link: ChatLink): Promise<Lookup> {
           .map((a, at) => ({ a, at, gap: nameMatch(wanted, a.name) }))
           .filter((c): c is { a: SearchArtist; at: number; gap: number } => c.gap !== null);
         const best = [...ranked].sort((x, y) => x.gap - y.gap || y.a.popularity - x.a.popularity)[0];
+        /*
+          Spotify files Korean artists under their romanised names (유재하 is Yoo Jae Ha, 혁오 is HYUKOH), and still
+          finds them by the Hangul. So when the name asked for is Hangul and no result is spelled exactly like it,
+          the one Spotify ranks first is the answer, not a result whose name merely contains the letters
+          (아이유 is also inside 아이유브이).
+        */
+        if (HANGUL.test(wanted[0]) && artists.length && (!best || best.gap > 0)) {
+          return { found: found(artists[0]), maybe: null };
+        }
         if (!best) return { found: null, maybe: null };
         // "blackskirt" is an artist on Last.fm, and also what someone typing 검정치마 slips into: when Spotify
         // puts another artist whose name holds the same letters above the match, offer it as "did you mean"
@@ -61,6 +94,13 @@ function lookUp(link: ChatLink): Promise<Lookup> {
       let lookup = rank((await search(link.name)).artists ?? []);
       // 검정치마 is not a name Spotify's search finds The Black Skirts by: ask with the other spelling too
       if (!lookup.found && link.alias) lookup = rank((await search(link.alias)).artists ?? []);
+      if (!lookup.found) {
+        // the search did not find the artist, but a song of theirs in this conversation may have: it names its artist by id
+        const song = (await foundSongs()).find((s) => s.artistId && nameMatch(wanted, s.artistName) !== null);
+        if (song?.artistId) {
+          lookup = { found: { id: song.artistId, name: song.artistName, image: null, sub: "아티스트" }, maybe: null };
+        }
+      }
       return lookup;
     }
 
@@ -149,7 +189,7 @@ export function LinkCard({ link }: { link: ChatLink }) {
   useEffect(() => {
     if (!ready) return;
     let live = true;
-    lookUp(link)
+    lookUpLink(link)
       .then((l) => live && setState(l.found ? { kind: "ready", lookup: { ...l, found: l.found } } : { kind: "missing" }))
       .catch(() => live && setState({ kind: "missing" }));
     return () => {
