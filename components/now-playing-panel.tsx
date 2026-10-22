@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Icon, TintedIcon } from "./ui/icon";
 import { QueueItem } from "./ui/queue-item";
 import { usePlaybackPosition, useSpotify } from "./player/spotify-provider";
@@ -14,7 +14,8 @@ import { LyricsPopover } from "./lyrics/lyrics-panel";
 import { clock } from "@/lib/time";
 import type { Track } from "@/lib/data";
 import { moodLabel } from "@/lib/station/custom-tags";
-import { TrackMenu, type TrackMenuTarget } from "./station/track-menu";
+import { PlayerMenu, type PlayerMenuItem } from "./player/player-menu";
+import { AddToPlaylistModal } from "./playlists/add-to-playlist-modal";
 
 /** One empty array for every list the panel holds back during hydration. */
 const NOTHING: never[] = [];
@@ -77,6 +78,8 @@ export function NowPlayingPanel() {
     stationActive: stationOn,
     stationBusy: busy,
     stationSeed: seedLabel,
+    deviceId,
+    startStation,
     stopStation,
     playFromStation,
     stationFilter: filter,
@@ -132,20 +135,16 @@ export function NowPlayingPanel() {
   const mood = hydrated ? filter.mood : null;
 
   /**
-   * ··· holds "이 곡은 <mood> 아님" for the track playing, and nothing else yet,
-   * so it only opens while a station runs under a mood tag. Outside that it
-   * stays the inert button it was.
+   * ··· holds what can be done with the track playing. "이 곡은 <mood> 아님" is
+   * among them only while a station runs under a mood tag; the rest need just
+   * a track to exist.
    */
   const nowId = now?.uri?.startsWith("spotify:track:") ? now.uri.slice(14) : null;
   const rejectable = stationActive && mood !== null && nowId !== null && now !== null;
-  const [menu, setMenu] = useState<TrackMenuTarget | null>(null);
-  const closeMenu = useCallback(() => setMenu(null), []);
-  const openMenu = (e: MouseEvent<HTMLButtonElement>) => {
-    if (!nowId || !now) return;
-    const track = { id: nowId, uri: now.uri, name: now.title, artist: now.artist };
-    const anchor = e.currentTarget;
-    setMenu((open) => (open ? null : { track, anchor }));
-  };
+  const [moreOpen, setMoreOpen] = useState(false);
+  /** the playlist picker, opened from the + and from the ··· menu */
+  const [adding, setAdding] = useState(false);
+  const closeAdding = () => setAdding(false);
 
   /**
    * The queue and the lyrics each live in a popover over the bar rather than a
@@ -155,11 +154,12 @@ export function NowPlayingPanel() {
    */
   const [queueOpen, setQueueOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const popover = queueOpen || lyricsOpen;
+  const popover = queueOpen || lyricsOpen || moreOpen;
   useEffect(() => {
     if (!popover) return;
     const shut = () => {
       setQueueOpen(false);
+      setMoreOpen(false);
       closeLyrics();
     };
     const onDown = (e: globalThis.MouseEvent) => {
@@ -277,6 +277,73 @@ export function NowPlayingPanel() {
     }
     void play({ uris: [uri] });
   };
+
+  /**
+   * What ··· offers for the track playing. A station keeps its own queue, which
+   * Spotify's "next" would not reach, so 다음에 재생 is left out while one runs.
+   */
+  const menuItems: PlayerMenuItem[] = [];
+  if (now && nowId) {
+    const seed = {
+      id: nowId,
+      uri: now.uri,
+      name: now.title,
+      artist: now.artist,
+      artwork: now.artwork,
+      durationMs: now.durationMs,
+    };
+    if (rejectable && mood) {
+      menuItems.push({
+        key: "reject",
+        mark: "⊘",
+        label: `${moodLabel(mood)} 아님`,
+        onSelect: () => rejectFromStation({ id: nowId, uri: now.uri, name: now.title, artist: now.artist }),
+      });
+    }
+    menuItems.push(
+      { key: "station", mark: "▶", label: "이 곡으로 스테이션 시작", onSelect: () => void startStation(seed) },
+      { key: "add", mark: "+", label: "플레이리스트에 담기", onSelect: () => setAdding(true) },
+    );
+    if (!stationActive) {
+      menuItems.push({
+        key: "next",
+        mark: "↳",
+        label: "다음에 재생",
+        confirm: "대기열에 넣었어요",
+        onSelect: () =>
+          void fetch("/api/spotify/player", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "queue", uri: now.uri, deviceId }),
+          }),
+      });
+    }
+    menuItems.push(
+      {
+        key: "artist",
+        mark: "↗",
+        label: "아티스트 페이지로 이동",
+        dividerBefore: true,
+        disabled: !now.artistId,
+        onSelect: () => router.push(`/artist/${now.artistId}`),
+      },
+      {
+        key: "album",
+        mark: "↗",
+        label: "앨범 페이지로 이동",
+        disabled: !now.albumId,
+        onSelect: () => router.push(`/album/${now.albumId}`),
+      },
+      {
+        key: "link",
+        mark: "⧉",
+        label: "링크 복사",
+        confirm: "복사했어요",
+        dividerBefore: true,
+        onSelect: () => void navigator.clipboard?.writeText(`https://open.spotify.com/track/${nowId}`),
+      },
+    );
+  }
 
   return (
     <section className="relative flex h-full w-full items-center gap-[24px] bg-panel px-[16px] text-on-dark">
@@ -431,6 +498,7 @@ export function NowPlayingPanel() {
           data-popover-toggle
           onClick={() => {
             closeLyrics();
+            setMoreOpen(false);
             setQueueOpen((v) => !v);
           }}
           className={`flex h-[30px] shrink-0 cursor-pointer items-center gap-[6px] rounded-pill px-[14px] text-[9px] tracking-[0.8px] transition-colors ${
@@ -459,6 +527,7 @@ export function NowPlayingPanel() {
           data-popover-toggle
           onClick={() => {
             setQueueOpen(false);
+            setMoreOpen(false);
             toggleLyrics();
           }}
           className={`flex h-[30px] shrink-0 items-center rounded-pill px-[12px] text-[10px] leading-none transition-colors rule disabled:opacity-40 ${
@@ -469,16 +538,35 @@ export function NowPlayingPanel() {
         >
           가사
         </button>
-        <RoundButton name="plus" label="보관함에 추가" size={30} icon={14} />
-        <RoundButton name="share" label="공유" size={30} icon={14} />
         <RoundButton
-          name="more"
-          label={rejectable ? "세부 기능" : "더 보기"}
+          name="plus"
+          label="플레이리스트에 담기"
           size={30}
           icon={14}
-          pressed={rejectable && menu !== null}
-          onClick={rejectable ? openMenu : undefined}
+          disabled={!likeable}
+          onClick={() => {
+            setQueueOpen(false);
+            setMoreOpen(false);
+            closeLyrics();
+            setAdding(true);
+          }}
         />
+        <RoundButton name="share" label="공유" size={30} icon={14} />
+        <span data-popover-toggle className="flex shrink-0">
+          <RoundButton
+            name="more"
+            label="세부 기능"
+            size={30}
+            icon={14}
+            disabled={!likeable}
+            pressed={moreOpen}
+            onClick={() => {
+              setQueueOpen(false);
+              closeLyrics();
+              setMoreOpen((v) => !v);
+            }}
+          />
+        </span>
       </div>
 
       {queueOpen && (
@@ -571,12 +659,13 @@ export function NowPlayingPanel() {
 
       {lyricsOpen && <LyricsPopover ref={popoverRef} />}
 
-      <TrackMenu
-        // closes by itself when the tag goes off, the station stops or the track moves on
-        target={rejectable && menu?.track.id === nowId ? menu : null}
-        onClose={closeMenu}
-        reject={mood ? { label: moodLabel(mood), onReject: rejectFromStation } : null}
-      />
+      {moreOpen && now && nowId && (
+        <PlayerMenu ref={popoverRef} items={menuItems} onClose={() => setMoreOpen(false)} />
+      )}
+
+      {adding && likeTrack && (
+        <AddToPlaylistModal track={{ ...likeTrack, albumId: likeTrack.albumId ?? null }} onClose={closeAdding} />
+      )}
     </section>
   );
 }

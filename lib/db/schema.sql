@@ -129,3 +129,31 @@ create table if not exists chats (
   updated_at    timestamptz not null default now()
 );
 create index if not exists chats_user_recent on chats (user_id, updated_at desc);
+
+-- Playlists made inside Superlike. Per user like everything above: every read and
+-- write is scoped to the signed-in account (lib/db/playlists). A track is kept as
+-- the row that was on screen when it was added, so a playlist can be drawn and
+-- played without asking Spotify for each song again.
+create table if not exists playlists (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    text not null references users (spotify_id) on delete cascade,
+  name       text not null,
+  is_public  boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists playlists_user_recent on playlists (user_id, updated_at desc);
+
+create table if not exists playlist_tracks (
+  playlist_id uuid not null references playlists (id) on delete cascade,
+  track_id    text not null,
+  uri         text not null,
+  title       text not null,
+  artist      text not null,
+  artwork     text,
+  duration_ms integer not null default 0,
+  album_id    text,
+  added_at    timestamptz not null default now(),
+  primary key (playlist_id, track_id)
+);
+create index if not exists playlist_tracks_order on playlist_tracks (playlist_id, added_at);

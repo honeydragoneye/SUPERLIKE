@@ -8,7 +8,8 @@ type Body =
   | { action: "shuffle"; state: boolean; deviceId?: string }
   | { action: "repeat"; state: "off" | "context" | "track"; deviceId?: string }
   | { action: "next"; deviceId?: string }
-  | { action: "previous"; deviceId?: string };
+  | { action: "previous"; deviceId?: string }
+  | { action: "queue"; uri: string; deviceId?: string };
 
 /**
  * Transport and playback modes, all via the Web API.
@@ -34,6 +35,14 @@ export async function PUT(request: NextRequest) {
     case "previous":
       skip = true;
       path = `/me/player/${body.action}${query}`;
+      break;
+    case "queue":
+      // "play this next": the uri must be a track, which is all the bar ever sends
+      if (!/^spotify:track:[A-Za-z0-9]{1,40}$/.test(body.uri)) {
+        return NextResponse.json({ error: "bad_uri" }, { status: 400 });
+      }
+      skip = true;
+      path = `/me/player/queue?uri=${encodeURIComponent(body.uri)}${amp}`;
       break;
     case "shuffle":
       path = `/me/player/shuffle?state=${body.state}${amp}`;
