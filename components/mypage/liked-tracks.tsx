@@ -22,8 +22,8 @@ const MAX_URIS = 100;
 
 const sleeve: Record<string, string> = {
   mint: "bg-mint",
-  gold: "bg-gold",
-  pink: "bg-pink",
+  gold: "bg-soft",
+  pink: "bg-accent",
   violet: "bg-violet",
 };
 
@@ -83,7 +83,7 @@ export function LikedTracks() {
           <button
             type="button"
             onClick={() => playFrom(liked[0].uri)}
-            className="flex h-[26px] cursor-pointer items-center whitespace-nowrap rounded-pill bg-ink px-[12px] text-[9px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-pink hover:text-on-bright rule"
+            className="flex h-[26px] cursor-pointer items-center whitespace-nowrap rounded-pill bg-ink px-[12px] text-[9px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-accent hover:text-on-bright rule"
           >
             전체 재생
           </button>
@@ -174,7 +174,7 @@ function LikedCard({
             />
           </span>
         )}
-        <span className="absolute right-[8px] top-[8px] flex size-[30px] items-center justify-center rounded-pill bg-pink opacity-0 transition-opacity group-hover:opacity-100 rule">
+        <span className="absolute right-[8px] top-[8px] flex size-[30px] items-center justify-center rounded-pill bg-accent opacity-0 transition-opacity group-hover:opacity-100 rule">
           <Icon name="play-sm" size={12} />
         </span>
       </button>

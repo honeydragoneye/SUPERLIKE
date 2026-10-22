@@ -88,7 +88,7 @@ export function RecentRow({
               ? "스테이션 구성 중…"
               : `${track.title} 기준으로 스테이션 시작`
           }
-          className={`absolute right-[136px] top-1/2 flex -translate-y-1/2 items-center gap-[5px] rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-[opacity,background-color] group-hover:opacity-100 disabled:opacity-100 ${stationBlocked ? "cursor-default" : "enabled:hover:bg-ink"}`}
+          className={`absolute right-[136px] top-1/2 flex -translate-y-1/2 items-center gap-[5px] rounded-pill bg-accent px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-[opacity,background-color] group-hover:opacity-100 disabled:opacity-100 ${stationBlocked ? "cursor-default" : "enabled:hover:bg-ink"}`}
         >
           {stationBusy ? (
             <>

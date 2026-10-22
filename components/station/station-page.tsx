@@ -77,7 +77,7 @@ function StationRow({
         aria-expanded={menuOpen}
         aria-label={`${track.name} 세부 기능`}
         title="세부 기능"
-        className="flex h-[24px] w-[24px] shrink-0 cursor-pointer items-center justify-center rounded-pill hover:bg-gold aria-expanded:bg-gold"
+        className="flex h-[24px] w-[24px] shrink-0 cursor-pointer items-center justify-center rounded-pill hover:bg-soft aria-expanded:bg-soft"
       >
         <Icon name="more" size={14} />
       </button>
@@ -180,7 +180,7 @@ export function StationPage() {
             )}
           </span>
           <span className="flex min-w-0 flex-1 flex-col gap-[2px]">
-            <span className="text-[8px] tracking-[0.9px] text-pink-bright">
+            <span className="text-[8px] tracking-[0.9px] text-accent-bright">
               STATION SEED
             </span>
             <span className="truncate text-[17px] tracking-[-0.4px] text-on-dark">
@@ -193,7 +193,7 @@ export function StationPage() {
           <span className="flex shrink-0 items-center gap-[6px] whitespace-nowrap">
             <span
               className={`size-[6px] shrink-0 rounded-pill ${
-                stationBusy ? "animate-pulse bg-pink-bright" : "bg-mint"
+                stationBusy ? "animate-pulse bg-accent-bright" : "bg-mint"
               }`}
               aria-hidden
             />

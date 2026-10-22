@@ -11,7 +11,7 @@ export type TrackMenuTarget = { track: RejectTarget; anchor: HTMLElement };
 const GAP = 6;
 
 export const MENU_ITEM =
-  "flex h-[34px] w-full shrink-0 cursor-pointer items-center gap-[10px] rounded-[4px] px-[10px] text-left text-[11px] tracking-[0.5px] outline-none hover:bg-gold focus-visible:bg-gold";
+  "flex h-[34px] w-full shrink-0 cursor-pointer items-center gap-[10px] rounded-[4px] px-[10px] text-left text-[11px] tracking-[0.5px] outline-none hover:bg-soft focus-visible:bg-soft";
 
 /** Not exported from Figma yet, so it is drawn here in the icons' own weight. */
 export function TrashIcon() {

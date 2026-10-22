@@ -61,7 +61,7 @@ const NOTHING: never[] = [];
  */
 const KIND = {
   basic: "bg-paper-solid text-ink enabled:active:bg-paper-press",
-  mood: "bg-gold text-ink enabled:active:bg-gold-press",
+  mood: "bg-soft text-ink enabled:active:bg-soft-press",
   custom: "bg-tag-blue text-ink",
 } as const;
 const ON = "bg-ink text-paper-solid";
@@ -159,7 +159,7 @@ export function TagFilter() {
       : { ...stationFilter, lyrics: on(t) ? null : LYRICS_OF[t.label] };
 
   return (
-    <section className="flex h-full w-full flex-col gap-[12px] overflow-hidden bg-[#d9d9d9] p-[16px]">
+    <section className="rail-scroll flex h-full w-full flex-col gap-[12px] bg-[#dfe5ec] p-[16px]">
       <div className="flex w-full shrink-0 flex-col gap-px">
         <h2 className="text-[19px] font-black tracking-[-0.4px] text-on-bright">TAGS</h2>
         <p className="text-[8px] tracking-[0.7px] text-on-bright-muted">
@@ -180,7 +180,7 @@ export function TagFilter() {
             }
             disabled={locked || !isFiltered(stationFilter)}
             onClick={() => void setStationFilter(NO_FILTER)}
-            className={`${PILL} bg-ink text-paper-solid enabled:hover:bg-pink-bright`}
+            className={`${PILL} bg-ink text-paper-solid enabled:hover:bg-accent-bright`}
           >
             해제
           </button>
@@ -329,7 +329,7 @@ export function TagFilter() {
             <p className="text-[8px] leading-[12px] text-on-bright-muted">{formError}</p>
           )}
           <div className="flex gap-[6px]">
-            <button type="submit" className={`${PILL} bg-ink text-paper-solid hover:bg-pink-bright`}>
+            <button type="submit" className={`${PILL} bg-ink text-paper-solid hover:bg-accent-bright`}>
               추가
             </button>
             <button
@@ -420,7 +420,7 @@ export function TagFilter() {
             type="button"
             title={`${selectedCustom.label} 태그의 기준을 챗봇과 대화로 정하기`}
             onClick={() => openRefine(selectedCustom.key)}
-            className="flex h-[30px] w-fit cursor-pointer items-center gap-[4px] rounded-pill bg-pink pl-[10px] pr-[14px] text-[10px] tracking-[0.6px] text-on-bright transition-colors rule hover:bg-gold"
+            className="flex h-[30px] w-fit cursor-pointer items-center gap-[4px] rounded-pill bg-accent pl-[10px] pr-[14px] text-[10px] tracking-[0.6px] text-on-bright transition-colors rule hover:bg-soft"
           >
             <Icon name="eyes-ink" size={22} />
             대화로 다듬기

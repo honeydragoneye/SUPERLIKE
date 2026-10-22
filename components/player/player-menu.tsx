@@ -49,7 +49,7 @@ export const PlayerMenu = forwardRef<HTMLDivElement, { items: PlayerMenuItem[]; 
               }}
               className="flex w-full cursor-pointer items-center gap-[10px] rounded-[6px] px-[10px] py-[9px] text-left text-[12px] outline-none transition-colors hover:bg-white/10 focus-visible:bg-white/10 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
             >
-              <span className="w-[14px] shrink-0 text-center text-[11px] text-pink-bright" aria-hidden>
+              <span className="w-[14px] shrink-0 text-center text-[11px] text-accent-bright" aria-hidden>
                 {said === item.key ? "✓" : item.mark}
               </span>
               {said === item.key ? item.confirm : item.label}

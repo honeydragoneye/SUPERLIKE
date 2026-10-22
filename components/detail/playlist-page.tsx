@@ -111,7 +111,7 @@ export function PlaylistPage({ id }: { id: string }) {
                       durationMs: first.durationMs,
                     })
                   }
-                  className="w-fit shrink-0 rounded-pill bg-pink px-[12px] py-[6px] text-[9px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-ink rule"
+                  className="w-fit shrink-0 rounded-pill bg-accent px-[12px] py-[6px] text-[9px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-ink rule"
                 >
                   이 목록 기준으로 스테이션 시작
                 </button>

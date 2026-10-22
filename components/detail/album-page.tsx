@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useRouter } from "next/navigation";
 import { StationButton } from "@/components/ui/station-button";
-import { clock } from "@/lib/time";
+import { clock, releaseLabel } from "@/lib/time";
 import type { AlbumPage as Album } from "@/lib/data";
 import { DetailShell, DetailStatus } from "./detail-shell";
 import { LoadingDots } from "@/components/ui/loading-dots";
@@ -15,13 +15,6 @@ const ALBUM_TYPE_LABEL: Record<string, string> = {
   single: "싱글",
   compilation: "컴필레이션",
 };
-
-/** "2024-10-28" at day precision, "2024" when that is all Spotify stored. */
-function releaseLabel(date: string, precision: string): string {
-  if (precision === "year") return `${date.slice(0, 4)}년`;
-  if (precision === "month") return `${date.slice(0, 4)}년 ${Number(date.slice(5, 7))}월`;
-  return `${date.slice(0, 4)}년 ${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일`;
-}
 
 /** The album screen for an id: fetches the album, then shows it. */
 export function AlbumPage({ id }: { id: string }) {
@@ -115,7 +108,7 @@ export function AlbumView({
                     key={a.id}
                     type="button"
                     onClick={() => router.push(`/artist/${a.id}`)}
-                    className="shrink-0 cursor-pointer rounded-pill bg-paper px-[10px] py-[5px] text-[9px] transition-colors hover:bg-gold rule"
+                    className="shrink-0 cursor-pointer rounded-pill bg-paper px-[10px] py-[5px] text-[9px] transition-colors hover:bg-soft rule"
                   >
                     {a.name}
                   </button>

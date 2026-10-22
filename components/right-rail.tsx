@@ -55,7 +55,7 @@ function EditorsPick() {
 
   return (
     <section
-      className="relative min-h-0 flex-[268_0_268px] overflow-hidden bg-ink transition-colors duration-700"
+      className="relative min-h-0 flex-[0_0_268px] overflow-hidden bg-ink transition-colors duration-700"
       // the cover's own colour; the near-black stays until there is one
       style={palette ? { backgroundColor: palette.bg } : undefined}
     >
@@ -95,13 +95,13 @@ function EditorsPick() {
 
       <p
         className={`absolute left-[14px] top-[14px] whitespace-nowrap text-[8px] tracking-[0.9px] ${
-          palette ? "text-on-dark-muted" : "text-pink-bright"
+          palette ? "text-on-dark-muted" : "text-accent-bright"
         }`}
       >
         EDITOR&apos;S PICK
       </p>
       <h2 className="absolute bottom-[60px] left-[14px] line-clamp-2 max-w-[78%] text-[26px] font-black leading-[28px] tracking-[-1px] text-on-dark">
-        <Link href="/editors-pick" className="transition-colors hover:text-pink-bright">
+        <Link href="/editors-pick" className="transition-colors hover:text-accent-bright">
           {title}
         </Link>
       </h2>
@@ -115,7 +115,7 @@ function EditorsPick() {
         onClick={open}
         aria-label="에디터스 픽 재생"
         title="앨범 재생"
-        className="absolute bottom-[14px] right-[14px] flex size-[46px] cursor-pointer items-center justify-center rounded-pill bg-pink transition-colors hover:bg-gold"
+        className="absolute bottom-[14px] right-[14px] flex size-[46px] cursor-pointer items-center justify-center rounded-pill bg-accent transition-colors hover:bg-soft"
       >
         <Icon name="play-md" size={17} />
       </button>
@@ -127,10 +127,10 @@ function StayConnected() {
   // the mail rotates through four themes; this is the one going out this week
   const theme = weekTheme();
   return (
-    <section className="relative flex min-h-0 flex-[186_0_186px] flex-col overflow-hidden bg-paper-solid px-[20px] py-[18px]">
+    <section className="relative flex min-h-0 flex-[0_0_186px] flex-col overflow-hidden bg-paper-solid px-[20px] py-[18px]">
       {/* the stamp's perforated edge */}
       <div aria-hidden className="pointer-events-none absolute inset-[8px] border border-dashed border-ink/45" />
-      <p className="text-[8px] tracking-[0.8px] text-pink-bright">{theme} · 이번 주 컨셉</p>
+      <p className="text-[8px] tracking-[0.8px] text-accent-bright">{theme} · 이번 주 컨셉</p>
       <h2 className="mt-[6px] text-[24px] font-black leading-[28px] tracking-[-0.5px] text-on-bright">
         금요일의
         <br />
@@ -138,7 +138,7 @@ function StayConnected() {
       </h2>
       <div
         aria-hidden
-        className="absolute right-[20px] top-[18px] flex h-[66px] w-[56px] flex-col items-center justify-center border border-dashed border-pink-bright text-pink-bright"
+        className="absolute right-[20px] top-[18px] flex h-[66px] w-[56px] flex-col items-center justify-center border border-dashed border-accent-bright text-accent-bright"
       >
         <span className="text-[18px] font-black leading-none">FRI</span>
         <span className="mt-[6px] text-[7px] tracking-[0.4px]">00:00 KST</span>
@@ -152,7 +152,7 @@ function StayConnected() {
       <div className="mt-[10px] flex items-center gap-[14px]">
         <Link
           href="/subscribe"
-          className="flex h-[28px] items-center whitespace-nowrap rounded-pill bg-ink px-[18px] text-[10px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-pink-bright"
+          className="flex h-[28px] items-center whitespace-nowrap rounded-pill bg-ink px-[18px] text-[10px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-accent-bright"
         >
           신청하기 →
         </Link>
@@ -171,7 +171,7 @@ function ArtistOfTheWeek() {
   const when = data?.previous ? "지난주" : "이번 주";
 
   return (
-    <section className="flex min-h-0 flex-[366_0_366px] flex-col gap-[10px] overflow-hidden bg-lime-soft p-[14px]">
+    <section className="flex min-h-0 flex-[1_0_294px] flex-col gap-[10px] overflow-hidden bg-soft p-[14px]">
       <p className="h-[10px] shrink-0 whitespace-nowrap text-[8px] leading-[10px] tracking-[1px] text-muted">
         ARTIST OF THE WEEK{data?.previous ? " · 지난주" : ""}
       </p>
@@ -196,7 +196,7 @@ function ArtistOfTheWeek() {
 
       <div className="flex h-[41px] w-full shrink-0 flex-col gap-[2px]">
         <h2 className="truncate text-[21px] font-black leading-[27px] tracking-[-0.7px]">
-          <Link href="/weekly-artist" className="transition-colors hover:text-pink-bright">
+          <Link href="/weekly-artist" className="transition-colors hover:text-accent-bright">
             {name}
           </Link>
         </h2>
@@ -212,7 +212,7 @@ function ArtistOfTheWeek() {
       <div className="flex h-[31px] w-full shrink-0 items-center justify-between">
         <Link
           href="/weekly-artist"
-          className="flex h-[31px] shrink-0 items-center rounded-pill bg-ink px-[18px] text-[11px] leading-none tracking-[0.8px] text-paper transition-colors hover:bg-pink-bright"
+          className="flex h-[31px] shrink-0 items-center rounded-pill bg-ink px-[18px] text-[11px] leading-none tracking-[0.8px] text-paper transition-colors hover:bg-accent-bright"
         >
           자세히 보기
         </Link>
@@ -223,7 +223,7 @@ function ArtistOfTheWeek() {
 
 export function RightRail() {
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="rail-scroll flex h-full flex-col">
       <EditorsPick />
       <StayConnected />
       <ArtistOfTheWeek />

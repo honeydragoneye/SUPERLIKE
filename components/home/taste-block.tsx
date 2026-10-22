@@ -29,8 +29,8 @@ type State =
 
 const sleeve: Record<string, string> = {
   mint: "bg-mint",
-  gold: "bg-gold",
-  pink: "bg-pink",
+  gold: "bg-soft",
+  pink: "bg-accent",
   violet: "bg-violet",
 };
 
@@ -116,7 +116,7 @@ export function TasteBlock() {
               setState({ kind: "loading" });
               void load(0).then(setState);
             }}
-            className="cursor-pointer rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.8px] text-paper-solid transition-colors hover:bg-pink-bright"
+            className="cursor-pointer rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.8px] text-paper-solid transition-colors hover:bg-accent-bright"
           >
             다시 시도
           </button>
@@ -132,7 +132,7 @@ export function TasteBlock() {
             onClick={() => {
               if (!chat.open) chat.toggle();
             }}
-            className="cursor-pointer whitespace-nowrap rounded-pill bg-paper-solid px-[14px] py-[7px] text-[9px] tracking-[0.6px] transition-colors rule hover:bg-gold"
+            className="cursor-pointer whitespace-nowrap rounded-pill bg-paper-solid px-[14px] py-[7px] text-[9px] tracking-[0.6px] transition-colors rule hover:bg-soft"
           >
             챗봇에게 추천받기
           </button>
@@ -149,7 +149,7 @@ export function TasteBlock() {
               >
                 <p className="flex items-baseline gap-[8px]">
                   <span
-                    className={`tnum text-[10px] font-black ${i === 0 ? "text-pink-bright" : "text-on-bright-muted"}`}
+                    className={`tnum text-[10px] font-black ${i === 0 ? "text-accent-bright" : "text-on-bright-muted"}`}
                   >
                     {String(i + 1).padStart(2, "0")}
                   </span>
@@ -179,7 +179,7 @@ export function TasteBlock() {
               type="button"
               disabled={again}
               onClick={() => void refresh()}
-              className="flex shrink-0 cursor-pointer items-center gap-[6px] whitespace-nowrap rounded-pill bg-paper-solid px-[16px] py-[6px] text-[9px] tracking-[0.6px] transition-colors rule enabled:hover:bg-gold disabled:cursor-default"
+              className="flex shrink-0 cursor-pointer items-center gap-[6px] whitespace-nowrap rounded-pill bg-paper-solid px-[16px] py-[6px] text-[9px] tracking-[0.6px] transition-colors rule enabled:hover:bg-soft disabled:cursor-default"
             >
               {again ? (
                 <>
@@ -261,7 +261,7 @@ function RecCard({ rec, index }: { rec: Rec; index: number }) {
           {rec.because} 기반
         </span>
         {seed && (
-          <span className="absolute right-[8px] top-[8px] flex size-[30px] items-center justify-center rounded-pill bg-pink opacity-0 transition-opacity group-hover:opacity-100 rule">
+          <span className="absolute right-[8px] top-[8px] flex size-[30px] items-center justify-center rounded-pill bg-accent opacity-0 transition-opacity group-hover:opacity-100 rule">
             <Icon name="play-sm" size={12} />
           </span>
         )}

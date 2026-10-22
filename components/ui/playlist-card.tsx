@@ -7,8 +7,8 @@ import { Icon } from "./icon";
 
 const sleeve: Record<string, string> = {
   mint: "bg-mint",
-  gold: "bg-gold",
-  pink: "bg-pink",
+  gold: "bg-soft",
+  pink: "bg-accent",
   violet: "bg-violet",
 };
 
@@ -71,7 +71,7 @@ export function PlaylistCard({
           onClick={() => onPlay(playlist.uri)}
           aria-label={`${playlist.name} 재생`}
           title="재생"
-          className="absolute right-[8px] top-[8px] flex size-[30px] items-center justify-center rounded-pill bg-pink opacity-0 transition-opacity group-hover:opacity-100 rule"
+          className="absolute right-[8px] top-[8px] flex size-[30px] items-center justify-center rounded-pill bg-accent opacity-0 transition-opacity group-hover:opacity-100 rule"
         >
           <Icon name="play-sm" size={12} />
         </button>

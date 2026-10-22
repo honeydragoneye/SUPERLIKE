@@ -64,7 +64,7 @@ function Sleeve({ src }: { src: string | null }) {
   }
   return (
     <span className="relative flex size-[34px] shrink-0 items-center justify-center rounded-[4px] bg-ink">
-      <span className="size-[18px] rounded-full bg-pink-bright" />
+      <span className="size-[18px] rounded-full bg-accent-bright" />
       <span className="absolute size-[5px] rounded-full bg-ink" />
     </span>
   );
@@ -132,7 +132,7 @@ export function TrackCard({ track, rank }: { track: TrackCardTrack; rank?: numbe
               : "재생"
         }
         onClick={() => seed && void play({ uris: [seed.uri] })}
-        className="flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-pill bg-ink text-paper-solid transition-colors enabled:hover:bg-pink-bright disabled:cursor-default disabled:opacity-40"
+        className="flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-pill bg-ink text-paper-solid transition-colors enabled:hover:bg-accent-bright disabled:cursor-default disabled:opacity-40"
       >
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden className="ml-[1px]">
           <path d="M2 1 9 5 2 9Z" fill="currentColor" />
@@ -153,7 +153,7 @@ export function TrackCard({ track, rank }: { track: TrackCardTrack; rank?: numbe
               setStarting(false);
             }
           }}
-          className={`flex shrink-0 items-center gap-[5px] whitespace-nowrap rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid transition-colors rule disabled:opacity-100 ${
+          className={`flex shrink-0 items-center gap-[5px] whitespace-nowrap rounded-pill bg-accent px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid transition-colors rule disabled:opacity-100 ${
             blocked ? "cursor-default" : "cursor-pointer enabled:hover:bg-ink"
           }`}
         >

@@ -20,3 +20,10 @@ export function clock(ms: number): string {
   const total = Math.floor(ms / 1000);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
+
+/** "2024-10-28" at day precision, "2024" when that is all Spotify stored. */
+export function releaseLabel(date: string, precision: string): string {
+  if (precision === "year") return `${date.slice(0, 4)}년`;
+  if (precision === "month") return `${date.slice(0, 4)}년 ${Number(date.slice(5, 7))}월`;
+  return `${date.slice(0, 4)}년 ${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일`;
+}

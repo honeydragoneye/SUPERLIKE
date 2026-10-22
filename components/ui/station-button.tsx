@@ -53,7 +53,7 @@ export function StationButton({
           setResolving(false);
         }
       }}
-      className={`absolute top-1/2 flex -translate-y-1/2 items-center gap-[5px] rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-[opacity,background-color] group-hover:opacity-100 disabled:opacity-100 ${blocked ? "cursor-default" : "enabled:hover:bg-ink"} ${className}`}
+      className={`absolute top-1/2 flex -translate-y-1/2 items-center gap-[5px] rounded-pill bg-accent px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid opacity-0 transition-[opacity,background-color] group-hover:opacity-100 disabled:opacity-100 ${blocked ? "cursor-default" : "enabled:hover:bg-ink"} ${className}`}
     >
       {busy ? (
         <>

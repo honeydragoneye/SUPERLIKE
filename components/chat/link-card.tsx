@@ -111,7 +111,7 @@ function Card({
         </span>
       ) : (
         <span className={`relative flex size-[34px] shrink-0 items-center justify-center bg-ink ${round ? "rounded-full" : "rounded-[4px]"}`}>
-          <span className="size-[18px] rounded-full bg-pink-bright" />
+          <span className="size-[18px] rounded-full bg-accent-bright" />
           <span className="absolute size-[5px] rounded-full bg-ink" />
         </span>
       )}
@@ -126,7 +126,7 @@ function Card({
         disabled={!target}
         onClick={() => target && router.push(target)}
         aria-label={`${title} ${kind === "artist" ? "아티스트" : "앨범"} 페이지 열기`}
-        className="shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[10px] py-[5px] text-[8px] tracking-[0.6px] text-paper-solid transition-colors enabled:hover:bg-pink-bright disabled:cursor-default disabled:opacity-35"
+        className="shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[10px] py-[5px] text-[8px] tracking-[0.6px] text-paper-solid transition-colors enabled:hover:bg-accent-bright disabled:cursor-default disabled:opacity-35"
       >
         {loading ? "찾는 중…" : "페이지 열기 →"}
       </button>

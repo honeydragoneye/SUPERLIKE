@@ -2,7 +2,7 @@
 
 import { AccountBanner } from "./account-banner";
 import { RecentlyPlayed } from "@/components/recently-played";
-import { FollowCounts, Listeners, ThemeMode } from "./side-panels";
+import { FollowCounts, Listeners } from "./side-panels";
 
 /**
  * 마이페이지: the account across the top, the listening history on the left,
@@ -28,7 +28,6 @@ export function Mypage() {
         <aside className="flex w-[341px] shrink-0 flex-col">
           <FollowCounts />
           <Listeners />
-          <ThemeMode />
         </aside>
       </div>
     </div>

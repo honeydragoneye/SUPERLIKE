@@ -6,49 +6,49 @@
    the design is a riso-style stack of translucent flat inks.
    --------------------------------------------------------------- */
 @theme {
-  /* core ink / paper */
-  --color-ink: rgba(0, 0, 0, 0.8);
-  --color-paper: rgba(255, 253, 246, 0.72);
-  /* the same warm white at full strength, for copy that must not wash out */
-  --color-paper-solid: #fffdf6;
-  --color-muted: rgba(110, 100, 128, 0.74);
+  /* The palette is three things: ink, a cool white, and one accent blue. Alpha is baked
+     into each colour on purpose: the design is a stack of translucent flat inks. The
+     colours that come out of an album cover (the Editor's Pick block, the records, the
+     playlist covers) are the music's own and stay outside it. */
 
-  /* accents */
-  --color-pink: rgba(255, 78, 156, 0.73);
-  /* full-strength pink: the 0.73 alpha drops to ~1.4:1 on the dark blocks */
-  --color-pink-bright: #ff4e9c;
-  --color-gold: rgba(255, 212, 70, 0.74);
-  --color-violet: rgba(123, 91, 255, 0.72);
-  --color-mint: rgba(46, 217, 166, 0.71);
-  /* Spotify green, darkened for legibility. The signature #1db954 reads at
-     2.59:1 on the white header, and this label is 8px — #169c46 is the same
-     hue at 3.57:1. A brand colour rather than one of ours, so no alpha. */
-  --color-spotify: #169c46;
+  /* ink / paper */
+  --color-ink: rgba(0, 0, 0, 0.8);
+  --color-paper: rgba(250, 252, 254, 0.72);
+  /* the same cool white at full strength, for copy that must not wash out */
+  --color-paper-solid: #fafcfe;
+  --color-muted: rgba(107, 114, 128, 0.74);
+
+  /* the accent: play, the chosen one, a press, the ticker */
+  --color-accent: rgba(61, 90, 254, 0.73);
+  /* full-strength accent: the 0.73 alpha drops too low on the dark blocks */
+  --color-accent-bright: #3d5afe;
+  /* what used to be a second and third colour, and a state colour: now the cool
+     neutrals, so a chip or a block is told apart by tone and not by hue */
+  --color-soft: #e7ecf1;
+  --color-soft-press: #d8dfe7;
+  --color-violet: #cfd8e3;
+  --color-mint: #dbe2ea;
+  /* the signed-in label, in the accent: this app has no green of its own */
+  --color-spotify: #3d5afe;
 
   /* surfaces */
   --color-panel: rgba(0, 0, 0, 0.82);
-  --color-artwork: rgba(255, 0, 4, 0.7);
-  --color-ticker: #ffe000;
-  --color-lime: #f0fe77;
-  --color-lime-soft: #e4fb8a;
-  --color-chart: #f4f9f9;
-  --color-sky: #54bdff;
-  /* the listener's own tags: the same pill as the others, in a diluted blue so
-     they read as theirs without being a second design */
-  --color-tag-blue: #c4d6ee;
+  --color-artwork: #3a404a;
+  --color-ticker: #3d5afe;
+  --color-chart: #f3f6f9;
+  /* the listener's own tags: the accent, diluted, so they read as theirs without a second design */
+  --color-tag-blue: #d4dcff;
   /* what a press leaves on each kind of tag: the same colour, a shade down */
-  --color-tag-blue-press: #aec7e8;
-  --color-paper-press: #ebe8dc;
-  --color-gold-press: rgba(238, 188, 40, 0.86);
+  --color-tag-blue-press: #bfcaff;
+  --color-paper-press: #dfe6ee;
+  /* errors only: it is the one place a warning has to be told from the rest at a glance */
   --color-alert: #ff383c;
   --color-shell: #ffffff;
 
-  /* Readability layer. The Figma file leans on `ink` and `paper`
-     everywhere, which drops to ~1.4:1 on the dark panel and on the
-     sky-blue block. These are the same hues pushed to a legible
-     alpha, used only where the surface demands it. */
-  --color-on-dark: rgba(255, 253, 246, 0.96);
-  --color-on-dark-muted: rgba(255, 253, 246, 0.62);
+  /* Readability layer: the same hues pushed to a legible alpha, used only where
+     the surface (the dark panel, the accent) demands it. */
+  --color-on-dark: rgba(250, 252, 254, 0.96);
+  --color-on-dark-muted: rgba(250, 252, 254, 0.62);
   --color-on-bright: rgba(0, 0, 0, 0.92);
   --color-on-bright-muted: rgba(0, 0, 0, 0.62);
 
@@ -120,6 +120,31 @@
   }
   .scroll-y::-webkit-scrollbar-thumb {
     background: var(--color-on-dark-muted);
+    border-radius: 999px;
+  }
+
+  /*
+   * The pinned column beside the page: it scrolls by itself when it holds more
+   * than the window leaves it, and its scrollbar only shows while the pointer
+   * is over it. Reaching its end does not carry on into the page.
+   */
+  .rail-scroll {
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: none;
+  }
+  .rail-scroll:hover {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-ink) transparent;
+  }
+  .rail-scroll::-webkit-scrollbar {
+    width: 0;
+  }
+  .rail-scroll:hover::-webkit-scrollbar {
+    width: 6px;
+  }
+  .rail-scroll:hover::-webkit-scrollbar-thumb {
+    background: var(--color-ink);
     border-radius: 999px;
   }
 

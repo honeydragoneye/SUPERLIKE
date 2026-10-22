@@ -135,7 +135,7 @@ export const LyricsPopover = forwardRef<HTMLDivElement>(function LyricsPopover(_
             ref={i === current ? currentRef : null}
             className={
               i === current
-                ? "shrink-0 text-[13.2px] font-black leading-[19px] text-pink-bright"
+                ? "shrink-0 text-[13.2px] font-black leading-[19px] text-accent-bright"
                 : "shrink-0 text-[12px] leading-[17px] text-on-dark-muted"
             }
           >

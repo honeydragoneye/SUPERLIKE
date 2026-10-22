@@ -42,7 +42,7 @@ export function ActionBar() {
   return (
     /* no overflow-hidden: the search field hangs its suggestion panel below
        the bar, and clipping here would cut it off at 76px */
-    <div className="flex h-[76px] shrink-0 items-center gap-[12px] bg-lime pl-[16px] pr-[12px]">
+    <div className="flex h-[76px] shrink-0 items-center gap-[12px] bg-soft pl-[16px] pr-[12px]">
       <SearchField />
 
       <div className="min-w-px flex-1" />
@@ -87,7 +87,7 @@ export function ActionBar() {
         <span className="whitespace-nowrap text-[13px] tracking-[0.6px] text-paper-solid">
           {isPlaying ? "PLAYING" : "PLAY ALL"}
         </span>
-        <span className="flex size-[34px] items-center justify-center rounded-pill bg-pink">
+        <span className="flex size-[34px] items-center justify-center rounded-pill bg-accent">
           <Icon name={isPlaying ? "pause-lg" : "play-sm"} size={14} />
         </span>
       </button>

@@ -22,8 +22,8 @@ type State = { kind: "loading" } | { kind: "error" } | { kind: "ok"; albums: Rel
 
 const sleeve: Record<string, string> = {
   mint: "bg-mint",
-  gold: "bg-gold",
-  pink: "bg-pink",
+  gold: "bg-soft",
+  pink: "bg-accent",
   violet: "bg-violet",
 };
 
@@ -95,7 +95,7 @@ export function ReleasesBlock() {
               aria-pressed={key === country}
               onClick={() => setCountry(key)}
               className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[14px] py-[7px] text-[9px] tracking-[0.7px] rule ${
-                key === country ? "bg-ink text-paper" : "bg-gold text-on-bright"
+                key === country ? "bg-ink text-paper" : "bg-soft text-on-bright"
               }`}
             >
               {label}
@@ -115,7 +115,7 @@ export function ReleasesBlock() {
           <button
             type="button"
             onClick={() => setLoaded((all) => ({ ...all, [country]: undefined }))}
-            className="cursor-pointer rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.8px] text-paper-solid transition-colors hover:bg-pink-bright"
+            className="cursor-pointer rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.8px] text-paper-solid transition-colors hover:bg-accent-bright"
           >
             다시 시도
           </button>

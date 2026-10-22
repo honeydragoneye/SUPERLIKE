@@ -94,7 +94,7 @@ export function SearchResults() {
                 aria-pressed={active}
                 onClick={() => setTab(key)}
                 className={`shrink-0 whitespace-nowrap rounded-pill px-[14px] py-[7px] text-[9px] tracking-[0.7px] rule ${
-                  active ? "bg-ink text-paper" : "bg-gold text-on-bright"
+                  active ? "bg-ink text-paper" : "bg-soft text-on-bright"
                 }`}
               >
                 {label}

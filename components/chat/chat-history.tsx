@@ -109,7 +109,7 @@ export const ChatHistory = function ChatHistory({
       ) : (
         <ul className="scroll-y flex min-h-0 flex-col">
           {state.chats.map((c) => (
-            <li key={c.id} className="flex items-center gap-[8px] rounded-[6px] pr-[8px] transition-colors hover:bg-gold/45">
+            <li key={c.id} className="flex items-center gap-[8px] rounded-[6px] pr-[8px] transition-colors hover:bg-soft/45">
               <button
                 type="button"
                 disabled={opening !== null}

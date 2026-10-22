@@ -87,6 +87,27 @@ export function AccountBanner() {
         </p>
       </div>
 
+      {/* light is the only look there is, so it shows as chosen and dark waits: a switch that
+          moved and changed nothing would read as broken, where a disabled one reads as not yet */}
+      <div role="group" aria-label="화면 모드" className="mt-[2px] flex shrink-0 items-center gap-[6px]">
+        {(["라이트", "다크"] as const).map((mode, i) => (
+          <button
+            key={mode}
+            type="button"
+            disabled
+            aria-pressed={i === 0}
+            title="준비 중"
+            className={`flex h-[28px] shrink-0 cursor-default items-center whitespace-nowrap rounded-pill px-[16px] text-[9px] tracking-[0.6px] ${
+              i === 0
+                ? "bg-paper-solid text-black"
+                : "border-[1.5px] border-on-dark-muted text-on-dark-muted"
+            }`}
+          >
+            {mode}
+          </button>
+        ))}
+      </div>
+
       <button
         type="button"
         onClick={() => {

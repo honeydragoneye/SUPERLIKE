@@ -9,7 +9,7 @@ export function TagSpace() {
   return (
     <section
       aria-hidden
-      className="h-full w-full overflow-hidden bg-[#d9d9d9]"
+      className="h-full w-full overflow-hidden bg-[#dfe5ec]"
       data-slot="tag-space"
     />
   );

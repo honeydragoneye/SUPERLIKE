@@ -51,7 +51,7 @@ export function DetailShell({
             type="button"
             onClick={() => router.back()}
             title="돌아가기"
-            className="flex shrink-0 items-center gap-[6px] whitespace-nowrap rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors enabled:hover:bg-gold rule"
+            className="flex shrink-0 items-center gap-[6px] whitespace-nowrap rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors enabled:hover:bg-soft rule"
           >
             <span aria-hidden>←</span>
             뒤로

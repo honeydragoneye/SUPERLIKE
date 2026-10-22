@@ -118,6 +118,65 @@ export async function similarArtists(
   return [];
 }
 
+/** What Last.fm writes about an artist or an album: the user-written summary, the listeners, the genre tags. */
+export type LfmInfo = { summary: string; listeners: number | null; tags: string[] };
+
+/** Last.fm's wiki text carries HTML links and a licence tail; neither belongs on screen. */
+function plainWiki(text: unknown): string {
+  return String(text ?? "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s*User-contributed text is available[\s\S]*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Genre tags only, each once, and never the artist's own name (people tag an album with it). */
+function genreTags(raw: unknown, names: string[]): string[] {
+  return [
+    ...new Set(
+      asList(raw)
+        .map((t) => canonicalTag(String(t.name ?? "")))
+        .filter(Boolean)
+        .filter(isGenreTag)
+        .filter((t) => !isOwnName(t, names)),
+    ),
+  ].slice(0, 3);
+}
+
+/** `artist.getInfo`, tried under each spelling Last.fm might know the artist by; null when it knows none. */
+export async function artistInfo(artistName: string): Promise<LfmInfo | null> {
+  for (const artist of artistCandidates(artistName)) {
+    const data = await call<{
+      artist?: { stats?: { listeners?: string }; bio?: { summary?: string }; tags?: { tag?: unknown } };
+    }>(endpoint("artist.getinfo", { artist, autocorrect: 1 }));
+    if (fatal(data) || !data?.artist) continue;
+    const listeners = Number(data.artist.stats?.listeners);
+    return {
+      summary: plainWiki(data.artist.bio?.summary),
+      listeners: Number.isFinite(listeners) && listeners > 0 ? listeners : null,
+      tags: genreTags(data.artist.tags?.tag, artistCandidates(artistName)),
+    };
+  }
+  return null;
+}
+
+/** `album.getInfo`: the summary and the tags people gave the album. */
+export async function albumInfo(albumName: string, artistName: string): Promise<LfmInfo | null> {
+  for (const artist of artistCandidates(artistName)) {
+    const data = await call<{
+      album?: { listeners?: string; wiki?: { summary?: string }; tags?: { tag?: unknown } };
+    }>(endpoint("album.getinfo", { artist, album: cleanTitle(albumName) || albumName, autocorrect: 1 }));
+    if (fatal(data) || !data?.album) continue;
+    const listeners = Number(data.album.listeners);
+    return {
+      summary: plainWiki(data.album.wiki?.summary),
+      listeners: Number.isFinite(listeners) && listeners > 0 ? listeners : null,
+      tags: genreTags(data.album.tags?.tag, artistCandidates(artistName)),
+    };
+  }
+  return null;
+}
+
 /** An artist's most-played tracks. */
 export async function artistTopTracks(
   artistName: string,

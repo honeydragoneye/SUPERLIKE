@@ -73,7 +73,7 @@ export function PlaylistCover({
       >
         <span className="absolute rounded-full" style={ring(0.8)} />
         <span className="absolute rounded-full" style={ring(0.58)} />
-        <span className="absolute rounded-full bg-pink-bright/90" style={{ inset: disc * 0.39 }} />
+        <span className="absolute rounded-full bg-accent-bright/90" style={{ inset: disc * 0.39 }} />
         <span className="absolute rounded-full bg-black" style={{ inset: disc * 0.475 }} />
       </span>
     </span>
@@ -225,7 +225,7 @@ export function AddToPlaylistModal({ track, onClose }: { track: PlaylistTrack; o
                 onChange={(e) => setName(e.target.value)}
                 maxLength={60}
                 placeholder="예: 밤에 듣는 노래"
-                className="rounded-[6px] border-[1.5px] border-pink-bright bg-[#2e2e2e] px-[14px] py-[12px] text-[13px] text-on-dark outline-none placeholder:text-on-dark-muted"
+                className="rounded-[6px] border-[1.5px] border-accent-bright bg-[#2e2e2e] px-[14px] py-[12px] text-[13px] text-on-dark outline-none placeholder:text-on-dark-muted"
               />
             </label>
             <fieldset className="flex flex-col gap-[8px]">
@@ -241,7 +241,7 @@ export function AddToPlaylistModal({ track, onClose }: { track: PlaylistTrack; o
                       name="privacy"
                       checked={isPublic === value}
                       onChange={() => setIsPublic(value as boolean)}
-                      className="size-[14px] accent-[#ff4e9c]"
+                      className="size-[14px] accent-[#3d5afe]"
                     />
                     {label as string}
                   </label>
@@ -253,9 +253,9 @@ export function AddToPlaylistModal({ track, onClose }: { track: PlaylistTrack; o
             </fieldset>
             <div className="flex flex-col gap-[4px] rounded-[8px] bg-white/[0.06] p-[12px]">
               {song}
-              <p className="text-[9px] text-pink-bright">만들면서 이 곡이 첫 곡으로 담겨요</p>
+              <p className="text-[9px] text-accent-bright">만들면서 이 곡이 첫 곡으로 담겨요</p>
             </div>
-            {error && <p className="text-[10px] text-pink-bright">{error}</p>}
+            {error && <p className="text-[10px] text-accent-bright">{error}</p>}
             <div className="flex justify-end gap-[10px]">
               <button
                 type="button"
@@ -270,7 +270,7 @@ export function AddToPlaylistModal({ track, onClose }: { track: PlaylistTrack; o
               <button
                 type="submit"
                 disabled={!name.trim() || busy !== null}
-                className="cursor-pointer rounded-pill bg-pink-bright px-[14px] py-[7px] text-[11px] text-black disabled:opacity-40"
+                className="cursor-pointer rounded-pill bg-accent-bright px-[14px] py-[7px] text-[11px] text-black disabled:opacity-40"
               >
                 만들고 담기
               </button>
@@ -288,7 +288,7 @@ export function AddToPlaylistModal({ track, onClose }: { track: PlaylistTrack; o
               }}
               className="flex shrink-0 cursor-pointer items-center gap-[12px] text-left"
             >
-              <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-pink text-[20px] text-black">
+              <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-accent text-[20px] text-black">
                 +
               </span>
               <span className="flex flex-col gap-px">
@@ -298,7 +298,7 @@ export function AddToPlaylistModal({ track, onClose }: { track: PlaylistTrack; o
             </button>
 
             <p className="shrink-0 text-[9px] text-on-dark-muted">내 플레이리스트</p>
-            {error && <p className="shrink-0 text-[10px] text-pink-bright">{error}</p>}
+            {error && <p className="shrink-0 text-[10px] text-accent-bright">{error}</p>}
             <ul className="scroll-y -mt-[6px] flex min-h-0 flex-col overflow-y-auto">
               {playlists?.length === 0 && (
                 <li className="py-[8px] text-[10px] text-on-dark-muted">아직 만든 플레이리스트가 없어요.</li>
@@ -340,7 +340,7 @@ export function AddToPlaylistModal({ track, onClose }: { track: PlaylistTrack; o
         >
           {toast.text}
           {toast.undo && (
-            <button type="button" onClick={toast.undo} className="cursor-pointer text-[#d6246f]">
+            <button type="button" onClick={toast.undo} className="cursor-pointer text-accent-bright">
               실행 취소
             </button>
           )}

@@ -46,8 +46,8 @@ function Pill({
       onClick={onClick}
       className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.6px] transition-colors rule disabled:cursor-default ${
         dark
-          ? "bg-ink text-paper-solid enabled:hover:bg-pink-bright"
-          : "bg-paper-solid text-on-bright enabled:hover:bg-gold"
+          ? "bg-ink text-paper-solid enabled:hover:bg-accent-bright"
+          : "bg-paper-solid text-on-bright enabled:hover:bg-soft"
       }`}
     >
       {children}
@@ -95,7 +95,7 @@ function ProposalCard({ id, p }: { id: string; p: ChatProposal }) {
   const { refine, applyProposal, dismissProposal } = useChat();
   const { checked, passedCount, passed, failed } = p.preview;
   return (
-    <div className="flex flex-col gap-[8px] rounded-[8px] bg-chart p-[10px] ring-[1.5px] ring-pink-bright">
+    <div className="flex flex-col gap-[8px] rounded-[8px] bg-chart p-[10px] ring-[1.5px] ring-accent-bright">
       <p className="text-[8px] tracking-[0.6px] text-on-bright-muted">새 기준</p>
       <p className="break-words text-[10px] leading-[15px] text-on-bright">{p.definition}</p>
       {p.warning && <p className="text-[8px] leading-[12px] text-alert">{p.warning}</p>}
@@ -271,7 +271,7 @@ export function ChatPanel() {
   return (
     <section
       aria-label="챗봇"
-      className="relative flex h-full w-full min-w-0 flex-col gap-[12px] overflow-hidden bg-[#d9d9d9] p-[16px]"
+      className="relative flex h-full w-full min-w-0 flex-col gap-[12px] overflow-hidden bg-[#dfe5ec] p-[16px]"
     >
       <div className="flex w-full shrink-0 items-center justify-between gap-[10px]">
         <div className="flex min-w-0 flex-col gap-px">
@@ -289,7 +289,7 @@ export function ChatPanel() {
               title="대화 이력"
               onClick={() => setHistoryOpen((v) => !v)}
               className={`flex size-[25px] shrink-0 cursor-pointer items-center justify-center rounded-pill transition-colors rule ${
-                historyOpen ? "bg-ink text-paper-solid" : "bg-paper-solid text-on-bright hover:bg-gold"
+                historyOpen ? "bg-ink text-paper-solid" : "bg-paper-solid text-on-bright hover:bg-soft"
               }`}
             >
               <ClockIcon />
@@ -321,8 +321,8 @@ export function ChatPanel() {
                 none
                   ? "cursor-default bg-paper-solid text-on-bright-muted opacity-60"
                   : on
-                    ? "cursor-pointer bg-ink text-paper-solid hover:bg-pink-bright"
-                    : "cursor-pointer bg-paper-solid text-on-bright-muted hover:bg-gold"
+                    ? "cursor-pointer bg-ink text-paper-solid hover:bg-accent-bright"
+                    : "cursor-pointer bg-paper-solid text-on-bright-muted hover:bg-soft"
               }`;
             return (
               <>
@@ -386,7 +386,7 @@ export function ChatPanel() {
             type="button"
             title="다듬기를 끝내고 곡 추천으로 돌아가기"
             onClick={leaveRefine}
-            className="flex min-w-0 cursor-pointer items-center gap-[6px] rounded-pill bg-pink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-on-bright transition-colors rule hover:bg-gold"
+            className="flex min-w-0 cursor-pointer items-center gap-[6px] rounded-pill bg-accent px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-on-bright transition-colors rule hover:bg-soft"
           >
             <span className="truncate">{refine.label}</span>
             <span aria-hidden>×</span>
@@ -469,7 +469,7 @@ export function ChatPanel() {
           <button
             type="submit"
             disabled={!draft.trim()}
-            className="shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[12px] py-[8px] text-[8px] tracking-[0.6px] text-paper-solid transition-colors enabled:hover:bg-pink-bright disabled:cursor-default disabled:opacity-60"
+            className="shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[12px] py-[8px] text-[8px] tracking-[0.6px] text-paper-solid transition-colors enabled:hover:bg-accent-bright disabled:cursor-default disabled:opacity-60"
           >
             ENTER
           </button>

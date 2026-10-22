@@ -8,7 +8,9 @@ import { useSpotify } from "@/components/player/spotify-provider";
 import { clock } from "@/lib/time";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useSearchFocus } from "./search-focus";
-import { useSuggest } from "./search-suggest";
+import { useSuggest, SUGGEST_LIMIT } from "./search-suggest";
+import { followersLabel } from "@/lib/suggest";
+import { addRecent } from "@/lib/recent-searches";
 
 /**
  * Sits in the action bar, where the quality pills used to be.
@@ -59,7 +61,12 @@ export function SearchField() {
   const settled = pathname === "/search" && urlQuery === text.trim();
   const showing = open && text.trim().length > 0 && !settled;
   // the suggestion query trails the field by one completed character
-  const { items, loading } = useSuggest(showing ? settledText : "");
+  const { items, entities, loading } = useSuggest(showing ? settledText : "");
+  const { artist, albums } = entities;
+  // an artist or an album the typed name belongs to goes first; songs fill the rest of the six rows
+  const named = (artist ? 1 : 0) + albums.length;
+  const songs = items.slice(0, SUGGEST_LIMIT - named);
+  const empty = songs.length === 0 && named === 0;
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const submit = () => {
@@ -68,6 +75,7 @@ export function SearchField() {
     composing.current = false;
     setSettledText(text);
     setOpen(false);
+    addRecent(q);
     router.push(`/search?q=${encodeURIComponent(q)}`);
   };
 
@@ -122,7 +130,7 @@ export function SearchField() {
               type="button"
               onClick={submit}
               title="검색 결과 페이지로 (Enter)"
-              className="shrink-0 rounded-pill bg-ink px-[10px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid transition-colors hover:bg-pink-bright"
+              className="shrink-0 rounded-pill bg-ink px-[10px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid transition-colors hover:bg-accent-bright"
             >
               ENTER
             </button>
@@ -151,7 +159,7 @@ export function SearchField() {
              enough for the click that follows to land on a row */
           onMouseDown={() => blurTimer.current && clearTimeout(blurTimer.current)}
         >
-          {items.length === 0 ? (
+          {empty ? (
             <p className="flex items-center gap-[8px] px-[14px] py-[12px] text-[10px] text-muted">
               {loading ? (
                 <>
@@ -164,7 +172,63 @@ export function SearchField() {
             </p>
           ) : (
             <ul className="flex w-full flex-col">
-              {items.map((t) => (
+              {artist && (
+                <li className="rule-b">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      router.push(`/artist/${artist.id}`);
+                    }}
+                    className="flex h-[44px] w-full cursor-pointer items-center gap-[10px] px-[10px] text-left transition-colors hover:bg-soft"
+                  >
+                    <span className="relative size-[28px] shrink-0 overflow-hidden rounded-full bg-ink">
+                      {artist.image && (
+                        <Image src={artist.image} alt="" fill sizes="28px" className="object-cover" unoptimized />
+                      )}
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-px">
+                      <span className="truncate text-[12px] font-bold text-on-bright">{artist.name}</span>
+                      <span className="truncate text-[9px] text-on-bright-muted">
+                        {artist.followers > 0 ? `팔로워 ${followersLabel(artist.followers)}` : "아티스트"}
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-pill bg-ink px-[7px] py-[3px] text-[8px] text-paper-solid">
+                      아티스트
+                    </span>
+                  </button>
+                </li>
+              )}
+              {albums.map((a) => (
+                <li key={a.id} className="rule-b">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      router.push(`/album/${a.id}`);
+                    }}
+                    className="flex h-[44px] w-full cursor-pointer items-center gap-[10px] px-[10px] text-left transition-colors hover:bg-soft"
+                  >
+                    <span className="relative size-[28px] shrink-0 overflow-hidden rounded-[3px] bg-ink">
+                      {a.artwork && (
+                        <Image src={a.artwork} alt="" fill sizes="28px" className="object-cover" unoptimized />
+                      )}
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-px">
+                      <span className="truncate text-[12px] font-bold text-on-bright">{a.name}</span>
+                      <span className="truncate text-[9px] text-on-bright-muted">
+                        {[a.artist, a.releaseDate.slice(0, 4), a.totalTracks ? `${a.totalTracks}곡` : ""]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-pill bg-ink px-[7px] py-[3px] text-[8px] text-paper-solid">
+                      앨범
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {songs.map((t) => (
                 <li key={t.id} className="rule-b">
                   <button
                     type="button"
@@ -172,7 +236,7 @@ export function SearchField() {
                       setOpen(false);
                       void play({ uris: [t.uri] });
                     }}
-                    className="flex h-[44px] w-full cursor-pointer items-center gap-[10px] px-[10px] text-left transition-colors hover:bg-gold"
+                    className="flex h-[44px] w-full cursor-pointer items-center gap-[10px] px-[10px] text-left transition-colors hover:bg-soft"
                   >
                     <span className="relative size-[28px] shrink-0 overflow-hidden rounded-[3px] bg-ink">
                       {t.artwork && (
@@ -204,7 +268,7 @@ export function SearchField() {
           <button
             type="button"
             onClick={submit}
-            className="flex w-full items-center justify-between gap-[8px] bg-lime px-[14px] py-[10px] text-left text-[9px] tracking-[0.6px] transition-colors hover:bg-gold"
+            className="flex w-full items-center justify-between gap-[8px] bg-soft px-[14px] py-[10px] text-left text-[9px] tracking-[0.6px] transition-colors hover:bg-soft"
           >
             <span className="truncate">&ldquo;{text.trim()}&rdquo; 전체 검색 결과</span>
             <span aria-hidden className="shrink-0 text-[11px]">

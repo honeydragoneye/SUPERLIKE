@@ -48,7 +48,7 @@ function RoundButton({
       onClick={onClick}
       disabled={disabled}
       className={`flex shrink-0 items-center justify-center rounded-pill rule ${
-        pressed ? "bg-pink" : "bg-[rgba(237,235,228,0.82)]"
+        pressed ? "bg-accent" : "bg-[rgba(231,236,241,0.82)]"
       }${onClick && !disabled ? " cursor-pointer transition-colors" : ""}${
         disabled ? " opacity-40" : ""
       }`}
@@ -367,7 +367,7 @@ export function NowPlayingPanel() {
           {/* a failure replaces the artist line: the bar has no room for a third row */}
           <p
             className={`w-full truncate text-[9px] tracking-[0.6px] ${
-              error ? "text-pink-bright" : "text-on-dark-muted"
+              error ? "text-accent-bright" : "text-on-dark-muted"
             }`}
             title={error ?? meta}
           >
@@ -406,7 +406,7 @@ export function NowPlayingPanel() {
             disabled={!live && !stationActive}
             onClick={() => void toggleShuffle()}
             className={`transition-colors disabled:opacity-30 ${
-              shuffle ? "text-pink-bright" : "text-on-dark-muted"
+              shuffle ? "text-accent-bright" : "text-on-dark-muted"
             }`}
           >
             <TintedIcon name="shuffle" size={18} />
@@ -429,7 +429,7 @@ export function NowPlayingPanel() {
             onClick={() =>
               void (live ? toggle() : play(last?.uri ? { uris: [last.uri] } : {}))
             }
-            className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-pink rule disabled:opacity-60"
+            className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-accent rule disabled:opacity-60"
           >
             <Icon name={isPlaying ? "pause-lg" : "play-lg"} size={16} />
           </button>
@@ -451,7 +451,7 @@ export function NowPlayingPanel() {
             disabled={!live}
             onClick={() => void cycleRepeat()}
             className={`relative transition-colors disabled:opacity-30 ${
-              repeatMode > 0 ? "text-pink-bright" : "text-on-dark-muted"
+              repeatMode > 0 ? "text-accent-bright" : "text-on-dark-muted"
             }`}
           >
             <TintedIcon name="repeat" size={18} />
@@ -481,7 +481,7 @@ export function NowPlayingPanel() {
         >
           <div className="h-[5px] w-full overflow-hidden rounded-[3px] bg-muted">
             <div
-              className="h-full rounded-[3px] bg-pink transition-[width] duration-500"
+              className="h-full rounded-[3px] bg-accent transition-[width] duration-500"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -502,13 +502,13 @@ export function NowPlayingPanel() {
             setQueueOpen((v) => !v);
           }}
           className={`flex h-[30px] shrink-0 cursor-pointer items-center gap-[6px] rounded-pill px-[14px] text-[9px] tracking-[0.8px] transition-colors ${
-            queueOpen ? "bg-pink text-paper-solid" : "bg-white/12 text-on-dark"
+            queueOpen ? "bg-accent text-paper-solid" : "bg-white/12 text-on-dark"
           }`}
         >
           {stationActive && (
             <span
               className={`size-[6px] shrink-0 rounded-pill ${
-                stationBusy ? "animate-pulse bg-pink-bright" : "bg-mint"
+                stationBusy ? "animate-pulse bg-accent-bright" : "bg-mint"
               }`}
               aria-hidden
             />
@@ -532,8 +532,8 @@ export function NowPlayingPanel() {
           }}
           className={`flex h-[30px] shrink-0 items-center rounded-pill px-[12px] text-[10px] leading-none transition-colors rule disabled:opacity-40 ${
             lyricsOpen
-              ? "bg-pink-bright text-paper-solid"
-              : "bg-[rgba(237,235,228,0.82)] text-ink"
+              ? "bg-accent-bright text-paper-solid"
+              : "bg-[rgba(231,236,241,0.82)] text-ink"
           }`}
         >
           가사
@@ -591,7 +591,7 @@ export function NowPlayingPanel() {
               >
                 <span
                   className={`size-[6px] shrink-0 rounded-pill ${
-                    stationBusy ? "animate-pulse bg-pink-bright" : "bg-mint"
+                    stationBusy ? "animate-pulse bg-accent-bright" : "bg-mint"
                   }`}
                   aria-hidden
                 />

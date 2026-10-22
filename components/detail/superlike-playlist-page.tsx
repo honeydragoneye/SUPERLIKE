@@ -136,7 +136,7 @@ export function SuperlikePlaylistPage({ id }: { id: string }) {
                 setName(data.name);
                 setEditing(true);
               }}
-              className="shrink-0 whitespace-nowrap rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors hover:bg-gold rule"
+              className="shrink-0 whitespace-nowrap rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors hover:bg-soft rule"
             >
               이름 바꾸기
             </button>
@@ -151,7 +151,7 @@ export function SuperlikePlaylistPage({ id }: { id: string }) {
               }}
               onBlur={() => setConfirmDelete(false)}
               className={`shrink-0 whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors rule ${
-                confirmDelete ? "bg-pink-bright text-black" : "bg-paper hover:bg-gold"
+                confirmDelete ? "bg-accent-bright text-black" : "bg-paper hover:bg-soft"
               }`}
             >
               {confirmDelete ? "정말 삭제" : "삭제"}
@@ -183,7 +183,7 @@ export function SuperlikePlaylistPage({ id }: { id: string }) {
                   durationMs: first.durationMs,
                 })
               }
-              className="w-fit shrink-0 rounded-pill bg-pink px-[12px] py-[6px] text-[9px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-ink rule"
+              className="w-fit shrink-0 rounded-pill bg-accent px-[12px] py-[6px] text-[9px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-ink rule"
             >
               이 목록 기준으로 스테이션 시작
             </button>

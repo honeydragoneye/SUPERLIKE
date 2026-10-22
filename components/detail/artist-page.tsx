@@ -1,12 +1,14 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { StationButton } from "@/components/ui/station-button";
 import { clock } from "@/lib/time";
-import type { ArtistPage as Artist } from "@/lib/data";
+import type { ArtistPage as Artist, SearchArtist } from "@/lib/data";
+import { pickEntities } from "@/lib/suggest";
 import { DetailShell, DetailStatus } from "./detail-shell";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useDetail } from "./use-detail";
@@ -36,24 +38,44 @@ export function ArtistPage({ id }: { id: string }) {
       subtitle={facts.length ? facts.join(" · ") : undefined}
       aside={
         data?.topTracks.length ? (
-          <button
-            type="button"
-            onClick={() =>
-              void play({
-                uris: data.topTracks.map((t) => t.uri),
-                tracks: data.topTracks.map((t) => ({
-                  uri: t.uri,
-                  title: t.name,
+          <>
+            {/* the station starts from the artist's first top track, as the button at the foot of the page did */}
+            <button
+              type="button"
+              title={`${data.name} 기준으로 스테이션 시작`}
+              onClick={() =>
+                void startStation({
+                  id: data.topTracks[0].id,
+                  uri: data.topTracks[0].uri,
+                  name: data.topTracks[0].name,
                   artist: data.name,
-                  artwork: t.artwork,
-                  durationMs: t.durationMs,
-                })),
-              })
-            }
-            className="shrink-0 whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid"
-          >
-            인기곡 재생
-          </button>
+                  artwork: data.topTracks[0].artwork,
+                  durationMs: data.topTracks[0].durationMs,
+                })
+              }
+              className="shrink-0 whitespace-nowrap rounded-pill bg-accent px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid transition-colors hover:bg-ink"
+            >
+              스테이션 시작
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                void play({
+                  uris: data.topTracks.map((t) => t.uri),
+                  tracks: data.topTracks.map((t) => ({
+                    uri: t.uri,
+                    title: t.name,
+                    artist: data.name,
+                    artwork: t.artwork,
+                    durationMs: t.durationMs,
+                  })),
+                })
+              }
+              className="shrink-0 whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid"
+            >
+              인기곡 재생
+            </button>
+          </>
         ) : null
       }
     >
@@ -73,7 +95,7 @@ export function ArtistPage({ id }: { id: string }) {
                   {data.genres.slice(0, 6).map((g) => (
                     <span
                       key={g}
-                      className="shrink-0 rounded-pill bg-gold px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-ink rule"
+                      className="shrink-0 rounded-pill bg-soft px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-ink rule"
                     >
                       {g}
                     </span>
@@ -168,13 +190,7 @@ export function ArtistPage({ id }: { id: string }) {
             <Section title="비슷한 아티스트">
               <div className="flex w-full flex-wrap gap-[6px]">
                 {data.similar.map((s) => (
-                  <span
-                    key={s.name}
-                    title={`유사도 ${s.match.toFixed(2)}`}
-                    className="shrink-0 rounded-pill bg-paper px-[10px] py-[5px] text-[9px] rule"
-                  >
-                    {s.name}
-                  </span>
+                  <SimilarArtist key={s.name} name={s.name} match={s.match} />
                 ))}
               </div>
               <p className="text-[8px] tracking-[0.5px] text-on-bright-muted">
@@ -183,27 +199,61 @@ export function ArtistPage({ id }: { id: string }) {
             </Section>
           )}
 
-          {data.topTracks[0] && (
-            <button
-              type="button"
-              onClick={() =>
-                void startStation({
-                  id: data.topTracks[0].id,
-                  uri: data.topTracks[0].uri,
-                  name: data.topTracks[0].name,
-                  artist: data.name,
-                  artwork: data.topTracks[0].artwork,
-                  durationMs: data.topTracks[0].durationMs,
-                })
-              }
-              className="w-full shrink-0 rounded-pill bg-pink px-[14px] py-[8px] text-[9px] tracking-[0.7px] text-paper-solid transition-colors hover:bg-ink rule"
-            >
-              {data.name} 기준으로 스테이션 시작
-            </button>
-          )}
         </div>
       )}
     </DetailShell>
+  );
+}
+
+/**
+ * One of Last.fm's neighbours, as a button to that artist's page.
+ *
+ * Last.fm names the artist but has no Spotify id, so the id is looked up when
+ * the chip is pressed — one search, for the one the listener asked about,
+ * instead of eight in advance. The same name rules as the search panel pick
+ * the artist (an exact spelling over a near one, the best known of namesakes).
+ * When Spotify has no artist by that name the chip says so for a moment.
+ */
+function SimilarArtist({ name, match }: { name: string; match: number }) {
+  const router = useRouter();
+  const [state, setState] = useState<"idle" | "finding" | "missing">("idle");
+
+  const open = async () => {
+    if (state === "finding") return;
+    setState("finding");
+    try {
+      const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(name)}&type=artist&limit=6`, {
+        cache: "no-store",
+      });
+      const found = res.ok
+        ? pickEntities(name, ((await res.json()) as { artists?: SearchArtist[] }).artists ?? [], []).artist
+        : null;
+      if (found) {
+        // the page may stay mounted for the next artist, so the chip must not stay on "찾는 중…"
+        setState("idle");
+        return router.push(`/artist/${found.id}`);
+      }
+    } catch {
+      // treated like not found: the chip goes back to what it was
+    }
+    setState("missing");
+    setTimeout(() => setState("idle"), 3000);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => void open()}
+      disabled={state !== "idle"}
+      title={`유사도 ${match.toFixed(2)}`}
+      className={`shrink-0 cursor-pointer rounded-pill px-[10px] py-[5px] text-[9px] rule transition-colors ${
+        state === "missing"
+          ? "!border-dashed bg-paper text-on-bright-muted"
+          : "bg-paper enabled:hover:bg-soft"
+      } ${state === "finding" ? "opacity-60" : ""}`}
+    >
+      {state === "finding" ? "찾는 중…" : state === "missing" ? "찾지 못했어요" : name}
+    </button>
   );
 }
 
