@@ -20,12 +20,16 @@ export async function removeChat(id: string): Promise<void> {
   if (!res.ok) throw new Error(String(res.status));
 }
 
-/** Saves a conversation; `id` is the one it was saved as before, null the first time. Resolves to its id. */
-export async function saveChat(id: string | null, messages: ChatMessage[]): Promise<string> {
+/**
+ * Saves a conversation; `id` is the one it was saved as before, null the first time. Resolves to its id.
+ * `keepalive` lets the request outlive the page: it is what a refresh or a closing tab sends.
+ */
+export async function saveChat(id: string | null, messages: ChatMessage[], opts?: { keepalive?: boolean }): Promise<string> {
   const res = await fetch("/api/me/chats", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, messages }),
+    keepalive: opts?.keepalive,
   });
   if (!res.ok) throw new Error(String(res.status));
   return ((await res.json()) as { id: string }).id;

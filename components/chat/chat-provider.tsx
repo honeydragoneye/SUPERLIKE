@@ -12,7 +12,7 @@ import {
 } from "react";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useCustomTags } from "@/components/station/use-custom-tags";
-import { saveChat } from "@/lib/chat/history";
+import { loadChat, saveChat } from "@/lib/chat/history";
 import { snapshot as likedSnapshot } from "@/lib/likes";
 import { updateCustomDefinition } from "@/lib/station/custom-tags";
 import type { CustomMoodKey } from "@/lib/station/filter";
@@ -225,6 +225,26 @@ const writeHistory = historyShare.write;
  * A history that cannot be fetched leaves the likes alone rather than failing
  * the question.
  */
+const OPEN_KEY = "superlike:chat-open";
+
+/** Writes down whether the chat is open and which saved conversation it holds, for this tab only. */
+function rememberOpen(open: boolean, id: string | null): void {
+  try {
+    sessionStorage.setItem(OPEN_KEY, JSON.stringify({ open, id }));
+  } catch {
+    // storage blocked: a refresh then starts with the chat shut, and the conversation is still in the history
+  }
+}
+
+function recallOpen(): { open: boolean; id: string | null } | null {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(OPEN_KEY) ?? "null") as { open?: unknown; id?: unknown } | null;
+    return raw && raw.open === true && typeof raw.id === "string" ? { open: true, id: raw.id } : null;
+  } catch {
+    return null;
+  }
+}
+
 async function tasteForAgent(): Promise<{ title: string; artist: string }[] | undefined> {
   const seen = new Set<string>();
   const out: { title: string; artist: string }[] = [];
@@ -353,8 +373,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   /**
    * Saving the conversation, to the account, when it is put down.
    *
-   * "Put down" is the chat closing or NEW pressed (or another conversation
-   * being opened), so nothing is sent while the listener is typing. Each
+   * It is saved when a reply has finished, when the chat is closed or NEW is
+   * pressed (or another conversation is opened), and when the page is left —
+   * a refresh or a closing tab — so a conversation is never lost for being
+   * unfinished. Nothing is sent while the listener is typing. Each
    * conversation has a number; the id the database gave it is kept against that
    * number, so closing and carrying on saves over the same row instead of
    * adding a copy, and a save that lands after the chat has moved on to
@@ -368,9 +390,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const conversation = useRef(0);
   const savedIds = useRef(new Map<number, string | null>([[0, null]]));
   const savedKey = useRef("");
+  const openRef = useRef(false);
   const queue = useRef<Promise<void>>(Promise.resolve());
 
-  const persist = useCallback(() => {
+  const persist = useCallback((leaving = false) => {
     // a half-written reply is not saved; the next save has the whole of it
     const list = messagesRef.current.filter((m) => !(m.role === "assistant" && m.streaming));
     // a tag conversation is about a tag, not about songs: it is not kept
@@ -380,10 +403,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     savedKey.current = key;
 
     const mine = conversation.current;
+    if (leaving) {
+      // the page is going: nothing after this line is certain to run, so the request is sent now, and told to outlive the page
+      void saveChat(savedIds.current.get(mine) ?? null, list, { keepalive: true }).catch(() => undefined);
+      return;
+    }
     // one at a time, so a second save of the same conversation sees the id the first one got
     queue.current = queue.current.then(async () => {
       try {
-        savedIds.current.set(mine, await saveChat(savedIds.current.get(mine) ?? null, list));
+        const id = await saveChat(savedIds.current.get(mine) ?? null, list);
+        savedIds.current.set(mine, id);
+        if (conversation.current === mine) rememberOpen(openRef.current, id);
       } catch {
         // let the next close or NEW try again
         if (conversation.current === mine) savedKey.current = "";
@@ -398,10 +428,29 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     savedKey.current = key;
   }, []);
 
-  // closed, and nothing is being written: whatever is unsaved goes now (a reply that finished after the chat was closed too)
+  // nothing is being written: whatever is unsaved goes now — a reply that has finished, open or closed
   useEffect(() => {
-    if (!open && !busy) persist();
-  }, [open, busy, messages, persist]);
+    if (!busy) persist();
+  }, [busy, messages, persist]);
+
+  // the page is being left (a refresh, a closing tab): the last question, or a reply cut off, is saved too
+  useEffect(() => {
+    const leave = () => persist(true);
+    window.addEventListener("pagehide", leave);
+    return () => window.removeEventListener("pagehide", leave);
+  }, [persist]);
+
+  // which conversation is open in this tab, so a refresh can put it back (the tab's own memory: it goes with the tab)
+  const lastOpen = useRef<boolean | null>(null);
+  useEffect(() => {
+    openRef.current = open;
+    // only when it changed: on load nothing has changed yet, and what the last page left here is what a refresh reads back
+    // (development runs every effect twice, and a write on that second run would erase it)
+    if (lastOpen.current !== null && lastOpen.current !== open) {
+      rememberOpen(open, savedIds.current.get(conversation.current) ?? null);
+    }
+    lastOpen.current = open;
+  }, [open]);
 
   const setWidth = useCallback((px: number) => writeSavedWidth(clamp(px, maxChatWidth())), []);
 
@@ -708,6 +757,23 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     },
     [persist, beginConversation],
   );
+
+  // a refresh puts the conversation that was open back: it is read from the account, where it was saved
+  const restoredOnce = useRef(false);
+  useEffect(() => {
+    if (!connected || restoredOnce.current) return;
+    restoredOnce.current = true;
+    const last = recallOpen();
+    if (!last?.id) return;
+    const id = last.id;
+    void loadChat(id).then(
+      (saved) => {
+        restore(id, saved);
+        setOpen(true);
+      },
+      () => undefined,
+    );
+  }, [connected, restore]);
 
   const openRefine = useCallback((key: CustomMoodKey) => {
     // a new subject is a new conversation: what was said about songs is not about this tag
