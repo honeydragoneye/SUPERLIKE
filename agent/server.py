@@ -67,6 +67,16 @@ def _clean_sources(raw: object) -> list[str] | None:
 MAX_TASTE = 30
 
 
+def _clean_now(raw: object) -> dict | None:
+    """화면이 보낸 지금 듣는 곡. 없으면 None(기능을 끈 것), 재생 중이 아니면 {"playing": False}."""
+    if not isinstance(raw, dict):
+        return None
+    if raw.get("playing") is not True:
+        return {"playing": False}
+    fields = {k: " ".join(str(raw.get(k, "")).split())[:120] for k in ("title", "artist", "album")}
+    return {"playing": bool(fields["title"]), **fields}
+
+
 def _clean_taste(raw: object) -> list[dict] | None:
     """좋아요한 곡 목록. 모델의 지시문에 들어가므로 개수와 길이를 자르고 한 줄로 만든다."""
     if not isinstance(raw, list):
@@ -117,6 +127,7 @@ class Handler(BaseHTTPRequestHandler):
         refine = _clean_refine(body.get("refine"))
         sources = _clean_sources(body.get("sources"))
         taste = _clean_taste(body.get("taste"))
+        now_playing = _clean_now(body.get("nowPlaying"))
 
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -129,7 +140,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         try:
-            for event in run_agent(history, question, cards=True, refine=refine, sources=sources, taste=taste):
+            for event in run_agent(history, question, cards=True, refine=refine, sources=sources, taste=taste, now_playing=now_playing):
                 send(event)
         except (BrokenPipeError, ConnectionResetError):
             pass  # 브라우저가 창을 닫거나 대화를 끊었다

@@ -26,7 +26,7 @@ const SOURCES = ["lastfm", "wikipedia", "musicbrainz"] as const;
  * is the songs the listener liked, and is only there when they chose to share it.
  */
 export async function POST(request: NextRequest) {
-  let body: { question?: unknown; history?: unknown; refine?: unknown; sources?: unknown; taste?: unknown };
+  let body: { question?: unknown; history?: unknown; refine?: unknown; sources?: unknown; taste?: unknown; nowPlaying?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -65,12 +65,27 @@ export async function POST(request: NextRequest) {
       })
     : undefined;
 
+  // what is playing in the browser right now: sent when the listener has the feature on, and the model only
+  // sees it if it asks (the agent's now_playing tool). Anything but strings is dropped.
+  const np = body.nowPlaying as { playing?: unknown; title?: unknown; artist?: unknown; album?: unknown } | null | undefined;
+  const nowPlaying =
+    np && typeof np === "object"
+      ? np.playing === true && typeof np.title === "string"
+        ? {
+            playing: true,
+            title: np.title.slice(0, 120),
+            artist: typeof np.artist === "string" ? np.artist.slice(0, 120) : "",
+            album: typeof np.album === "string" ? np.album.slice(0, 120) : "",
+          }
+        : { playing: false }
+      : undefined;
+
   let upstream: Response;
   try {
     upstream = await fetch(`${AGENT_URL}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, history, refine, sources, taste }),
+      body: JSON.stringify({ question, history, refine, sources, taste, nowPlaying }),
       // closing the chat or sending the next question cuts the agent's work short too
       signal: request.signal,
       cache: "no-store",

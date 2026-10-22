@@ -45,6 +45,19 @@ _INFO = (
     "도구를 같은 이름으로 다시 부르지 않는다. 소개글은 영어라서 한국어로 옮겨 짧게 답한다. "
     "묻지 않은 소개를 되풀이하지 않는다.\n"
 )
+# 지금 듣는 곡을 가리키는 질문: 곡 이름을 모르니 먼저 now_playing으로 확인하고, 그 곡의 정보를 이어서 찾는다
+_NOW = (
+    "'이 곡', '지금 나오는 노래', '지금 듣는 곡', '이거 누구 노래야', '이 가수'처럼 지금 재생 중인 곡을 가리키는 "
+    "말에는 먼저 now_playing을 불러 어떤 곡인지 확인한 뒤, 그 곡으로 track_info나 artist_info, similar_to를 "
+    "이어서 부른다. 재생 중인 곡이 없다고 나오면 그렇게 말한다. 곡 이름을 직접 말했거나 분위기로 추천을 "
+    "묻는 말에는 now_playing을 부르지 않는다.\n"
+)
+# 사용자가 지금 듣는 곡 기능을 껐다: 도구가 없으니, 아는 척하지도 다른 출처를 권하지도 않는다
+_NO_NOW = (
+    "\n\n지금 사용자가 듣는 곡은 알 수 없다('이 곡', '지금 듣는 곡'을 묻는 말). 그런 질문에는 지금 듣는 곡을 볼 수 "
+    "없다고 한 문장으로 말하고, 챗봇 위쪽의 '지금 듣는 곡' 버튼을 켜면 알려 줄 수 있다고 안내한다. "
+    "request_source는 부르지 않는다."
+)
 # 화면에서는 가수·앨범 페이지로 가는 링크가 카드로 따로 붙는다: 글이 주소를 쓰거나 링크를 약속하지 않게 한다
 _LINK_CARDS = (
     "두 가수를 견주어 달라는 말에는 가수마다 artist_info를 불러서 둘 다 확인한다. 가수나 곡에 대해 답하면 "
@@ -77,7 +90,7 @@ SYSTEM_PROMPT_CARDS = _HEAD + _NAMED + _NAMED_CARDS + _INFO + _LINK_CARDS + _RUL
 
 # 곡을 틀거나 찾아 달라는 말, 추천해 달라는 말: 이런 요청은 도구로 확인해야 답할 수 있다
 _NEEDS_TOOL = re.compile(
-    r"(틀어|들려|재생|검색|찾아|추천|play|어떤 (밴드|가수|곡|노래)|누구|어느 나라|언제 (결성|데뷔|나왔)|앨범|대표곡|비슷한|같은 (노래|곡|가수|밴드)|설명|소개|에 대해|비교)",
+    r"(틀어|들려|재생|검색|찾아|추천|play|어떤 (밴드|가수|곡|노래)|누구|어느 나라|언제 (결성|데뷔|나왔)|앨범|대표곡|비슷한|같은 (노래|곡|가수|밴드)|설명|소개|에 대해|비교|이 (곡|노래|가수)|이거|지금 (듣|나오|재생)|방금)",
     re.IGNORECASE,
 )
 
@@ -166,6 +179,7 @@ def run_agent(
     refine: dict | None = None,
     sources: list[str] | None = None,
     taste: list[dict] | None = None,
+    now_playing: dict | None = None,
 ) -> Iterator[dict]:
     """이벤트를 하나씩 내보낸다.
 
@@ -184,6 +198,10 @@ def run_agent(
     taste는 사용자가 좋아요한 곡들([{"title", "artist"}], 최근순)이다. 사용자가 공유를 켰을 때만 오고,
     "내 취향에 맞는 곡"을 물으면 이걸 근거로 고르게 하며 이미 좋아요한 곡은 추천에서 뺀다.
 
+    now_playing은 화면이 보내 준 지금 듣는 곡({"playing", "title", "artist", "album"})이다. 사용자가 그 기능을 켰을
+    때만 오고, 모델에게는 처음부터 보여 주지 않는다: "이 곡"을 가리키는 질문에서 모델이 now_playing 도구를
+    부를 때에야 알려 준다(상관없는 질문이 지금 곡에 끌려가지 않고, 곡 정보가 필요할 때만 모델로 간다).
+
     cards=True는 곡을 화면이 카드로 보여 주는 경우다. 글이 곡 이름을 말하지 않으니 "곡을
     말했는가"로 하는 재시도 검사는 끄고, 글은 기준 설명만 쓰게 한다.
     """
@@ -191,7 +209,7 @@ def run_agent(
     if model is None and config.PROVIDER == "ollama":
         model = config.LOCAL_GENERATION_MODEL
     # sources: 사용자가 켜 둔 출처(lastfm·wikipedia·musicbrainz). None이면 전부. 다듬기 대화는 출처와 무관하다.
-    tools = TOOLS_REFINE if refine else tools_for(sources)
+    tools = TOOLS_REFINE if refine else tools_for(sources, now_playing is not None)
     system = (
         refine_prompt(refine["label"], refine["definition"])
         if refine
@@ -222,7 +240,9 @@ def run_agent(
         )
     # 사용자가 출처를 골라 다시 찾는 경우: 기억으로 답하지 못하게, 첫 호출에서 그 출처의 도구를 반드시 부르게 한다
     force_first = [t for name in picked for t in SOURCES[name] if t in tools] if not refine else []
-    session = Session()
+    session = Session(now_playing)
+    if not refine:
+        system += ("\n\n" + _NOW) if now_playing is not None else _NO_NOW
     if taste and not refine:
         system += _taste_prompt(taste)
         session.seen |= {f"{t['title']}|{t['artist']}".lower() for t in taste}

@@ -38,8 +38,10 @@ def _same_title(a: str, b: str) -> bool:
 class Session:
     """한 질문 동안 에이전트가 이미 본 곡. 같은 태그를 다시 불러도 같은 곡을 또 주지 않는다."""
 
-    def __init__(self) -> None:
+    def __init__(self, now_playing: dict | None = None) -> None:
         self.seen: set[str] = set()
+        # 사용자가 지금 듣는 곡 {"playing", "title", "artist", "album"}. 모델에게는 now_playing 도구를 부를 때만 보인다.
+        self.now_playing = now_playing
 
 
 # 한 번에 판정하는 후보 수. 판정기가 한 번에 처리하는 양(judge.BATCH)과 같게 둔다.
@@ -237,6 +239,24 @@ def artist_top_tracks(artist: str) -> dict:
         return {"found": False, "artist": artist, "tracks": []}
     name = (data["toptracks"].get("@attr") or {}).get("artist", artist)
     return {"found": True, "artist": name, "tracks": [{"title": t["name"], "artist": t["artist"]["name"]} for t in found]}
+
+
+def now_playing(session: Session) -> dict:
+    """사용자가 지금 듣고 있는 곡. 화면이 질문과 함께 보내 준 값이다.
+
+    "이 곡", "지금 나오는 노래"처럼 현재 곡을 가리키는 질문에서만 모델이 부른다. 아무것도 재생 중이
+    아니면 playing이 false다.
+    """
+    now = session.now_playing or {}
+    if not now.get("playing") or not now.get("title"):
+        return {"playing": False, "note": "지금 재생 중인 곡이 없습니다. 사용자에게 그렇게 말한다."}
+    return {
+        "playing": True,
+        "title": now["title"],
+        "artist": now.get("artist", ""),
+        "album": now.get("album", ""),
+        "note": "이 곡의 정보는 track_info(title, artist)로, 가수는 artist_info로 이어서 확인한다. 곡 내용을 아는 척하지 않는다.",
+    }
 
 
 def _seen_key(title: str, artist: str) -> str:
@@ -628,6 +648,21 @@ TOOLS: dict[str, dict] = {
         },
         "run": track_info,
     },
+    "now_playing": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "now_playing",
+                "description": (
+                    "사용자가 지금 듣고 있는 곡이 무엇인지 가져온다. '이 곡', '지금 나오는 노래', '이거 누구 노래야', "
+                    "'지금 듣는 가수'처럼 지금 재생 중인 곡을 가리키는 질문에서만 부른다. "
+                    "곡 이름을 직접 말한 질문이나 분위기로 추천을 묻는 질문에는 부르지 않는다."
+                ),
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        "run": now_playing,
+    },
     "artist_top_tracks": {
         "schema": {
             "type": "function",
@@ -774,7 +809,7 @@ TOOLS_REFINE = ("propose_definition",)
 DEFAULT_SOURCES = ["lastfm"]
 
 
-def tools_for(sources: list[str] | None) -> tuple[str, ...]:
+def tools_for(sources: list[str] | None, now_playing_on: bool = False) -> tuple[str, ...]:
     """쓸 수 있는 출처의 도구만. sources가 None이면 기본 출처(Last.fm).
 
     아직 안 쓴 출처가 남아 있으면 request_source도 준다: 답을 못 찾았을 때 모델이 지어내는 대신
@@ -783,6 +818,9 @@ def tools_for(sources: list[str] | None) -> tuple[str, ...]:
     used = DEFAULT_SOURCES if sources is None else sources
     on = {tool for name in used for tool in SOURCES.get(name, ())}
     names = tuple(t for t in TOOLS_CHAT if t in on)
+    # 지금 듣는 곡은 출처가 아니라 사용자의 화면에서 온다: 화면이 보내 준 때에만 모델에게 보인다
+    if now_playing_on:
+        names += ("now_playing",)
     return names + ("request_source",) if any(name not in used for name in SOURCES) else names
 
 
@@ -794,7 +832,7 @@ def call_tool(name: str, arguments: dict, session: Session, allowed: tuple[str, 
         return {"error": f"없는 도구: {name}"}
     try:
         run = tool["run"]
-        return run(session, **arguments) if name in ("top_tracks", "similar_to") else run(**arguments)
+        return run(session, **arguments) if name in ("top_tracks", "similar_to", "now_playing") else run(**arguments)
     except TypeError as e:
         return {"error": f"인자가 맞지 않습니다: {e}"}
     except Exception as e:  # 네트워크 실패 등 — 모델이 사용자에게 설명할 수 있도록 문구로 전달

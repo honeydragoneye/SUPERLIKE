@@ -382,7 +382,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
    * adding a copy, and a save that lands after the chat has moved on to
    * another conversation cannot attach its id to that one.
    */
-  const { connected } = useSpotify();
+  const { connected, now: playing } = useSpotify();
+  /**
+   * What is playing, read when a question is sent: a track that changed a second ago is already the one
+   * the next question is about. The agent keeps it to itself unless the question is about "this song".
+   */
+  const nowRef = useRef(playing);
+  useEffect(() => {
+    nowRef.current = playing;
+  }, [playing]);
   const connectedRef = useRef(false);
   useEffect(() => {
     connectedRef.current = connected;
@@ -503,6 +511,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             refine: refineRef.current && { label: refineRef.current.label, definition: refineRef.current.definition },
             sources: opts?.sources,
             taste,
+            nowPlaying: nowRef.current
+              ? { playing: true, title: nowRef.current.title, artist: nowRef.current.artist, album: nowRef.current.album }
+              : { playing: false },
           }),
           signal: controller.signal,
         });
@@ -521,7 +532,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               if (wanted) asked.set(String(event.name), wanted);
               patch(reply, (m) => {
                 m.status =
-                  event.name === "top_tracks"
+                  event.name === "now_playing"
+                    ? "지금 듣는 곡을 확인하는 중…"
+                    : event.name === "top_tracks"
                     ? "곡을 찾는 중…"
                     : event.name === "propose_definition"
                       ? "기준을 정리하는 중…"
