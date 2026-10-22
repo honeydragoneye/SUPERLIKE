@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { DetailShell } from "./detail-shell";
 
-type Phase = "idle" | "busy" | "done" | "error";
+export type Phase = "idle" | "busy" | "done" | "error";
 
-const MESSAGE: Record<string, string> = {
+export const MESSAGE: Record<string, string> = {
   mailed: "확인 메일을 보냈습니다. 메일의 링크를 열면 구독이 시작됩니다.",
   already: "이미 구독 중인 주소입니다.",
   wait: "방금 확인 메일을 보냈습니다. 1분 뒤에 다시 시도해 주세요.",
@@ -15,7 +15,7 @@ const MESSAGE: Record<string, string> = {
   database_off: "저장소가 설정되지 않았습니다.",
 };
 
-async function post(body: unknown): Promise<{ ok: boolean; key: string }> {
+export async function post(body: unknown): Promise<{ ok: boolean; key: string }> {
   try {
     const res = await fetch("/api/subscribe", {
       method: "POST",

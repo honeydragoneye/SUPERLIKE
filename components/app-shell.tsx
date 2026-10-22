@@ -11,6 +11,7 @@ import { useAccountSync } from "./player/use-account-sync";
 import { TagSpace } from "./tag-space";
 import { ArtistRail } from "./rail/artist-rail";
 import { AlbumRail } from "./rail/album-rail";
+import { IssuesRail } from "./rail/issues-rail";
 import { SearchRail } from "./rail/search-rail";
 import { Ticker } from "./ticker";
 import { TagFilter } from "./station/tag-filter";
@@ -97,6 +98,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const artistId = pathname.match(/^\/artist\/([^/]+)/)?.[1] ?? null;
   const albumId = pathname.match(/^\/album\/([^/]+)/)?.[1] ?? null;
   const searching = pathname === "/search";
+  const issues = pathname.startsWith("/issues");
   /** screens that own the whole width: nothing in the rail slot would earn it */
   const railless =
     pathname.startsWith("/mypage") ||
@@ -209,6 +211,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <AlbumRail id={albumId} />
               ) : searching ? (
                 <SearchRail />
+              ) : issues ? (
+                <IssuesRail />
               ) : (
                 <TagSpace />
               )}

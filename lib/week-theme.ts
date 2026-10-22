@@ -17,3 +17,11 @@ export function weekTheme(now: Date = new Date()): string {
   day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
   return NAMES[Math.floor(day.getTime() / WEEK_MS) % NAMES.length];
 }
+
+/** The mail's own colours per theme: a chip on the archive page wears the colour its issue was sent in. */
+export const THEME_COLORS: Record<string, { bg: string; ink: string }> = {
+  "A SIDE": { bg: "#ffe000", ink: "#111111" },
+  "LINER NOTES": { bg: "#f78fc0", ink: "#1a0a12" },
+  SPOTLIGHT: { bg: "#b8f26b", ink: "#0f1a00" },
+  "NIGHT SHIFT": { bg: "#1d1d2b", ink: "#ffffff" },
+};

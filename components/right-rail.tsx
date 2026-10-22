@@ -123,7 +123,12 @@ function EditorsPick() {
   );
 }
 
-function StayConnected() {
+/**
+ * The subscribe card. Where a screen can open the form beside it, `onSubscribe`
+ * is given and the button toggles that form (`open`); everywhere else it is a
+ * link to the subscribe screen.
+ */
+export function StayConnected({ onSubscribe, open = false }: { onSubscribe?: () => void; open?: boolean }) {
   // the mail rotates through four themes; this is the one going out this week
   const theme = weekTheme();
   return (
@@ -132,9 +137,11 @@ function StayConnected() {
       <div aria-hidden className="pointer-events-none absolute inset-[8px] border border-dashed border-ink/45" />
       <p className="text-[8px] tracking-[0.8px] text-accent-bright">{theme} · 이번 주 컨셉</p>
       <h2 className="mt-[6px] text-[24px] font-black leading-[28px] tracking-[-0.5px] text-on-bright">
-        금요일의
-        <br />
-        앨범 편지
+        <Link href="/issues" className="transition-colors hover:text-accent-bright">
+          금요일의
+          <br />
+          앨범 편지
+        </Link>
       </h2>
       <div
         aria-hidden
@@ -150,12 +157,23 @@ function StayConnected() {
         메일로 보내드립니다.
       </p>
       <div className="mt-[10px] flex items-center gap-[14px]">
-        <Link
-          href="/subscribe"
-          className="flex h-[28px] items-center whitespace-nowrap rounded-pill bg-ink px-[18px] text-[10px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-accent-bright"
-        >
-          신청하기 →
-        </Link>
+        {onSubscribe ? (
+          <button
+            type="button"
+            onClick={onSubscribe}
+            aria-expanded={open}
+            className={`flex h-[28px] items-center whitespace-nowrap rounded-pill px-[18px] text-[10px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-accent-bright ${open ? "bg-accent-bright" : "bg-ink"}`}
+          >
+            {open ? "접기 ↑" : "신청하기 →"}
+          </button>
+        ) : (
+          <Link
+            href="/subscribe"
+            className="flex h-[28px] items-center whitespace-nowrap rounded-pill bg-ink px-[18px] text-[10px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-accent-bright"
+          >
+            신청하기 →
+          </Link>
+        )}
         <span className="text-[8px] tracking-[0.6px] text-on-bright-muted">무료 · 언제든 해지</span>
       </div>
     </section>
