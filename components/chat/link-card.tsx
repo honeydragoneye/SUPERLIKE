@@ -136,6 +136,7 @@ function Card({
   image,
   target,
   loading,
+  search = false,
 }: {
   kind: ChatLink["kind"];
   title: string;
@@ -143,6 +144,8 @@ function Card({
   image: string | null;
   target: string | null;
   loading: boolean;
+  /** the page was not found: the button opens the search for the name instead, so the card is not a dead end */
+  search?: boolean;
 }) {
   const router = useRouter();
   const round = kind === "artist";
@@ -168,10 +171,14 @@ function Card({
         type="button"
         disabled={!target}
         onClick={() => target && router.push(target)}
-        aria-label={`${title} ${kind === "artist" ? "아티스트" : "앨범"} 페이지 열기`}
-        className="shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[10px] py-[5px] text-[8px] tracking-[0.6px] text-paper-solid transition-colors enabled:hover:bg-accent-bright disabled:cursor-default disabled:opacity-35"
+        aria-label={search ? `${title} 검색에서 열기` : `${title} ${kind === "artist" ? "아티스트" : "앨범"} 페이지 열기`}
+        className={
+          search
+            ? "rule shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-paper-solid px-[10px] py-[5px] text-[8px] tracking-[0.6px] text-on-bright transition-colors hover:bg-soft"
+            : "shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[10px] py-[5px] text-[8px] tracking-[0.6px] text-paper-solid transition-colors enabled:hover:bg-accent-bright disabled:cursor-default disabled:opacity-35"
+        }
       >
-        {loading ? "찾는 중…" : "페이지 열기 →"}
+        {loading ? "찾는 중…" : search ? "검색에서 열기 →" : "페이지 열기 →"}
       </button>
     </li>
   );
@@ -205,12 +212,16 @@ export function LinkCard({ link }: { link: ChatLink }) {
   const sub = !ready
     ? "Spotify를 연결하면 열 수 있어요"
     : state.kind === "missing"
-      ? "Superlike에서 찾지 못했어요"
+      ? "일치하는 페이지를 못 찾았어요"
       : found
         ? found.sub
         : link.kind === "artist"
           ? "아티스트"
           : "앨범";
+
+  // not found: the search for the name stands in for the page (an album is searched with its artist, as it was looked up)
+  const missing = ready && state.kind === "missing";
+  const searchFor = link.kind === "album" && link.artist ? `${link.name} ${link.artist}` : link.name;
 
   return (
     <>
@@ -219,8 +230,9 @@ export function LinkCard({ link }: { link: ChatLink }) {
         title={link.name}
         sub={sub}
         image={found?.image ?? null}
-        target={found ? `/${link.kind}/${found.id}` : null}
+        target={found ? `/${link.kind}/${found.id}` : missing ? `/search?q=${encodeURIComponent(searchFor)}` : null}
         loading={ready && state.kind === "loading"}
+        search={missing}
       />
       {maybe && (
         <>
