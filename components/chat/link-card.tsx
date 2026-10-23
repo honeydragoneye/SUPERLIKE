@@ -92,6 +92,9 @@ export function lookUpLink(link: ChatLink): Promise<Lookup> {
         return { found: found(best.a), maybe: other ? found(other.a) : null };
       };
       let lookup = rank((await search(link.name)).artists ?? []);
+      // 유 재 하: letters spaced apart are one name, and Spotify finds nothing for the spaced form
+      const joined = link.name.replace(/\s+/g, "");
+      if (!lookup.found && joined !== link.name && HANGUL.test(joined)) lookup = rank((await search(joined)).artists ?? []);
       // 검정치마 is not a name Spotify's search finds The Black Skirts by: ask with the other spelling too
       if (!lookup.found && link.alias) lookup = rank((await search(link.alias)).artists ?? []);
       if (!lookup.found) {
