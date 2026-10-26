@@ -60,6 +60,7 @@ _NO_NOW = (
 # 사용자의 화면이 대신 해 주는 동작(좋아요·재생·스테이션·플레이리스트): 도구는 제안만 하고 실행은 화면이 한다
 _ACTIONS = (
     "사용자가 동작을 시키면 맞는 도구를 한 번 부른다: 좋아요(like_track), 재생·멈춤·다음 곡(playback), "
+    "셔플·반복(player_mode), 재생 위치 옮기기(seek), 음량(volume), 곡 하나만 들려 달라는 말(play_one), "
     "스테이션 시작(start_station), 플레이리스트 만들기(make_playlist). 도구는 제안만 하고 실행은 화면이 하며, "
     "결과(좋아요에 담았는지, 만들었는지)는 화면에 카드로 따로 보인다. 그래서 글은 한두 문장으로 짧게 "
     "\"~할게요\"처럼 알리고, 이미 됐다고 단정하지 않으며 곡 목록을 되풀이하지 않는다. 플레이리스트는 사용자가 "
@@ -111,7 +112,7 @@ SYSTEM_PROMPT_CARDS = _HEAD + _NAMED + _NAMED_CARDS + _INFO + _LINK_CARDS + _RUL
 
 # 곡을 틀거나 찾아 달라는 말, 추천해 달라는 말: 이런 요청은 도구로 확인해야 답할 수 있다
 _NEEDS_TOOL = re.compile(
-    r"(틀어|들려|재생|검색|찾아|추천|play|어떤 (밴드|가수|곡|노래)|누구|어느 나라|언제 (결성|데뷔|나왔)|앨범|대표곡|비슷한|같은 (노래|곡|가수|밴드)|설명|소개|에 대해|비교|이 (곡|노래|가수)|이거|지금 (듣|나오|재생)|방금|좋아요|스테이션|플레이리스트|다음 곡|이전 곡|멈춰|일시정지)",
+    r"(틀어|들려|재생|검색|찾아|추천|play|어떤 (밴드|가수|곡|노래)|누구|어느 나라|언제 (결성|데뷔|나왔)|앨범|대표곡|비슷한|같은 (노래|곡|가수|밴드)|설명|소개|에 대해|비교|이 (곡|노래|가수)|이거|지금 (듣|나오|재생)|방금|좋아요|스테이션|플레이리스트|다음 곡|이전 곡|멈춰|일시정지|셔플|반복|볼륨|음량|소리|음소거|처음부터|한 곡만)",
     re.IGNORECASE,
 )
 
@@ -119,15 +120,37 @@ _NEEDS_TOOL = re.compile(
 # 짧고 분명한 동작 명령은 모델에게 맡기지 않고 코드가 알아본다. 작은 모델은 "다음 곡 넘겨줘"에 도구를 부르지 않고
 # "넘길게요"라고 말만 하거나 엉뚱한 동작을 말하는 일이 있다. 곡 이름을 말하는 명령은 이름을 읽어야 해서 모델에게 둔다.
 _NOT_COMMAND = re.compile(r"(추천|뭐|누구|어떤|알려|설명|왜|어때|좋아요\s*한|좋아한|\?)")
-_DIRECT: list[tuple[re.Pattern[str], str, dict]] = [
-    (re.compile(r"(일시\s*정지|멈춰|정지|잠깐\s*스톱|\bstop\b|\bpause\b)", re.IGNORECASE), "playback", {"command": "pause"}),
-    (re.compile(r"(다음\s*(곡|노래)|넘겨|스킵|\bskip\b|\bnext\b)", re.IGNORECASE), "playback", {"command": "next"}),
-    (re.compile(r"(이전\s*(곡|노래)|앞\s*(곡|노래)|\bprevious\b)", re.IGNORECASE), "playback", {"command": "previous"}),
-    (re.compile(r"^(다시|계속)\s*(재생|틀어)"), "playback", {"command": "resume"}),
-    (re.compile(r"^(지금\s*)?(듣는\s*|나오는\s*)?(곡|노래)?\s*(스테이션|라디오)\s*(만들|시작|틀)"), "start_station", {}),
-    (re.compile(r"(지금|이)\s*(듣는|나오는|재생\s*중인)?\s*(곡|노래|음악).*스테이션"), "start_station", {}),
-    (re.compile(r"(지금|이)\s*(듣는|나오는|재생\s*중인)?\s*(곡|노래|음악)?.*좋아요"), "like_track", {}),
-    (re.compile(r"^좋아요\s*(눌러|해|담아|누르)"), "like_track", {}),
+def _seconds(m: re.Match[str]) -> int:
+    """"1분 30초"에서 몇 초인지. 분이나 초 중 하나만 있어도 된다."""
+    return int(m.group("m") or 0) * 60 + int(m.group("s") or 0)
+
+
+_TIME = r"(?:(?P<m>\d+)\s*분)?\s*(?:(?P<s>\d+)\s*초)?"
+_DIRECT: list[tuple[re.Pattern[str], object]] = [
+    (re.compile(r"(음소거|뮤트|\bmute\b)\s*(해제|풀|끄|꺼)", re.IGNORECASE), ("volume", {"mute": "off"})),
+    (re.compile(r"(소리|볼륨|음량)\s*(다시\s*)?(켜|켤)|음소거\s*(풀|해제)"), ("volume", {"mute": "off"})),
+    (re.compile(r"(음소거|뮤트|\bmute\b)", re.IGNORECASE), ("volume", {"mute": "on"})),
+    (re.compile(r"(소리|볼륨|음량).*(줄여|낮춰|작게|내려)"), ("volume", {"change": -20})),
+    (re.compile(r"(소리|볼륨|음량).*(키워|높여|크게|올려)"), ("volume", {"change": 20})),
+    (re.compile(r"(소리|볼륨|음량)\s*(?:을|를)?\s*(\d{1,3})\s*(?:%|퍼센트|으로|로)?"), lambda m: ("volume", {"level": int(m.group(2))})),
+    (re.compile(r"(셔플|섞어).*(꺼|끄|해제|\boff\b)", re.IGNORECASE), ("player_mode", {"shuffle": "off"})),
+    (re.compile(r"(셔플|섞어)"), ("player_mode", {"shuffle": "on"})),
+    (re.compile(r"(반복).*(꺼|끄|해제|\boff\b)", re.IGNORECASE), ("player_mode", {"repeat": "off"})),
+    (re.compile(r"(전체|모두|플레이리스트)\s*반복"), ("player_mode", {"repeat": "all"})),
+    (re.compile(r"(한\s*곡|이\s*(곡|노래)\s*(만)?)\s*(계속\s*)?(반복|리핏|repeat)", re.IGNORECASE), ("player_mode", {"repeat": "one"})),
+    (re.compile(r"(처음부터|처음으로|맨\s*앞)"), ("seek", {"seconds": 0, "relative": False})),
+    (re.compile(r"(?:맨\s*뒤|끝)\s*(?:에서)?\s*"+_TIME+r"\s*전"), lambda m: ("seek", {"seconds": -_seconds(m), "relative": False}) if _seconds(m) else None),
+    (re.compile(_TIME + r"\s*(뒤로|되감|전으로)"), lambda m: ("seek", {"seconds": -_seconds(m), "relative": True}) if _seconds(m) else None),
+    (re.compile(_TIME + r"\s*(앞으로|건너뛰|뒤\s*로\s*건너)"), lambda m: ("seek", {"seconds": _seconds(m), "relative": True}) if _seconds(m) else None),
+    (re.compile(_TIME + r"\s*(으로|로)\s*(이동|가|넘어|옮겨|점프)"), lambda m: ("seek", {"seconds": _seconds(m), "relative": False}) if _seconds(m) else None),
+    (re.compile(r"(일시\s*정지|멈춰|정지|잠깐\s*스톱|\bstop\b|\bpause\b)", re.IGNORECASE), ("playback", {"command": "pause"})),
+    (re.compile(r"(다음\s*(곡|노래)|넘겨|스킵|\bskip\b|\bnext\b)", re.IGNORECASE), ("playback", {"command": "next"})),
+    (re.compile(r"(이전\s*(곡|노래)|앞\s*(곡|노래)|\bprevious\b)", re.IGNORECASE), ("playback", {"command": "previous"})),
+    (re.compile(r"^(다시|계속)\s*(재생|틀어)"), ("playback", {"command": "resume"})),
+    (re.compile(r"^(지금\s*)?(듣는\s*|나오는\s*)?(곡|노래)?\s*(스테이션|라디오)\s*(만들|시작|틀)"), ("start_station", {})),
+    (re.compile(r"(지금|이)\s*(듣는|나오는|재생\s*중인)?\s*(곡|노래|음악).*스테이션"), ("start_station", {})),
+    (re.compile(r"(지금|이)\s*(듣는|나오는|재생\s*중인)?\s*(곡|노래|음악)?.*좋아요"), ("like_track", {})),
+    (re.compile(r"^좋아요\s*(눌러|해|담아|누르)"), ("like_track", {})),
 ]
 
 
@@ -136,9 +159,15 @@ def _direct_action(question: str) -> tuple[str, dict] | None:
     q = " ".join(question.split())
     if len(q) > 28 or _NOT_COMMAND.search(q):
         return None
-    for pattern, name, args in _DIRECT:
-        if pattern.search(q):
-            return name, dict(args)
+    for pattern, target in _DIRECT:
+        m = pattern.search(q)
+        if not m:
+            continue
+        found = target(m) if callable(target) else target
+        if found is None:
+            continue
+        name, args = found
+        return name, dict(args)
     return None
 
 
@@ -382,7 +411,7 @@ def run_agent(
                         "content": (
                             "도구를 먼저 불러서 확인한 뒤에 답해줘. 곡 이름을 말한 거면 find_track, "
                             "분위기나 장르를 말한 거면 top_tracks, '~같은 곡'이면 similar_to, 좋아요·재생·스테이션·플레이리스트를 "
-                            "시킨 거면 like_track, playback, start_station, make_playlist, 가수나 곡에 대한 질문이면 "
+                            "시킨 거면 like_track, playback, player_mode, seek, volume, play_one, start_station, make_playlist, 가수나 곡에 대한 질문이면 "
                             "artist_info, track_info, albums, wiki_summary 같은 정보 도구를 불러. "
                             "필요한 도구가 안 보이거나 도구로 찾고도 답이 없을 때만 request_source로 "
                             "사용자가 다른 출처를 고르게 해."

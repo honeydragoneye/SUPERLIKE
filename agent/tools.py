@@ -462,6 +462,52 @@ def make_playlist(session: Session, name: str, source: str = "shown") -> dict:
     return _action("playlist", "화면이 이름과 곡을 보여 주고 사용자가 만들기를 눌러야 만들어진다. 곡 목록을 글로 나열하지 말고, 만들어 볼지 물어본다.", name=name, source=source)
 
 
+def player_mode(session: Session, shuffle: str = "", repeat: str = "") -> dict:
+    """셔플과 반복을 정한다: shuffle은 on/off, repeat는 off(반복 없음)/all(전체 반복)/one(한 곡 반복)."""
+    shuffle, repeat = _line(shuffle, 10).lower(), _line(repeat, 10).lower()
+    if shuffle not in ("", "on", "off"):
+        return {"error": "shuffle은 on 또는 off여야 한다"}
+    if repeat not in ("", "off", "all", "one"):
+        return {"error": "repeat는 off, all, one 중 하나여야 한다"}
+    if not shuffle and not repeat:
+        return {"error": "shuffle이나 repeat 중 하나는 있어야 한다"}
+    return _action("mode", "화면이 바로 바꾸고 플레이어 카드를 보여 준다. 짧게 알린다.", shuffle=shuffle, repeat=repeat)
+
+
+def seek(session: Session, seconds: float = 0, relative: bool = False) -> dict:
+    """지금 곡의 재생 위치를 옮긴다. relative가 false면 seconds는 곡 처음부터의 위치(처음부터는 0, 음수면 곡 끝에서부터), true면 지금 위치에서 더하는 초(뒤로 감기는 음수)."""
+    try:
+        sec = int(max(-36000, min(36000, float(seconds))))
+    except (TypeError, ValueError):
+        return {"error": "seconds는 숫자여야 한다"}
+    return _action("seek", "화면이 바로 옮기고 플레이어 카드를 보여 준다. 짧게 알린다.", seconds=sec, relative=bool(relative))
+
+
+def volume(session: Session, level: float | None = None, change: float | None = None, mute: str = "") -> dict:
+    """음량을 정한다: level은 0~100으로 맞추기, change는 지금보다 더하거나 뺄 값(예: -20), mute는 on/off."""
+    mute = _line(mute, 10).lower()
+    if mute not in ("", "on", "off"):
+        return {"error": "mute는 on 또는 off여야 한다"}
+    fields: dict = {"mute": mute}
+    for key, value, lo, hi in (("level", level, 0, 100), ("change", change, -100, 100)):
+        if value is not None:
+            try:
+                fields[key] = int(max(lo, min(hi, float(value))))
+            except (TypeError, ValueError):
+                return {"error": f"{key}는 숫자여야 한다"}
+    if len(fields) == 1 and not mute:
+        return {"error": "level, change, mute 중 하나는 있어야 한다"}
+    return _action("volume", "화면이 바로 바꾸고 음량 카드를 보여 준다. 짧게 알린다.", **fields)
+
+
+def play_one(session: Session, title: str, artist: str = "") -> dict:
+    """곡 하나만 들려 달라는 말('한 곡만 틀어줘')을 받는다. 계속 반복할지 한 번만 들을지는 사용자가 카드에서 고른다."""
+    title, artist = _line(title), _line(artist)
+    if not title:
+        return {"error": "곡 제목(title)이 필요하다. 이름을 모르면 find_track으로 먼저 찾는다."}
+    return _action("choice", "화면이 '이 곡만 계속'과 '한 번만 듣기' 두 버튼을 보여 주고 사용자가 고른다. 고르라고 짧게 말하고, 아직 재생하지 않았다고 알린다.", title=title, artist=artist)
+
+
 def _seen_key(title: str, artist: str) -> str:
     return f"{title}|{artist}".lower()
 
@@ -966,6 +1012,89 @@ TOOLS: dict[str, dict] = {
         },
         "run": make_playlist,
     },
+    "player_mode": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "player_mode",
+                "description": (
+                    "셔플과 반복을 정한다. '셔플 켜줘/꺼줘', '한 곡 반복', '전체 반복', '반복 꺼줘'에 부른다. "
+                    "shuffle은 on/off, repeat는 off(반복 없음)/all(전체)/one(한 곡). 바꾸지 않을 쪽은 비운다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "shuffle": {"type": "string", "enum": ["on", "off"]},
+                        "repeat": {"type": "string", "enum": ["off", "all", "one"]},
+                    },
+                },
+            },
+        },
+        "run": player_mode,
+    },
+    "seek": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "seek",
+                "description": (
+                    "지금 곡의 재생 위치를 옮긴다. '1분 30초로 가줘'는 seconds=90, relative=false. '처음부터'는 seconds=0, relative=false. "
+                    "'30초 앞으로(건너뛰기)'는 seconds=30, relative=true, '30초 뒤로(되감기)'는 seconds=-30, relative=true. '끝에서 30초 전'은 seconds=-30, relative=false(음수면 곡 끝에서부터)."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "seconds": {"type": "number", "description": "초. relative가 false면 곡 처음부터의 위치(음수면 곡 끝에서부터), true면 더하는 값(되감기는 음수)"},
+                        "relative": {"type": "boolean", "description": "지금 위치에서 더하는 값이면 true"},
+                    },
+                    "required": ["seconds"],
+                },
+            },
+        },
+        "run": seek,
+    },
+    "volume": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "volume",
+                "description": (
+                    "음량을 바꾼다. '볼륨 30으로'는 level=30, '소리 줄여줘'는 change=-20, '소리 키워줘'는 change=20, "
+                    "'음소거해줘'는 mute=on, '음소거 풀어줘'는 mute=off."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "level": {"type": "number", "description": "0~100으로 맞출 음량"},
+                        "change": {"type": "number", "description": "지금 음량에 더할 값(줄이기는 음수)"},
+                        "mute": {"type": "string", "enum": ["on", "off"]},
+                    },
+                },
+            },
+        },
+        "run": volume,
+    },
+    "play_one": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "play_one",
+                "description": (
+                    "'한 곡만 틀어줘', '이 노래 하나만 들을래'처럼 곡 하나만 들려 달라는 말에 부른다. 곧바로 재생하지 않고 사용자가 "
+                    "'이 곡만 계속'(한 곡 반복)과 '한 번만 듣기' 중에서 고른다. 그냥 '틀어줘'에는 playback의 play를 쓴다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "곡 제목"},
+                        "artist": {"type": "string", "description": "가수(알면)"},
+                    },
+                    "required": ["title"],
+                },
+            },
+        },
+        "run": play_one,
+    },
     "artist_top_tracks": {
         "schema": {
             "type": "function",
@@ -1114,7 +1243,7 @@ DEFAULT_SOURCES = ["lastfm"]
 
 
 # 사용자의 화면이 대신 해 주는 동작. 로그인(Spotify 연결)한 사용자에게만 준다.
-ACTION_TOOLS = ("like_track", "playback", "start_station", "make_playlist")
+ACTION_TOOLS = ("like_track", "playback", "player_mode", "seek", "volume", "play_one", "start_station", "make_playlist")
 
 
 def tools_for(sources: list[str] | None, now_playing_on: bool = False, can_act: bool = False, station_on: bool = False) -> tuple[str, ...]:
