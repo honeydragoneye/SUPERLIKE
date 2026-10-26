@@ -1,21 +1,19 @@
 /**
- * Playback control on a Premium account, plus the read scopes the home screen
- * needs. Adding a scope invalidates existing grants, so they are requested
- * together to keep re-consent to a single round trip.
+ * What the app actually calls, and no more: the Web Playback SDK (which asks for
+ * the account's email and plan too), controlling that player, and the recent plays
+ * the home screen and the listening stats are built from. Hearts and playlists
+ * live in Superlike's own database, so the library and playlist scopes are not
+ * asked for. Adding a scope invalidates existing grants, so a new one is added
+ * together with the code that needs it.
  */
 export const SPOTIFY_SCOPES = [
   // Web Playback SDK
   "streaming",
   "user-read-email",
   "user-read-private",
-  "user-read-playback-state",
+  // play, pause, seek, queue, shuffle, repeat, move playback to the web player
   "user-modify-playback-state",
-  // library reads
   "user-read-recently-played",
-  "user-top-read",
-  "user-library-read",
-  "playlist-read-private",
-  "playlist-read-collaborative",
 ].join(" ");
 
 export const COOKIE = {
