@@ -1,5 +1,6 @@
 "use client";
 
+import { useHydrated } from "@/components/ui/use-hydrated";
 import { useSpotify } from "./spotify-provider";
 
 /** The speaker, with as many waves as the level has; muted wears a cross instead. */
@@ -25,7 +26,12 @@ const wavesOf = (volume: number): 0 | 1 | 2 => (volume === 0 ? 0 : volume < 0.5 
  * which also lifts a mute. The level is the listener's own and is kept.
  */
 export function VolumeControl({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  const { volume, muted, setVolume, toggleMute } = useSpotify();
+  const live = useSpotify();
+  // the saved level is the browser's own: until hydration is done, show what the server wrote
+  const hydrated = useHydrated();
+  const volume = hydrated ? live.volume : 0.5;
+  const muted = hydrated && live.muted;
+  const { setVolume, toggleMute } = live;
   const percent = Math.round(volume * 100);
   const silent = muted || volume === 0;
   const label = muted ? "음소거 중 · 누르면 음량 조절" : `음량 ${percent}%`;
