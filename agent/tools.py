@@ -10,6 +10,7 @@ from __future__ import annotations
 import html
 import random
 import re
+import uuid
 import threading
 import time
 from difflib import SequenceMatcher
@@ -38,10 +39,12 @@ def _same_title(a: str, b: str) -> bool:
 class Session:
     """한 질문 동안 에이전트가 이미 본 곡. 같은 태그를 다시 불러도 같은 곡을 또 주지 않는다."""
 
-    def __init__(self, now_playing: dict | None = None) -> None:
+    def __init__(self, now_playing: dict | None = None, station: dict | None = None) -> None:
         self.seen: set[str] = set()
         # 사용자가 지금 듣는 곡 {"playing", "title", "artist", "album"}. 모델에게는 now_playing 도구를 부를 때만 보인다.
         self.now_playing = now_playing
+        # 화면의 스테이션 {"active", "seed", "tracks": [{"title", "artist", "position"}]}. station_info 도구를 부를 때만 보인다.
+        self.station = station
 
 
 # 한 번에 판정하는 후보 수. 판정기가 한 번에 처리하는 양(judge.BATCH)과 같게 둔다.
@@ -378,6 +381,85 @@ def now_playing(session: Session) -> dict:
         "album": now.get("album", ""),
         "note": "이 곡의 정보는 track_info(title, artist)로, 가수는 artist_info로 이어서 확인한다. 곡 내용을 아는 척하지 않는다.",
     }
+
+
+def station_info(session: Session) -> dict:
+    """사용자의 스테이션에 든 곡. 화면이 질문과 함께 보내 준 값이다.
+
+    "스테이션에 어떤 곡이 있어?", "다음에 나오는 곡", "스테이션 곡 중에 ~"처럼 스테이션을 가리키는 질문에서 모델이
+    부른다. 곡 하나에 대한 자세한 질문은 이 목록의 제목·가수로 track_info나 artist_info를 이어서 부른다.
+    """
+    st = session.station or {}
+    if not st.get("active") or not st.get("tracks"):
+        return {"active": False, "note": "지금 만들어 둔 스테이션이 없습니다. 사용자에게 그렇게 말한다."}
+    return {
+        "active": True,
+        "seed": st.get("seed"),
+        "tracks": st["tracks"],
+        "note": "position이 playing인 곡이 지금 나오는 곡, next는 곧 나올 곡이다. 곡 하나의 자세한 내용은 그 제목과 가수로 track_info나 artist_info를 불러 확인한다. 목록에 없는 곡은 말하지 않는다.",
+    }
+
+
+# 화면이 대신 하는 동작. 에이전트는 아무것도 직접 하지 않고, 무엇을 하자는 제안만 돌려준다:
+# 로그인한 사용자의 브라우저만 좋아요·재생·플레이리스트에 닿을 수 있다.
+def _action(kind: str, note: str, **fields: object) -> dict:
+    return {"action": {"id": uuid.uuid4().hex[:8], "kind": kind, **fields}, "note": note}
+
+
+def _line(value: object, limit: int = 120) -> str:
+    return " ".join(str(value or "").split())[:limit]
+
+
+def like_track(session: Session, title: str = "", artist: str = "") -> dict:
+    """곡에 좋아요를 누른다. 제목을 말하지 않으면 지금 듣는 곡이다."""
+    title, artist = _line(title), _line(artist)
+    if title:
+        return _action("like", "화면이 이 곡에 좋아요를 누르고 취소 버튼을 보여 준다. 짧게 알린다.", source="named", title=title, artist=artist)
+    now = session.now_playing or {}
+    if not now.get("playing"):
+        return {"error": "지금 재생 중인 곡이 없어서 좋아요를 누를 곡을 모른다. 곡을 재생한 뒤에 다시 말해 달라고 한다."}
+    return _action("like", "화면이 지금 듣는 곡에 좋아요를 누르고 취소 버튼을 보여 준다. 짧게 알린다.", source="now", title=now["title"], artist=now.get("artist", ""))
+
+
+_COMMANDS = ("play", "pause", "resume", "next", "previous")
+
+
+def playback(session: Session, command: str, title: str = "", artist: str = "") -> dict:
+    """재생을 조작한다: 곡 틀기(play), 일시정지(pause), 다시 재생(resume), 다음 곡(next), 이전 곡(previous)."""
+    command = _line(command, 20).lower()
+    if command not in _COMMANDS:
+        return {"error": f"command는 {', '.join(_COMMANDS)} 중 하나여야 한다"}
+    title, artist = _line(title), _line(artist)
+    if command == "play" and not title:
+        return {"error": "틀 곡의 제목(title)이 필요하다. 이름을 모르면 find_track으로 먼저 찾는다."}
+    return _action("playback", "화면이 바로 실행한다. 짧게 알린다.", command=command, title=title, artist=artist)
+
+
+def start_station(session: Session, title: str = "", artist: str = "") -> dict:
+    """곡이나 가수를 기준으로 스테이션을 시작한다. 아무것도 말하지 않으면 지금 듣는 곡이 기준이다."""
+    title, artist = _line(title), _line(artist)
+    if title:
+        return _action("station", "화면이 스테이션을 만들기 시작한다(10~20초). 시작한다고만 짧게 알린다.", source="named", title=title, artist=artist)
+    if artist:
+        return _action("station", "화면이 그 가수의 대표곡으로 스테이션을 만들기 시작한다(10~20초). 시작한다고만 짧게 알린다.", source="artist", title="", artist=artist)
+    now = session.now_playing or {}
+    if not now.get("playing"):
+        return {"error": "지금 재생 중인 곡이 없어서 기준을 모른다. 곡이나 가수를 말해 달라고 한다."}
+    return _action("station", "화면이 지금 듣는 곡으로 스테이션을 만들기 시작한다(10~20초). 시작한다고만 짧게 알린다.", source="now", title=now["title"], artist=now.get("artist", ""))
+
+
+_PLAYLIST_SOURCES = ("shown", "station", "now")
+
+
+def make_playlist(session: Session, name: str, source: str = "shown") -> dict:
+    """플레이리스트를 만들자고 제안한다. 곡은 화면이 고른다: 대화에서 보여 준 곡(shown), 스테이션의 곡(station), 지금 듣는 곡(now)."""
+    name = _line(name, 60)
+    source = _line(source, 20).lower() or "shown"
+    if not name:
+        return {"error": "플레이리스트 이름(name)이 필요하다. 사용자가 말하지 않았으면 곡 분위기에 맞는 짧은 이름을 붙인다."}
+    if source not in _PLAYLIST_SOURCES:
+        return {"error": f"source는 {', '.join(_PLAYLIST_SOURCES)} 중 하나여야 한다"}
+    return _action("playlist", "화면이 이름과 곡을 보여 주고 사용자가 만들기를 눌러야 만들어진다. 곡 목록을 글로 나열하지 말고, 만들어 볼지 물어본다.", name=name, source=source)
 
 
 def _seen_key(title: str, artist: str) -> str:
@@ -785,6 +867,105 @@ TOOLS: dict[str, dict] = {
         },
         "run": now_playing,
     },
+    "station_info": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "station_info",
+                "description": (
+                    "사용자가 만들어 둔 스테이션에 어떤 곡이 있는지 가져온다. '스테이션에 어떤 곡 있어?', '다음에 나오는 곡', "
+                    "'스테이션 곡 중에 ~', '이 스테이션은 뭘 기준으로 만들었어?'처럼 스테이션을 가리키는 질문에서만 부른다. "
+                    "그 곡 중 하나의 자세한 내용은 돌려받은 제목과 가수로 track_info나 artist_info를 이어서 부른다."
+                ),
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        "run": station_info,
+    },
+    "like_track": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "like_track",
+                "description": (
+                    "곡에 좋아요(하트)를 누른다. '지금 듣는 노래 좋아요 눌러줘', '이 곡 좋아요'면 인자 없이 부르고, "
+                    "곡 이름을 말했으면 title과 artist를 넣는다. 좋아요를 누르거나 취소해 달라는 말에만 부른다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "곡 제목. 지금 듣는 곡이면 비운다."},
+                        "artist": {"type": "string", "description": "가수. 지금 듣는 곡이면 비운다."},
+                    },
+                },
+            },
+        },
+        "run": like_track,
+    },
+    "playback": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "playback",
+                "description": (
+                    "재생을 조작한다. command는 play(곡 틀기: title 필수), pause(일시정지), resume(다시 재생), "
+                    "next(다음 곡), previous(이전 곡). '멈춰', '다음 곡', 'Everlong 틀어줘' 같은 말에 부른다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "command": {"type": "string", "enum": list(_COMMANDS)},
+                        "title": {"type": "string", "description": "command가 play일 때 틀 곡의 제목"},
+                        "artist": {"type": "string", "description": "play일 때 가수(알면)"},
+                    },
+                    "required": ["command"],
+                },
+            },
+        },
+        "run": playback,
+    },
+    "start_station": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "start_station",
+                "description": (
+                    "곡이나 가수를 기준으로 스테이션(비슷한 곡이 이어지는 재생)을 시작한다. '지금 듣는 노래로 스테이션 만들어줘'면 "
+                    "인자 없이, '아이유 스테이션'이면 artist만, 곡을 말했으면 title과 artist를 넣는다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "기준이 될 곡 제목. 가수나 지금 듣는 곡이면 비운다."},
+                        "artist": {"type": "string", "description": "기준이 될 가수"},
+                    },
+                },
+            },
+        },
+        "run": start_station,
+    },
+    "make_playlist": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "make_playlist",
+                "description": (
+                    "플레이리스트를 만들자고 제안한다. '플레이리스트 만들어줘', '이 곡들 담아줘'에 부른다. 곡은 화면이 고른다: "
+                    "shown(방금 대화에서 보여 준 곡, 기본), station(스테이션의 곡), now(지금 듣는 곡). 사용자가 이름을 말하지 "
+                    "않았으면 분위기에 맞는 짧은 이름을 name에 붙인다. 사용자가 만들기를 눌러야 만들어진다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "플레이리스트 이름"},
+                        "source": {"type": "string", "enum": list(_PLAYLIST_SOURCES), "description": "담을 곡의 출처"},
+                    },
+                    "required": ["name"],
+                },
+            },
+        },
+        "run": make_playlist,
+    },
     "artist_top_tracks": {
         "schema": {
             "type": "function",
@@ -932,7 +1113,11 @@ TOOLS_REFINE = ("propose_definition",)
 DEFAULT_SOURCES = ["lastfm"]
 
 
-def tools_for(sources: list[str] | None, now_playing_on: bool = False) -> tuple[str, ...]:
+# 사용자의 화면이 대신 해 주는 동작. 로그인(Spotify 연결)한 사용자에게만 준다.
+ACTION_TOOLS = ("like_track", "playback", "start_station", "make_playlist")
+
+
+def tools_for(sources: list[str] | None, now_playing_on: bool = False, can_act: bool = False, station_on: bool = False) -> tuple[str, ...]:
     """쓸 수 있는 출처의 도구만. sources가 None이면 기본 출처(Last.fm).
 
     아직 안 쓴 출처가 남아 있으면 request_source도 준다: 답을 못 찾았을 때 모델이 지어내는 대신
@@ -944,6 +1129,11 @@ def tools_for(sources: list[str] | None, now_playing_on: bool = False) -> tuple[
     # 지금 듣는 곡은 출처가 아니라 사용자의 화면에서 온다: 화면이 보내 준 때에만 모델에게 보인다
     if now_playing_on:
         names += ("now_playing",)
+    # 스테이션의 곡도 화면에서 온다. 동작은 사용자의 계정이 있어야 해서 연결한 사용자에게만 준다
+    if station_on:
+        names += ("station_info",)
+    if can_act:
+        names += ACTION_TOOLS
     return names + ("request_source",) if any(name not in used for name in SOURCES) else names
 
 
@@ -955,7 +1145,7 @@ def call_tool(name: str, arguments: dict, session: Session, allowed: tuple[str, 
         return {"error": f"없는 도구: {name}"}
     try:
         run = tool["run"]
-        return run(session, **arguments) if name in ("top_tracks", "similar_to", "now_playing") else run(**arguments)
+        return run(session, **arguments) if name in ("top_tracks", "similar_to", "now_playing", "station_info", *ACTION_TOOLS) else run(**arguments)
     except TypeError as e:
         return {"error": f"인자가 맞지 않습니다: {e}"}
     except Exception as e:  # 네트워크 실패 등 — 모델이 사용자에게 설명할 수 있도록 문구로 전달

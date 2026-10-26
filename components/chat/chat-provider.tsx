@@ -13,6 +13,7 @@ import {
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useCustomTags } from "@/components/station/use-custom-tags";
 import { loadChat, saveChat } from "@/lib/chat/history";
+import { actionFrom, cancelAction, makePlaylist, startAction, undoAction, type ActionEnv, type ChatAction } from "./chat-actions";
 import { snapshot as likedSnapshot } from "@/lib/likes";
 import { updateCustomDefinition } from "@/lib/station/custom-tags";
 import type { CustomMoodKey } from "@/lib/station/filter";
@@ -69,6 +70,8 @@ export type ChatMessage =
       tracks: ChatTrack[];
       /** pages the answer points to: an artist asked about, the album of a song asked about */
       links: ChatLink[];
+      /** what the agent did for the listener in this answer: a heart, a song played, a station, a playlist waiting to be made */
+      actions: ChatAction[];
       proposal: ChatProposal | null;
       /** the question as asked, so the same one can be asked again with another source */
       question: string;
@@ -115,6 +118,8 @@ type Ctx = {
   /** clamped to [CHAT_MIN_WIDTH, half the window] */
   setWidth: (px: number) => void;
   maxWidth: number;
+  /** a press on an action's card: take it back, stop it, make the playlist under this name, or try it again */
+  actOn: (messageId: string, actionId: string, op: { type: "undo" | "cancel" | "retry" } | { type: "confirm"; name: string }) => void;
   /** the listener picked where to look next, for the question this answer was about */
   searchWith: (messageId: string, source: ChatSource) => void;
   /** asks again the question an answer gave up on, in place of the failed pair */
@@ -310,16 +315,26 @@ function historyOf(messages: ChatMessage[]): { role: "user" | "assistant"; conte
   for (const m of messages) {
     if (m.role === "user") {
       out.push({ role: "user", content: m.text });
-    } else if (m.text.trim() || m.tracks.length || m.proposal) {
+    } else if (m.text.trim() || m.tracks.length || m.proposal || m.actions.length) {
       const songs = m.tracks.length
         ? `\n(추천한 곡: ${m.tracks.map((t) => `${t.title} - ${t.artist}`).join(", ")})`
+        : "";
+      const did = m.actions.length
+        ? `\n(해 준 동작: ${m.actions
+            .map((a) => {
+              const what = a.kind === "like" ? "좋아요" : a.kind === "station" ? "스테이션" : a.kind === "playlist" ? `플레이리스트 '${a.name ?? ""}'` : "재생";
+              const subject = a.tracks?.[0] ? ` ${a.tracks[0].title}` : a.title ? ` ${a.title}` : "";
+              const state = { working: "하는 중", pending: "만들기 전", done: "했음", undone: "취소됨", cancelled: "취소됨", already: "이미 그랬음", busy: "다른 스테이션 만드는 중", error: "못 했음" }[a.state];
+              return `${what}${subject} ${state}`;
+            })
+            .join(", ")})`
         : "";
       const proposed = m.proposal
         ? `\n(제안한 기준: ${m.proposal.definition} — ${
             { pending: "아직 답 없음", applied: "사용자가 적용함", dismissed: "사용자가 취소함" }[m.proposal.state]
           })`
         : "";
-      out.push({ role: "assistant", content: m.text.trim() + songs + proposed });
+      out.push({ role: "assistant", content: m.text.trim() + songs + did + proposed });
     }
   }
   return out;
@@ -329,6 +344,18 @@ function historyOf(messages: ChatMessage[]): { role: "user" | "assistant"; conte
 function signature(list: ChatMessage[]): string {
   const last = list[list.length - 1];
   return last ? `${list.length}:${last.role}${last.text.length}` : "";
+}
+
+/** What the agent may be told about the listener's station: its songs in order, the one playing first. */
+function stationForAgent(sp: ReturnType<typeof useSpotify>) {
+  const seed = sp.stationSeedTrack;
+  const now = sp.now;
+  const queue = sp.stationQueue.slice(0, 25).map((t) => ({ title: t.name, artist: t.artist, position: "next" }));
+  const tracks =
+    sp.stationActive && now
+      ? [{ title: now.title, artist: now.artist, position: "playing" }, ...queue.filter((t) => t.title !== now.title)]
+      : queue;
+  return { active: sp.stationActive, seed: seed ? { title: seed.name, artist: seed.artist } : null, tracks };
 }
 
 let seq = 0;
@@ -384,7 +411,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
    * adding a copy, and a save that lands after the chat has moved on to
    * another conversation cannot attach its id to that one.
    */
-  const { connected, now: playing } = useSpotify();
+  const spotify = useSpotify();
+  const { connected, now: playing } = spotify;
+  /** the live player, read when something is done: an action may finish long after the render that began it */
+  const spotifyRef = useRef(spotify);
+  useEffect(() => {
+    spotifyRef.current = spotify;
+  }, [spotify]);
   /**
    * What is playing, read when a question is sent: a track that changed a second ago is already the one
    * the next question is about. The agent keeps it to itself unless the question is about "this song".
@@ -471,12 +504,53 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setMessages((all) =>
       all.map((m) => {
         if (m.id !== id || m.role !== "assistant") return m;
-        const copy = { ...m, tracks: [...m.tracks] };
+        const copy = { ...m, tracks: [...m.tracks], actions: [...m.actions] };
         change(copy);
         return copy;
       }),
     );
   }, []);
+
+  /** Changes one action of an answer: what it found, and where it stands. */
+  const patchAction = useCallback(
+    (messageId: string, actionId: string, change: Partial<ChatAction>) => {
+      patch(messageId, (m) => {
+        m.actions = m.actions.map((a) => (a.id === actionId ? { ...a, ...change } : a));
+      });
+    },
+    [patch],
+  );
+
+  /** The songs the chat has shown, the newest answer's first: what "the songs you just recommended" means. */
+  const shownTracks = useCallback((): ChatTrack[] => {
+    for (let i = messagesRef.current.length - 1; i >= 0; i--) {
+      const m = messagesRef.current[i];
+      if (m.role === "assistant" && m.tracks.length) return m.tracks;
+    }
+    return [];
+  }, []);
+
+  const actionEnv = useCallback((shown?: () => ChatTrack[]): ActionEnv => ({ spotify: spotifyRef.current, shown: shown ?? shownTracks }), [shownTracks]);
+
+  const actOn = useCallback<Ctx["actOn"]>(
+    (messageId, actionId, op) => {
+      const message = messagesRef.current.find((m) => m.id === messageId);
+      const action = message?.role === "assistant" ? message.actions.find((a) => a.id === actionId) : undefined;
+      if (!action) return;
+      void (async () => {
+        if (op.type === "undo") patchAction(messageId, actionId, await undoAction(action, actionEnv()));
+        else if (op.type === "cancel") patchAction(messageId, actionId, cancelAction(action, actionEnv()));
+        else if (op.type === "retry") {
+          patchAction(messageId, actionId, { state: "working", note: undefined });
+          patchAction(messageId, actionId, await startAction({ ...action, state: "working" }, actionEnv()));
+        } else if (op.type === "confirm") {
+          patchAction(messageId, actionId, { state: "working" });
+          patchAction(messageId, actionId, await makePlaylist(action, op.name));
+        }
+      })();
+    },
+    [actionEnv, patchAction],
+  );
 
   const run = useCallback(
     async (raw: string, opts?: { sources?: ChatSource[]; via?: string; before?: number }) => {
@@ -490,7 +564,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         ...all,
         { id: nextId(), role: "user", text: opts?.via ? `${question} · ${opts.via}에서 찾기` : question },
         {
-          id: reply, role: "assistant", text: "", status: null, tracks: [], links: [], proposal: null,
+          id: reply, role: "assistant", text: "", status: null, tracks: [], links: [], actions: [], proposal: null,
           question, offer: null, error: null, streaming: true,
         },
       ]);
@@ -500,6 +574,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setBusy(true);
       // what the agent asked each tool for, to pair with the name the tool answers under
       const asked = new Map<string, string>();
+      // the songs this answer has shown so far: a playlist made in the same breath reads them from here
+      let turnTracks: ChatTrack[] = [];
 
       try {
         // read when sending, so a heart pressed a second ago is already in
@@ -516,6 +592,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             nowPlaying: nowRef.current
               ? { playing: true, title: nowRef.current.title, artist: nowRef.current.artist, album: nowRef.current.album }
               : { playing: false },
+            station: stationForAgent(spotifyRef.current),
+            canAct: connectedRef.current,
           }),
           signal: controller.signal,
         });
@@ -536,6 +614,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 m.status =
                   event.name === "now_playing"
                     ? "지금 듣는 곡을 확인하는 중…"
+                    : event.name === "station_info"
+                      ? "스테이션을 확인하는 중…"
+                    : ["like_track", "playback", "start_station", "make_playlist"].includes(String(event.name))
+                      ? "준비하는 중…"
                     : event.name === "top_tracks"
                     ? "곡을 찾는 중…"
                     : event.name === "propose_definition"
@@ -553,6 +635,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             case "tool_result": {
               const result = event.result as
                 | {
+                    /** like_track, playback, start_station, make_playlist: what the browser is asked to do */
+                    action?: unknown;
                     found?: boolean;
                     /** find_track: the title was not found, and these are the artist's own best-known songs instead */
                     substitute?: boolean;
@@ -568,6 +652,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     preview?: { checked: number; passed_count?: number; passed: ChatTrack[]; failed: ChatTrack[] };
                   }
                 | undefined;
+              const action = actionFrom(result?.action);
+              if (action) {
+                patch(reply, (m) => {
+                  m.actions = [...m.actions.filter((a) => a.id !== action.id), action];
+                  m.status = null;
+                });
+                // done by the browser, which is the one signed in; a playlist waits there for the press
+                void startAction(action, actionEnv(() => (turnTracks.length ? turnTracks : shownTracks()))).then((change) => patchAction(reply, action.id, change));
+                break;
+              }
               if (result?.proposal && result.preview) {
                 const { proposal, preview } = result;
                 patch(reply, (m) => {
@@ -619,6 +713,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               }
               if (result && Array.isArray(result.tracks)) {
                 const found = result.tracks.map((t) => ({ title: String(t.title), artist: String(t.artist) }));
+                turnTracks = found;
                 patch(reply, (m) => {
                   m.tracks = found;
                   if (event.name === "find_track") {
@@ -699,7 +794,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         });
       }
     },
-    [patch],
+    [patch, patchAction, actionEnv, shownTracks],
   );
 
   const send = useCallback((question: string) => run(question), [run]);
@@ -815,11 +910,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Ctx>(
     () => ({
       open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
-      applyProposal, dismissProposal, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, retry, shareTaste, toggleTaste, shareHistory, toggleHistory,
+      applyProposal, dismissProposal, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, retry, actOn, shareTaste, toggleTaste, shareHistory, toggleHistory,
     }),
     [
       open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
-      applyProposal, dismissProposal, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, retry, shareTaste, toggleTaste, shareHistory, toggleHistory,
+      applyProposal, dismissProposal, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, retry, actOn, shareTaste, toggleTaste, shareHistory, toggleHistory,
     ],
   );
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

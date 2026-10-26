@@ -31,8 +31,7 @@ _NAMED = (
     "곡을 듣지 못했으니 분위기나 내용을 꾸며 쓰지 않는다.\n"
 )
 _NAMED_CARDS = (
-    "곡을 직접 재생할 수는 없다. 찾은 곡은 화면에 카드로 나오니, 카드의 재생 버튼을 누르면 들을 수 "
-    "있다고 안내한다.\n"
+    "찾은 곡은 화면에 카드로 나오니, 카드의 재생 버튼을 누르면 들을 수 있다고 안내한다.\n"
 )
 # 가수·곡에 대한 질문: 글이 곧 답이다. 모델의 기억 대신 Last.fm이 돌려준 내용으로만 답하게 한다
 _INFO = (
@@ -57,6 +56,28 @@ _NOW = (
 _NO_NOW = (
     "\n\n지금 사용자가 듣는 곡은 알 수 없다('이 곡', '지금 듣는 곡'을 묻는 말). 그런 질문에는 지금 듣는 곡을 알 수 "
     "없다고 한 문장으로 말한다. request_source는 부르지 않는다."
+)
+# 사용자의 화면이 대신 해 주는 동작(좋아요·재생·스테이션·플레이리스트): 도구는 제안만 하고 실행은 화면이 한다
+_ACTIONS = (
+    "사용자가 동작을 시키면 맞는 도구를 한 번 부른다: 좋아요(like_track), 재생·멈춤·다음 곡(playback), "
+    "스테이션 시작(start_station), 플레이리스트 만들기(make_playlist). 도구는 제안만 하고 실행은 화면이 하며, "
+    "결과(좋아요에 담았는지, 만들었는지)는 화면에 카드로 따로 보인다. 그래서 글은 한두 문장으로 짧게 "
+    "\"~할게요\"처럼 알리고, 이미 됐다고 단정하지 않으며 곡 목록을 되풀이하지 않는다. 플레이리스트는 사용자가 "
+    "만들기를 눌러야 만들어지니 \"만들어 볼까요?\"처럼 말한다. 곡 이름을 말하며 틀어 달라거나 좋아요를 "
+    "누르라고 하면 이름은 사용자가 쓴 그대로 넣는다. 곡 삭제, 플레이리스트에서 곡 빼기·지우기, 가사 보기처럼 "
+    "이 도구들로 못 하는 일은 할 수 없다고 한 문장으로 말한다.\n"
+)
+# 사용자가 Spotify에 연결하지 않았다: 동작 도구가 없다
+_NO_ACT = (
+    "\n\n지금은 좋아요, 재생, 스테이션, 플레이리스트 같은 동작을 할 수 없다(사용자가 Spotify에 연결하지 않았다). "
+    "그런 부탁에는 Spotify를 연결하면 할 수 있다고 한 문장으로 말한다. request_source는 부르지 않는다."
+)
+# 스테이션의 곡에 대한 질문: 곡 목록은 화면에서 오니 먼저 station_info로 확인하고, 곡 하나의 내용은 정보 도구로 찾는다
+_STATION = (
+    "'스테이션', '스테이션에 있는 곡', '다음에 나오는 곡'처럼 사용자의 스테이션을 가리키는 질문에는 먼저 station_info를 "
+    "불러 어떤 곡이 있는지 확인한다. 그 곡 중 하나의 가수·앨범·분위기를 물으면 돌려받은 제목과 가수로 track_info, "
+    "artist_info, similar_to를 이어서 불러 그 내용으로만 답한다. 스테이션이 없다고 나오면 그렇게 말한다. "
+    "목록에 없는 곡을 있다고 하지 않는다.\n"
 )
 # 화면에서는 가수·앨범 페이지로 가는 링크가 카드로 따로 붙는다: 글이 주소를 쓰거나 링크를 약속하지 않게 한다
 _LINK_CARDS = (
@@ -90,9 +111,35 @@ SYSTEM_PROMPT_CARDS = _HEAD + _NAMED + _NAMED_CARDS + _INFO + _LINK_CARDS + _RUL
 
 # 곡을 틀거나 찾아 달라는 말, 추천해 달라는 말: 이런 요청은 도구로 확인해야 답할 수 있다
 _NEEDS_TOOL = re.compile(
-    r"(틀어|들려|재생|검색|찾아|추천|play|어떤 (밴드|가수|곡|노래)|누구|어느 나라|언제 (결성|데뷔|나왔)|앨범|대표곡|비슷한|같은 (노래|곡|가수|밴드)|설명|소개|에 대해|비교|이 (곡|노래|가수)|이거|지금 (듣|나오|재생)|방금)",
+    r"(틀어|들려|재생|검색|찾아|추천|play|어떤 (밴드|가수|곡|노래)|누구|어느 나라|언제 (결성|데뷔|나왔)|앨범|대표곡|비슷한|같은 (노래|곡|가수|밴드)|설명|소개|에 대해|비교|이 (곡|노래|가수)|이거|지금 (듣|나오|재생)|방금|좋아요|스테이션|플레이리스트|다음 곡|이전 곡|멈춰|일시정지)",
     re.IGNORECASE,
 )
+
+
+# 짧고 분명한 동작 명령은 모델에게 맡기지 않고 코드가 알아본다. 작은 모델은 "다음 곡 넘겨줘"에 도구를 부르지 않고
+# "넘길게요"라고 말만 하거나 엉뚱한 동작을 말하는 일이 있다. 곡 이름을 말하는 명령은 이름을 읽어야 해서 모델에게 둔다.
+_NOT_COMMAND = re.compile(r"(추천|뭐|누구|어떤|알려|설명|왜|어때|좋아요\s*한|좋아한|\?)")
+_DIRECT: list[tuple[re.Pattern[str], str, dict]] = [
+    (re.compile(r"(일시\s*정지|멈춰|정지|잠깐\s*스톱|\bstop\b|\bpause\b)", re.IGNORECASE), "playback", {"command": "pause"}),
+    (re.compile(r"(다음\s*(곡|노래)|넘겨|스킵|\bskip\b|\bnext\b)", re.IGNORECASE), "playback", {"command": "next"}),
+    (re.compile(r"(이전\s*(곡|노래)|앞\s*(곡|노래)|\bprevious\b)", re.IGNORECASE), "playback", {"command": "previous"}),
+    (re.compile(r"^(다시|계속)\s*(재생|틀어)"), "playback", {"command": "resume"}),
+    (re.compile(r"^(지금\s*)?(듣는\s*|나오는\s*)?(곡|노래)?\s*(스테이션|라디오)\s*(만들|시작|틀)"), "start_station", {}),
+    (re.compile(r"(지금|이)\s*(듣는|나오는|재생\s*중인)?\s*(곡|노래|음악).*스테이션"), "start_station", {}),
+    (re.compile(r"(지금|이)\s*(듣는|나오는|재생\s*중인)?\s*(곡|노래|음악)?.*좋아요"), "like_track", {}),
+    (re.compile(r"^좋아요\s*(눌러|해|담아|누르)"), "like_track", {}),
+]
+
+
+def _direct_action(question: str) -> tuple[str, dict] | None:
+    """명령 한 마디면 (도구 이름, 인자). 길거나 묻는 말, 곡 이름이 낀 말은 None."""
+    q = " ".join(question.split())
+    if len(q) > 28 or _NOT_COMMAND.search(q):
+        return None
+    for pattern, name, args in _DIRECT:
+        if pattern.search(q):
+            return name, dict(args)
+    return None
 
 
 # 취향을 묻는 말. 취향 정보가 없을 때는 도구를 부르게 되돌리지 않고, 켜는 법을 안내한 답을 그대로 둔다
@@ -180,6 +227,8 @@ def run_agent(
     sources: list[str] | None = None,
     taste: list[dict] | None = None,
     now_playing: dict | None = None,
+    station: dict | None = None,
+    can_act: bool = False,
 ) -> Iterator[dict]:
     """이벤트를 하나씩 내보낸다.
 
@@ -202,6 +251,11 @@ def run_agent(
     때만 오고, 모델에게는 처음부터 보여 주지 않는다: "이 곡"을 가리키는 질문에서 모델이 now_playing 도구를
     부를 때에야 알려 준다(상관없는 질문이 지금 곡에 끌려가지 않고, 곡 정보가 필요할 때만 모델로 간다).
 
+    station은 화면이 보내 준 스테이션({"active", "seed", "tracks"})이다. 모델에게는 처음부터 보여 주지 않고, 스테이션을
+    가리키는 질문에서 station_info 도구를 부를 때 알려 준다. can_act는 사용자가 Spotify에 연결해 화면이 좋아요·재생·
+    스테이션·플레이리스트 같은 동작을 대신 할 수 있다는 뜻이다: 그때만 동작 도구가 모델에게 보인다. 동작 도구의
+    {"type": "tool_result"}에는 result["action"]이 있고, 실제 실행은 화면이 한다.
+
     cards=True는 곡을 화면이 카드로 보여 주는 경우다. 글이 곡 이름을 말하지 않으니 "곡을
     말했는가"로 하는 재시도 검사는 끄고, 글은 기준 설명만 쓰게 한다.
     """
@@ -209,7 +263,7 @@ def run_agent(
     if model is None and config.PROVIDER == "ollama":
         model = config.LOCAL_GENERATION_MODEL
     # sources: 사용자가 켜 둔 출처(lastfm·wikipedia·musicbrainz). None이면 전부. 다듬기 대화는 출처와 무관하다.
-    tools = TOOLS_REFINE if refine else tools_for(sources, now_playing is not None)
+    tools = TOOLS_REFINE if refine else tools_for(sources, now_playing is not None, can_act, station is not None)
     system = (
         refine_prompt(refine["label"], refine["definition"])
         if refine
@@ -240,9 +294,12 @@ def run_agent(
         )
     # 사용자가 출처를 골라 다시 찾는 경우: 기억으로 답하지 못하게, 첫 호출에서 그 출처의 도구를 반드시 부르게 한다
     force_first = [t for name in picked for t in SOURCES[name] if t in tools] if not refine else []
-    session = Session(now_playing)
+    session = Session(now_playing, station)
     if not refine:
         system += ("\n\n" + _NOW) if now_playing is not None else _NO_NOW
+        system += ("\n" + _ACTIONS) if can_act else _NO_ACT
+        if station is not None:
+            system += "\n" + _STATION
     if taste and not refine:
         system += _taste_prompt(taste)
         session.seen |= {f"{t['title']}|{t['artist']}".lower() for t in taste}
@@ -257,6 +314,21 @@ def run_agent(
     # 도구가 돌려준 곡 제목들. 답변이 이 중 하나도 말하지 않으면 추천을 못 한 것이다.
     seen_titles: list[str] = []
     nudged = False
+    # 분명한 동작 명령: 모델이 고르기 전에 도구를 먼저 부르고, 모델은 그 결과를 보고 짧게 알린다
+    direct = _direct_action(question) if can_act and not refine else None
+    if direct and direct[0] in tools:
+        name, args = direct
+        # 모델이 고른 호출이 아니라서 생각 서명이 없다: Gemini는 서명 검증을 건너뛰라는 이 값을 받아 준다
+        call = {
+            "function": {"name": name, "arguments": args},
+            "_part": {"functionCall": {"name": name, "args": args}, "thoughtSignature": "skip_thought_signature_validator"},
+        }
+        yield {"type": "tool_call", "name": name, "arguments": args}
+        result = call_tool(name, args, session, tools)
+        yield {"type": "tool_result", "name": name, "result": result}
+        messages.append({"role": "assistant", "content": "", "tool_calls": [call]})
+        messages.append({"role": "tool", "tool_name": name, "content": json.dumps(result, ensure_ascii=False)})
+        nudged = True
     # 도구를 쓰라고 되돌린 직후의 호출: 도구를 부르면 그 답으로 바꾸고, 안 부르면 처음 답을 그대로 둔다
     after_nudge = False
     # 마지막 top_tracks가 돌려준 곡 수. 0곡이면 답하기 전에 다른 태그로 한 번 더 찾아 본다.
@@ -309,7 +381,8 @@ def run_agent(
                         "role": "user",
                         "content": (
                             "도구를 먼저 불러서 확인한 뒤에 답해줘. 곡 이름을 말한 거면 find_track, "
-                            "분위기나 장르를 말한 거면 top_tracks, '~같은 곡'이면 similar_to, 가수나 곡에 대한 질문이면 "
+                            "분위기나 장르를 말한 거면 top_tracks, '~같은 곡'이면 similar_to, 좋아요·재생·스테이션·플레이리스트를 "
+                            "시킨 거면 like_track, playback, start_station, make_playlist, 가수나 곡에 대한 질문이면 "
                             "artist_info, track_info, albums, wiki_summary 같은 정보 도구를 불러. "
                             "필요한 도구가 안 보이거나 도구로 찾고도 답이 없을 때만 request_source로 "
                             "사용자가 다른 출처를 고르게 해."

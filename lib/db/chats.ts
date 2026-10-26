@@ -62,6 +62,8 @@ export function cleanMessages(raw: unknown): ChatMessage[] | null {
         status: typeof a.status === "string" ? text(a.status, 200) : null,
         tracks: tracks(a.tracks),
         links: links(a.links),
+        // what was done for the listener is not kept: a conversation opened later is words and songs, and must not do it again
+        actions: [],
         proposal: null,
         question: text(a.question, 2000),
         offer: null,

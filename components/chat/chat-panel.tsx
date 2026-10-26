@@ -9,6 +9,7 @@ import { useCustomTags } from "@/components/station/use-custom-tags";
 import { boldSpans } from "@/lib/chat/inline";
 import { TrackCard } from "@/components/ui/track-card";
 import { ChatHistory, ClockIcon } from "./chat-history";
+import { ActionCard } from "./action-card";
 import { LinkCard } from "./link-card";
 import { CHAT_SOURCES, useChat, type ChatMessage, type ChatProposal, type ChatTrack } from "./chat-provider";
 
@@ -147,7 +148,7 @@ function UserBubble({ text }: { text: string }) {
 function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }> }) {
   const { searchWith, retry, busy } = useChat();
   const text = m.tracks.length ? withoutList(m.text) : m.text;
-  const waiting = m.streaming && !text && !m.status && !m.proposal && !m.error;
+  const waiting = m.streaming && !text && !m.status && !m.proposal && !m.actions.length && !m.error;
   return (
     <div className="flex w-full justify-start">
       <div className="flex w-full min-w-0 max-w-full flex-col gap-[8px] rounded-[4px_14px_14px_14px] bg-paper-solid p-[10px]">
@@ -177,6 +178,13 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
           </p>
         )}
         {m.proposal && <ProposalCard id={m.id} p={m.proposal} />}
+        {m.actions.length > 0 && (
+          <ul className="flex flex-col gap-[6px]">
+            {m.actions.map((a) => (
+              <ActionCard key={a.id} messageId={m.id} a={a} />
+            ))}
+          </ul>
+        )}
         {m.tracks.length > 0 && (
           <ul className="flex flex-col gap-[6px]">
             {m.tracks.map((t) => (

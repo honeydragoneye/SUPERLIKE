@@ -5,7 +5,8 @@
 표준 라이브러리만 쓰고, 이 컴퓨터 안에서만 열린다 (127.0.0.1). 인증이 없으므로 밖으로 열지 않는다.
 
 POST /chat  {"question": str, "history": [{"role": "user"|"assistant", "content": str}, ...],
-             "refine": {"label": str, "definition": str}}   ← 선택. 있으면 그 태그의 기준을 정하는 대화
+             "refine": {"label": str, "definition": str},   ← 선택. 있으면 그 태그의 기준을 정하는 대화
+             "nowPlaying", "station", "canAct"}              ← 선택. 화면이 대신 알려 주는 지금 듣는 곡·스테이션, 동작 가능 여부
   → text/event-stream. 줄마다 `data: {이벤트 JSON}` — loop.run_agent의 이벤트에
     {"type": "error", "code", "message"}가 더해진다.
 GET /health → {"status": "ok", "model": ...}
@@ -77,6 +78,29 @@ def _clean_now(raw: object) -> dict | None:
     return {"playing": bool(fields["title"]), **fields}
 
 
+MAX_STATION = 30
+
+
+def _clean_station(raw: object) -> dict | None:
+    """화면이 보낸 스테이션. 없으면 None. 모델에게 도구로 보이므로 개수와 길이를 자르고 한 줄로 만든다."""
+    if not isinstance(raw, dict):
+        return None
+
+    def line(v: object) -> str:
+        return " ".join(str(v or "").split())[:120]
+
+    tracks = []
+    for i, t in enumerate(raw.get("tracks") or []):
+        if len(tracks) >= MAX_STATION:
+            break
+        if isinstance(t, dict) and line(t.get("title")):
+            position = t.get("position") if t.get("position") in ("playing", "next") else "next"
+            tracks.append({"title": line(t.get("title")), "artist": line(t.get("artist")), "position": position})
+    seed = raw.get("seed")
+    seed = {"title": line(seed.get("title")), "artist": line(seed.get("artist"))} if isinstance(seed, dict) and line(seed.get("title")) else None
+    return {"active": raw.get("active") is True and bool(tracks), "seed": seed, "tracks": tracks}
+
+
 def _clean_taste(raw: object) -> list[dict] | None:
     """좋아요한 곡 목록. 모델의 지시문에 들어가므로 개수와 길이를 자르고 한 줄로 만든다."""
     if not isinstance(raw, list):
@@ -128,6 +152,8 @@ class Handler(BaseHTTPRequestHandler):
         sources = _clean_sources(body.get("sources"))
         taste = _clean_taste(body.get("taste"))
         now_playing = _clean_now(body.get("nowPlaying"))
+        station = _clean_station(body.get("station"))
+        can_act = body.get("canAct") is True
 
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -140,7 +166,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         try:
-            for event in run_agent(history, question, cards=True, refine=refine, sources=sources, taste=taste, now_playing=now_playing):
+            for event in run_agent(history, question, cards=True, refine=refine, sources=sources, taste=taste, now_playing=now_playing, station=station, can_act=can_act):
                 send(event)
         except (BrokenPipeError, ConnectionResetError):
             pass  # 브라우저가 창을 닫거나 대화를 끊었다

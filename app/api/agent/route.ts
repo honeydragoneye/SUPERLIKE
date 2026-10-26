@@ -17,7 +17,7 @@ const SOURCES = ["lastfm", "wikipedia", "musicbrainz"] as const;
  * Forwards one question and relays the agent's server-sent events as they
  * arrive, so the reply types itself out instead of landing in one piece.
  *
- * Only `question`, `history`, `refine`, `sources` and `taste` are passed on: the browser does not
+ * Only `question`, `history`, `refine`, `sources`, `taste`, `nowPlaying`, `station` and `canAct` are passed on: the browser does not
  * get to address anything else on the agent. `refine` is the tag the
  * conversation is about — its name and what it means now — and turns the chat
  * from recommending songs into settling that tag's definition. `sources` is what
@@ -26,7 +26,16 @@ const SOURCES = ["lastfm", "wikipedia", "musicbrainz"] as const;
  * is the songs the listener liked, and is only there when they chose to share it.
  */
 export async function POST(request: NextRequest) {
-  let body: { question?: unknown; history?: unknown; refine?: unknown; sources?: unknown; taste?: unknown; nowPlaying?: unknown };
+  let body: {
+    question?: unknown;
+    history?: unknown;
+    refine?: unknown;
+    sources?: unknown;
+    taste?: unknown;
+    nowPlaying?: unknown;
+    station?: unknown;
+    canAct?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -80,12 +89,36 @@ export async function POST(request: NextRequest) {
         : { playing: false }
       : undefined;
 
+  // the listener's station, as the browser holds it: the agent only reads it when asked about the station
+  const st = body.station as { active?: unknown; seed?: unknown; tracks?: unknown } | null | undefined;
+  const line = (v: unknown, n = 120) => (typeof v === "string" ? v.slice(0, n) : "");
+  const station =
+    st && typeof st === "object"
+      ? {
+          active: st.active === true,
+          seed:
+            st.seed && typeof st.seed === "object"
+              ? { title: line((st.seed as { title?: unknown }).title), artist: line((st.seed as { artist?: unknown }).artist) }
+              : null,
+          tracks: Array.isArray(st.tracks)
+            ? st.tracks.slice(0, 30).flatMap((t): { title: string; artist: string; position: string }[] => {
+                const row = t as { title?: unknown; artist?: unknown; position?: unknown };
+                return typeof row.title === "string" && row.title
+                  ? [{ title: line(row.title), artist: line(row.artist), position: row.position === "playing" ? "playing" : "next" }]
+                  : [];
+              })
+            : [],
+        }
+      : undefined;
+  // whether the browser can carry out like / playback / station / playlist actions for this listener
+  const canAct = body.canAct === true;
+
   let upstream: Response;
   try {
     upstream = await fetch(`${AGENT_URL}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, history, refine, sources, taste, nowPlaying }),
+      body: JSON.stringify({ question, history, refine, sources, taste, nowPlaying, station, canAct }),
       // closing the chat or sending the next question cuts the agent's work short too
       signal: request.signal,
       cache: "no-store",
