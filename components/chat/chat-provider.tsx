@@ -10,6 +10,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { useLyricsView } from "@/components/lyrics/lyrics-view";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useCustomTags } from "@/components/station/use-custom-tags";
 import { loadChat, saveChat } from "@/lib/chat/history";
@@ -420,9 +421,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { connected, now: playing } = spotify;
   /** the live player, read when something is done: an action may finish long after the render that began it */
   const spotifyRef = useRef(spotify);
+  const lyrics = useLyricsView();
+  const lyricsRef = useRef(lyrics);
   useEffect(() => {
     spotifyRef.current = spotify;
-  }, [spotify]);
+    lyricsRef.current = lyrics;
+  }, [spotify, lyrics]);
   /**
    * What is playing, read when a question is sent: a track that changed a second ago is already the one
    * the next question is about. The agent keeps it to itself unless the question is about "this song".
@@ -535,7 +539,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     return [];
   }, []);
 
-  const actionEnv = useCallback((shown?: () => ChatTrack[]): ActionEnv => ({ spotify: spotifyRef.current, shown: shown ?? shownTracks }), [shownTracks]);
+  const actionEnv = useCallback((shown?: () => ChatTrack[]): ActionEnv => ({ spotify: spotifyRef.current, lyrics: lyricsRef.current, shown: shown ?? shownTracks }), [shownTracks]);
 
   const actOn = useCallback<Ctx["actOn"]>(
     (messageId, actionId, op) => {
@@ -624,7 +628,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     ? "지금 듣는 곡을 확인하는 중…"
                     : event.name === "station_info"
                       ? "스테이션을 확인하는 중…"
-                    : ["like_track", "playback", "player_mode", "seek", "volume", "play_one", "start_station", "make_playlist"].includes(String(event.name))
+                    : ["like_track", "playback", "player_mode", "seek", "volume", "play_one", "up_next", "lyrics", "stop_station", "start_station", "make_playlist"].includes(String(event.name))
                       ? "준비하는 중…"
                     : event.name === "top_tracks"
                     ? "곡을 찾는 중…"

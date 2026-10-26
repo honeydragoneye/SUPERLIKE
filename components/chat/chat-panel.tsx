@@ -150,10 +150,10 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
   const { searchWith, retry, busy, messages } = useChat();
   // of the player cards, and of the volume cards, only the newest in the conversation is live
   const live = new Set<string>();
-  for (const kind of ["player", "volume"] as const) {
+  for (const kind of ["player", "volume", "queue"] as const) {
     for (let i = messages.length - 1; i >= 0; i--) {
       const row = messages[i];
-      const hit = row.role === "assistant" ? [...row.actions].reverse().find((x) => (kind === "volume" ? x.kind === "volume" : showsPlayer(x))) : undefined;
+      const hit = row.role === "assistant" ? [...row.actions].reverse().find((x) => (kind === "volume" ? x.kind === "volume" : kind === "queue" ? x.kind === "queue" : showsPlayer(x))) : undefined;
       if (hit) {
         live.add(hit.id);
         break;

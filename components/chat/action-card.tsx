@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { usePlaybackPosition, useSpotify } from "@/components/player/spotify-provider";
-import { clock, showsPlayer, type ChatAction } from "./chat-actions";
+import { clock, playQueued, showsPlayer, type ChatAction } from "./chat-actions";
 import { useChat } from "./chat-provider";
 
 /**
@@ -431,11 +431,44 @@ function Choice({ messageId, a }: { messageId: string; a: ChatAction }) {
 }
 
 /** One action of an answer. Some leave no card: moving the player on is a word, not a thing to keep. */
+/** What comes next, as UP NEXT lists it: a few rows, each playable, and a count of the rest. */
+function Queue({ a, live }: { a: ChatAction; live: boolean }) {
+  const sp = useSpotify();
+  if (a.state === "error") return <li className="text-[8px] leading-[12px] tracking-[0.4px] text-alert">{a.note ?? "하지 못했어요"}</li>;
+  const tracks = a.tracks ?? [];
+  if (!live)
+    return (
+      <li className="flex items-center gap-[6px] rounded-[8px] bg-chart px-[10px] py-[6px] text-[8px] tracking-[0.4px]">
+        <span className="text-accent-bright">UP NEXT</span>
+        <span className="font-bold text-on-bright-muted">{a.summary}</span>
+      </li>
+    );
+  return (
+    <li className="flex flex-col gap-[8px] rounded-[8px] bg-chart p-[10px]">
+      <span className="text-[8px] tracking-[0.8px] text-accent-bright">UP NEXT</span>
+      <div className="flex flex-col gap-[6px]">
+        {tracks.map((t) => (
+          <div key={t.uri} className="flex items-center gap-[8px]">
+            <Tile src={t.artwork} />
+            <span className="flex min-w-0 flex-1 flex-col gap-px">
+              <span className="w-full truncate text-[10px] font-black">{t.title}</span>
+              <span className="w-full truncate text-[8px] tracking-[0.5px] text-on-bright-muted">{t.artist}</span>
+            </span>
+            <Button onClick={() => void playQueued(a, t, sp)}>재생</Button>
+          </div>
+        ))}
+      </div>
+      {!!a.more && <p className="text-[8px] tracking-[0.4px] text-on-bright-muted">외 {a.more}곡</p>}
+    </li>
+  );
+}
+
 export function ActionCard({ messageId, a, live }: { messageId: string; a: ChatAction; live: boolean }) {
   if (a.kind === "like") return <Line messageId={messageId} a={a} />;
   if (showsPlayer(a)) return <PlayerCard messageId={messageId} a={a} live={live} />;
   if (a.kind === "volume") return <VolumeCard messageId={messageId} a={a} live={live} />;
   if (a.kind === "choice") return <Choice messageId={messageId} a={a} />;
+  if (a.kind === "queue") return <Queue a={a} live={live} />;
   if (a.kind === "station") return <Station messageId={messageId} a={a} />;
   if (a.kind === "playlist") return <Playlist messageId={messageId} a={a} />;
   // next, previous: only a refusal is worth a line

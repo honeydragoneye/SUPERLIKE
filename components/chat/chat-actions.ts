@@ -43,7 +43,7 @@ export type Before = {
 
 export type ChatAction = {
   id: string;
-  kind: "like" | "playback" | "mode" | "seek" | "volume" | "choice" | "station" | "playlist";
+  kind: "like" | "playback" | "mode" | "seek" | "volume" | "choice" | "queue" | "lyrics" | "stopStation" | "station" | "playlist";
   /** where the subject came from: the song playing (now), named by the listener, an artist, the songs shown, the station */
   source: "now" | "named" | "artist" | "shown" | "station";
   command?: "play" | "pause" | "resume" | "next" | "previous";
@@ -78,9 +78,13 @@ export type ChatAction = {
   chosen?: "loop" | "once";
   /** the playlist that was made */
   playlistId?: string;
+  /** a queue card: how many more songs follow the ones listed */
+  more?: number;
+  /** a queue card: whose order it is, which decides how a row is played */
+  via?: "station" | "queue";
 };
 
-const KINDS = ["like", "playback", "mode", "seek", "volume", "choice", "station", "playlist"] as const;
+const KINDS = ["like", "playback", "mode", "seek", "volume", "choice", "queue", "lyrics", "stopStation", "station", "playlist"] as const;
 const SOURCES = ["now", "named", "artist", "shown", "station"] as const;
 const COMMANDS = ["play", "pause", "resume", "next", "previous"] as const;
 const line = (v: unknown, n: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, n) : "");
@@ -129,6 +133,8 @@ type Spotify = ReturnType<typeof useSpotify>;
 /** What the executor reads: the live player, and the songs the chat has shown (newest answer first). */
 export type ActionEnv = {
   spotify: Spotify;
+  /** the lyrics popover: opened from the chat, shut again with the lyrics button as ever */
+  lyrics: { open: boolean; toggle: () => void };
   shown: () => ChatTrack[];
 };
 
@@ -172,6 +178,9 @@ async function playOnly(track: ActionTrack, sp: Spotify) {
     tracks: [{ uri: track.uri, title: track.title, artist: track.artist, artwork: track.artwork, durationMs: track.durationMs }],
   });
 }
+
+/** How many songs a queue card lists; the rest are counted. */
+const QUEUE_ROWS = 3;
 
 const REPEAT_MODE = { off: 0, all: 1, one: 2 } as const;
 const REPEAT_SAYS = { off: "반복을 껐어요", all: "전체 반복을 켰어요", one: "한 곡 반복을 켰어요" } as const;
@@ -273,6 +282,26 @@ export async function startAction(a: ChatAction, env: ActionEnv): Promise<Partia
       if (!track) return fail(NOT_FOUND);
       // nothing plays yet: the listener says which way to listen
       return { state: "pending", tracks: [track] };
+    }
+
+    if (a.kind === "queue") {
+      const station = sp.stationActive && sp.stationQueue.length > 0;
+      const rows = station ? sp.stationQueue.map((t) => ({ uri: t.uri, title: t.name, artist: t.artist, artwork: t.artwork, durationMs: t.durationMs })) : sp.nextUp;
+      if (!rows.length) return fail("다음에 나올 곡이 없어요");
+      const tracks: ActionTrack[] = rows.slice(0, QUEUE_ROWS).map((t) => ({ id: t.uri, uri: t.uri, title: t.title, artist: t.artist, artwork: t.artwork, durationMs: t.durationMs, albumId: null }));
+      return { state: "done", tracks, more: Math.max(0, rows.length - tracks.length), via: station ? "station" : "queue", summary: `다음 곡 ${rows.length}곡` };
+    }
+
+    if (a.kind === "lyrics") {
+      if (!sp.now) return fail(NOTHING_PLAYING);
+      if (!env.lyrics.open) env.lyrics.toggle();
+      return { state: "done", summary: "가사 화면을 열었어요" };
+    }
+
+    if (a.kind === "stopStation") {
+      if (!sp.stationActive) return fail("지금 돌고 있는 스테이션이 없어요");
+      sp.stopStation();
+      return { state: "done", summary: "스테이션을 종료했어요" };
     }
 
     if (a.kind === "station") {
@@ -419,4 +448,20 @@ export async function makePlaylist(a: ChatAction, name: string): Promise<Partial
   } catch (e) {
     return { state: "error", note: playlistErrorText(e), name: clean };
   }
+}
+
+/**
+ * A row of a queue card pressed: play it the way the UP NEXT list does. The song and
+ * everything after it become the queue, so what follows it is what comes next; a
+ * station's queue is its own and just reorders.
+ */
+export async function playQueued(a: ChatAction, track: ActionTrack, sp: Spotify): Promise<void> {
+  if (a.via === "station" && sp.stationActive) {
+    const row = sp.stationQueue.find((t) => t.uri === track.uri);
+    if (row) return void (await sp.playFromStation(row));
+  }
+  const at = sp.nextUp.findIndex((t) => t.uri === track.uri);
+  const rest = at >= 0 ? sp.nextUp.slice(at) : [];
+  if (rest.length > 1) return void (await sp.play({ uris: rest.map((t) => t.uri), tracks: rest }));
+  await sp.play({ uris: [track.uri], tracks: [{ uri: track.uri, title: track.title, artist: track.artist, artwork: track.artwork, durationMs: track.durationMs }] });
 }
