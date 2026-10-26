@@ -462,6 +462,17 @@ def make_playlist(session: Session, name: str, source: str = "shown") -> dict:
     return _action("playlist", "화면이 이름과 곡을 보여 주고 사용자가 만들기를 눌러야 만들어진다. 곡 목록을 글로 나열하지 말고, 만들어 볼지 물어본다.", name=name, source=source)
 
 
+def add_to_playlist(session: Session, title: str = "", artist: str = "", name: str = "") -> dict:
+    """곡 하나를 사용자의 기존 플레이리스트에 담자는 말('이 곡 내 플레이리스트에 담아줘')에 부른다. 어느 플레이리스트인지는 사용자가 카드에서 고른다."""
+    title, artist, name = _line(title), _line(artist), _line(name, 60)
+    if title:
+        return _action("addTo", "화면이 플레이리스트 목록 카드를 보여 주고 사용자가 고른다. 어느 곳에 담을지 물어보는 한 문장만 쓴다. 아직 담지 않았다.", source="named", title=title, artist=artist, name=name)
+    now = session.now_playing or {}
+    if not now.get("playing"):
+        return {"error": "지금 재생 중인 곡이 없어서 어느 곡인지 모른다. 곡 이름을 말해 달라고 한다."}
+    return _action("addTo", "화면이 플레이리스트 목록 카드를 보여 주고 사용자가 고른다. 어느 곳에 담을지 물어보는 한 문장만 쓴다. 아직 담지 않았다.", source="now", title=now["title"], artist=now.get("artist", ""), name=name)
+
+
 def up_next(session: Session) -> dict:
     """곧 나올 곡들을 보여 달라는 말('다음에 뭐 나와?')에 부른다. 목록은 화면이 카드로 보여 주니 글로 나열하지 않는다."""
     return _action("queue", "화면이 다음에 나올 곡 카드를 보여 준다. 곡을 말하지 말고 '다음 곡들이에요'처럼 짧게만 알린다.")
@@ -1089,6 +1100,28 @@ TOOLS: dict[str, dict] = {
         },
         "run": volume,
     },
+    "add_to_playlist": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "add_to_playlist",
+                "description": (
+                    "곡 하나를 사용자의 기존 플레이리스트에 담는다. '이 곡 내 플레이리스트에 담아줘'(title 없이), "
+                    "'Everlong 플레이리스트에 담아줘'(title)에 부른다. 곧바로 담지 않고 사용자가 카드에서 플레이리스트를 고른다. "
+                    "새 플레이리스트를 만들자는 말이나 여러 곡을 담는 말은 make_playlist를 쓴다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "곡 제목. 지금 듣는 곡이면 비운다"},
+                        "artist": {"type": "string", "description": "가수(알면)"},
+                        "name": {"type": "string", "description": "새로 만들 플레이리스트 이름(사용자가 말했을 때만)"},
+                    },
+                },
+            },
+        },
+        "run": add_to_playlist,
+    },
     "up_next": {
         "schema": {
             "type": "function",
@@ -1297,7 +1330,7 @@ DEFAULT_SOURCES = ["lastfm"]
 
 
 # 사용자의 화면이 대신 해 주는 동작. 로그인(Spotify 연결)한 사용자에게만 준다.
-ACTION_TOOLS = ("like_track", "playback", "player_mode", "seek", "volume", "play_one", "up_next", "lyrics", "stop_station", "start_station", "make_playlist")
+ACTION_TOOLS = ("like_track", "playback", "player_mode", "seek", "volume", "play_one", "add_to_playlist", "up_next", "lyrics", "stop_station", "start_station", "make_playlist")
 
 
 def tools_for(sources: list[str] | None, now_playing_on: bool = False, can_act: bool = False, station_on: bool = False) -> tuple[str, ...]:
