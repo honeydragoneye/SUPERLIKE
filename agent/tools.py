@@ -462,6 +462,21 @@ def make_playlist(session: Session, name: str, source: str = "shown") -> dict:
     return _action("playlist", "화면이 이름과 곡을 보여 주고 사용자가 만들기를 눌러야 만들어진다. 곡 목록을 글로 나열하지 말고, 만들어 볼지 물어본다.", name=name, source=source)
 
 
+def up_next(session: Session) -> dict:
+    """곧 나올 곡들을 보여 달라는 말('다음에 뭐 나와?')에 부른다. 목록은 화면이 카드로 보여 주니 글로 나열하지 않는다."""
+    return _action("queue", "화면이 다음에 나올 곡 카드를 보여 준다. 곡을 말하지 말고 '다음 곡들이에요'처럼 짧게만 알린다.")
+
+
+def lyrics(session: Session) -> dict:
+    """지금 듣는 곡의 가사 화면을 연다('가사 보여줘')."""
+    return _action("lyrics", "화면이 가사를 연다. 카드는 없다. 가사 내용을 지어내지 말고 '가사 화면을 열게요'처럼만 알린다.")
+
+
+def stop_station(session: Session) -> dict:
+    """돌고 있는 스테이션을 끝낸다('스테이션 꺼줘'). 지금 곡은 끝까지 재생된다."""
+    return _action("stopStation", "화면이 스테이션을 끝낸다. 지금 곡은 계속 재생된다고 짧게 알린다.")
+
+
 def player_mode(session: Session, shuffle: str = "", repeat: str = "") -> dict:
     """셔플과 반복을 정한다: shuffle은 on/off, repeat는 off(반복 없음)/all(전체 반복)/one(한 곡 반복)."""
     shuffle, repeat = _line(shuffle, 10).lower(), _line(repeat, 10).lower()
@@ -1074,6 +1089,45 @@ TOOLS: dict[str, dict] = {
         },
         "run": volume,
     },
+    "up_next": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "up_next",
+                "description": (
+                    "다음에 나올 곡 목록 카드를 보여 준다. '다음에 뭐 나와?', '다음 곡들 보여줘'에 부른다. 곡 이름은 화면이 보여 주니 글로 말하지 않는다."
+                ),
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        "run": up_next,
+    },
+    "lyrics": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "lyrics",
+                "description": (
+                    "지금 듣는 곡의 가사 화면을 연다. '가사 보여줘', '가사 열어줘'에 부른다."
+                ),
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        "run": lyrics,
+    },
+    "stop_station": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "stop_station",
+                "description": (
+                    "돌고 있는 스테이션을 끝낸다. '스테이션 꺼줘', '스테이션 그만'에 부른다. 지금 곡은 끝까지 재생된다."
+                ),
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        "run": stop_station,
+    },
     "play_one": {
         "schema": {
             "type": "function",
@@ -1243,7 +1297,7 @@ DEFAULT_SOURCES = ["lastfm"]
 
 
 # 사용자의 화면이 대신 해 주는 동작. 로그인(Spotify 연결)한 사용자에게만 준다.
-ACTION_TOOLS = ("like_track", "playback", "player_mode", "seek", "volume", "play_one", "start_station", "make_playlist")
+ACTION_TOOLS = ("like_track", "playback", "player_mode", "seek", "volume", "play_one", "up_next", "lyrics", "stop_station", "start_station", "make_playlist")
 
 
 def tools_for(sources: list[str] | None, now_playing_on: bool = False, can_act: bool = False, station_on: bool = False) -> tuple[str, ...]:

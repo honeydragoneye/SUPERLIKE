@@ -61,11 +61,11 @@ _NO_NOW = (
 _ACTIONS = (
     "사용자가 동작을 시키면 맞는 도구를 한 번 부른다: 좋아요(like_track), 재생·멈춤·다음 곡(playback), "
     "셔플·반복(player_mode), 재생 위치 옮기기(seek), 음량(volume), 곡 하나만 들려 달라는 말(play_one), "
-    "스테이션 시작(start_station), 플레이리스트 만들기(make_playlist). 도구는 제안만 하고 실행은 화면이 하며, "
+    "다음에 나올 곡 목록(up_next), 가사 화면 열기(lyrics), 스테이션 끝내기(stop_station), 스테이션 시작(start_station), 플레이리스트 만들기(make_playlist). 도구는 제안만 하고 실행은 화면이 하며, "
     "결과(좋아요에 담았는지, 만들었는지)는 화면에 카드로 따로 보인다. 그래서 글은 한두 문장으로 짧게 "
     "\"~할게요\"처럼 알리고, 이미 됐다고 단정하지 않으며 곡 목록을 되풀이하지 않는다. 플레이리스트는 사용자가 "
     "만들기를 눌러야 만들어지니 \"만들어 볼까요?\"처럼 말한다. 곡 이름을 말하며 틀어 달라거나 좋아요를 "
-    "누르라고 하면 이름은 사용자가 쓴 그대로 넣는다. 곡 삭제, 플레이리스트에서 곡 빼기·지우기, 가사 보기처럼 "
+    "누르라고 하면 이름은 사용자가 쓴 그대로 넣는다. 곡 삭제, 플레이리스트에서 곡 빼기·지우기처럼 "
     "이 도구들로 못 하는 일은 할 수 없다고 한 문장으로 말한다.\n"
 )
 # 사용자가 Spotify에 연결하지 않았다: 동작 도구가 없다
@@ -112,7 +112,7 @@ SYSTEM_PROMPT_CARDS = _HEAD + _NAMED + _NAMED_CARDS + _INFO + _LINK_CARDS + _RUL
 
 # 곡을 틀거나 찾아 달라는 말, 추천해 달라는 말: 이런 요청은 도구로 확인해야 답할 수 있다
 _NEEDS_TOOL = re.compile(
-    r"(틀어|들려|재생|검색|찾아|추천|play|어떤 (밴드|가수|곡|노래)|누구|어느 나라|언제 (결성|데뷔|나왔)|앨범|대표곡|비슷한|같은 (노래|곡|가수|밴드)|설명|소개|에 대해|비교|이 (곡|노래|가수)|이거|지금 (듣|나오|재생)|방금|좋아요|스테이션|플레이리스트|다음 곡|이전 곡|멈춰|일시정지|셔플|반복|볼륨|음량|소리|음소거|처음부터|한 곡만)",
+    r"(틀어|들려|재생|검색|찾아|추천|play|어떤 (밴드|가수|곡|노래)|누구|어느 나라|언제 (결성|데뷔|나왔)|앨범|대표곡|비슷한|같은 (노래|곡|가수|밴드)|설명|소개|에 대해|비교|이 (곡|노래|가수)|이거|지금 (듣|나오|재생)|방금|좋아요|스테이션|플레이리스트|다음 곡|이전 곡|멈춰|일시정지|셔플|반복|볼륨|음량|소리|음소거|처음부터|한 곡만|다음에|가사|업\s*넥스트|up\s*next)",
     re.IGNORECASE,
 )
 
@@ -143,6 +143,9 @@ _DIRECT: list[tuple[re.Pattern[str], object]] = [
     (re.compile(_TIME + r"\s*(뒤로|되감|전으로)"), lambda m: ("seek", {"seconds": -_seconds(m), "relative": True}) if _seconds(m) else None),
     (re.compile(_TIME + r"\s*(앞으로|건너뛰|뒤\s*로\s*건너)"), lambda m: ("seek", {"seconds": _seconds(m), "relative": True}) if _seconds(m) else None),
     (re.compile(_TIME + r"\s*(으로|로)\s*(이동|가|넘어|옮겨|점프)"), lambda m: ("seek", {"seconds": _seconds(m), "relative": False}) if _seconds(m) else None),
+    (re.compile(r"스테이션\s*(꺼|끄|종료|끝|그만|중지|멈춰)"), ("stop_station", {})),
+    (re.compile(r"가사\s*(보여|열어|띄워|틀어|켜)"), ("lyrics", {})),
+    (re.compile(r"(다음\s*곡들|다음\s*(에)?\s*나올|업\s*넥스트|up\s*next)", re.IGNORECASE), ("up_next", {})),
     (re.compile(r"(일시\s*정지|멈춰|정지|잠깐\s*스톱|\bstop\b|\bpause\b)", re.IGNORECASE), ("playback", {"command": "pause"})),
     (re.compile(r"(다음\s*(곡|노래)|넘겨|스킵|\bskip\b|\bnext\b)", re.IGNORECASE), ("playback", {"command": "next"})),
     (re.compile(r"(이전\s*(곡|노래)|앞\s*(곡|노래)|\bprevious\b)", re.IGNORECASE), ("playback", {"command": "previous"})),
@@ -411,7 +414,7 @@ def run_agent(
                         "content": (
                             "도구를 먼저 불러서 확인한 뒤에 답해줘. 곡 이름을 말한 거면 find_track, "
                             "분위기나 장르를 말한 거면 top_tracks, '~같은 곡'이면 similar_to, 좋아요·재생·스테이션·플레이리스트를 "
-                            "시킨 거면 like_track, playback, player_mode, seek, volume, play_one, start_station, make_playlist, 가수나 곡에 대한 질문이면 "
+                            "시킨 거면 like_track, playback, player_mode, seek, volume, play_one, up_next, lyrics, stop_station, start_station, make_playlist, 가수나 곡에 대한 질문이면 "
                             "artist_info, track_info, albums, wiki_summary 같은 정보 도구를 불러. "
                             "필요한 도구가 안 보이거나 도구로 찾고도 답이 없을 때만 request_source로 "
                             "사용자가 다른 출처를 고르게 해."
