@@ -3,7 +3,8 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import type { ChatAction } from "./chat-actions";
+import { usePlaybackPosition, useSpotify } from "@/components/player/spotify-provider";
+import { clock, showsPlayer, type ChatAction } from "./chat-actions";
 import { useChat } from "./chat-provider";
 
 /**
@@ -229,18 +230,215 @@ function Playlist({ messageId, a }: { messageId: string; a: ChatAction }) {
   );
 }
 
-/** One action of an answer. Some leave no card: moving the player on and pausing are words, not things to keep. */
-export function ActionCard({ messageId, a }: { messageId: string; a: ChatAction }) {
-  if (a.kind === "like" || (a.kind === "playback" && a.command === "play")) return <Line messageId={messageId} a={a} />;
+/** The card an older one becomes once a newer one of its kind has come: what was done, in a line. */
+function Record({ glyph, a }: { glyph: string; a: ChatAction }) {
+  const failed = a.state === "error";
+  return (
+    <li className="flex items-center gap-[6px] rounded-[8px] bg-chart px-[10px] py-[7px]">
+      <span className="text-[7px] tracking-[0.6px] text-on-bright-muted">{glyph}</span>
+      <span className={`min-w-0 flex-1 truncate text-[9px] ${failed ? "text-alert" : "text-on-bright-muted"}`}>
+        {failed ? (a.note ?? "하지 못했어요") : (a.summary ?? "")}
+      </span>
+    </li>
+  );
+}
+
+const Ico = ({ children, on = false, big = false, label, onClick, disabled }: { children: React.ReactNode; on?: boolean; big?: boolean; label: string; onClick?: () => void; disabled?: boolean }) => (
+  <button
+    type="button"
+    aria-label={label}
+    title={label}
+    disabled={disabled}
+    onClick={onClick}
+    className={`flex shrink-0 cursor-pointer items-center justify-center rounded-full text-[10px] font-bold transition-colors disabled:cursor-default disabled:opacity-40 ${
+      big ? "size-[30px] bg-accent-bright text-paper-solid enabled:hover:bg-ink" : `size-[22px] ${on ? "bg-[#d4dcff] text-accent-bright" : "text-on-bright enabled:hover:bg-soft"}`
+    }`}
+  >
+    {children}
+  </button>
+);
+
+/**
+ * The bar, made small: the song, the buttons, and where it is. It is live (the
+ * buttons work and it follows the player) only while it is the newest of its
+ * kind; an older one is a line of what it did, so two cards never disagree
+ * about what the player is doing now.
+ */
+function PlayerCard({ messageId, a, live }: { messageId: string; a: ChatAction; live: boolean }) {
+  const { actOn } = useChat();
+  const sp = useSpotify();
+  const position = usePlaybackPosition();
+  if (!live) return <Record glyph="PLAYER" a={a} />;
+  const now = sp.now;
+  const ratio = now && now.durationMs ? Math.min(1, position / now.durationMs) : 0;
+  return (
+    <li className="flex flex-col gap-[8px] rounded-[8px] bg-chart p-[10px]">
+      <span className="text-[8px] tracking-[0.8px] text-accent-bright">PLAYER</span>
+      <div className="flex items-center gap-[8px]">
+        <Tile src={now?.artwork ?? a.tracks?.[0]?.artwork} />
+        <span className="flex min-w-0 flex-1 flex-col gap-px">
+          <span className="w-full truncate text-[11px] font-black">{now?.title ?? a.tracks?.[0]?.title ?? "재생 중인 곡 없음"}</span>
+          <span className="w-full truncate text-[8px] tracking-[0.5px] text-on-bright-muted">{now?.artist ?? a.tracks?.[0]?.artist ?? ""}</span>
+        </span>
+      </div>
+      <div className="flex items-center justify-center gap-[6px]">
+        <Ico label={sp.shuffle ? "셔플 끄기" : "셔플 켜기"} on={sp.shuffle} onClick={() => void sp.toggleShuffle()}>
+          ⇄
+        </Ico>
+        <Ico label="이전 곡" onClick={() => void sp.previous()}>
+          |◀
+        </Ico>
+        <Ico big label={sp.isPlaying ? "일시정지" : "재생"} onClick={() => void sp.toggle()}>
+          {sp.isPlaying ? "❚❚" : "▶"}
+        </Ico>
+        <Ico label="다음 곡" onClick={() => void sp.next()}>
+          ▶|
+        </Ico>
+        <Ico label={["반복 없음", "전체 반복", "한 곡 반복"][sp.repeatMode]} on={sp.repeatMode > 0} onClick={() => void sp.cycleRepeat()}>
+          {sp.repeatMode === 2 ? "↻1" : "↻"}
+        </Ico>
+      </div>
+      <div className="flex items-center gap-[6px]">
+        <span className="tnum w-[28px] text-[8px] text-on-bright-muted">{clock(position)}</span>
+        <button
+          type="button"
+          aria-label="재생 위치"
+          disabled={!now}
+          onClick={(e) => {
+            if (!now) return;
+            const box = e.currentTarget.getBoundingClientRect();
+            void sp.seek(Math.round(((e.clientX - box.left) / box.width) * now.durationMs));
+          }}
+          className="relative h-[10px] flex-1 cursor-pointer disabled:cursor-default"
+        >
+          <span className="absolute inset-x-0 top-[3px] h-[4px] rounded-pill bg-soft" />
+          <span className="absolute left-0 top-[3px] h-[4px] rounded-pill bg-accent-bright" style={{ width: `${ratio * 100}%` }} />
+        </button>
+        <span className="tnum w-[28px] text-right text-[8px] text-on-bright-muted">{now ? clock(now.durationMs) : "0:00"}</span>
+      </div>
+      {(a.summary || a.state === "error" || a.state === "already") && (
+        <div className="flex items-center gap-[8px]">
+          <span className={`min-w-0 flex-1 text-[9px] font-bold ${a.state === "error" ? "text-alert" : ""}`}>
+            {a.state === "error" ? (a.note ?? "하지 못했어요") : a.state === "already" ? "이미 그 상태예요" : a.summary}
+          </span>
+          {a.state === "done" && <Button onClick={() => actOn(messageId, a.id, { type: "undo" })}>취소</Button>}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** The volume, with a slider that moves the player's own: it is the bar's slider, said in the chat. */
+function VolumeCard({ messageId, a, live }: { messageId: string; a: ChatAction; live: boolean }) {
+  const { actOn } = useChat();
+  const { volume, muted, setVolume, toggleMute } = useSpotify();
+  if (!live) return <Record glyph="VOLUME" a={a} />;
+  const percent = Math.round(volume * 100);
+  return (
+    <li className="flex flex-col gap-[8px] rounded-[8px] bg-chart p-[10px]">
+      <span className="text-[8px] tracking-[0.8px] text-accent-bright">VOLUME</span>
+      <div className="flex items-center gap-[10px]">
+        <button
+          type="button"
+          aria-label={muted ? "음소거 해제" : "음소거"}
+          onClick={toggleMute}
+          className={`flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-full text-[11px] transition-colors ${muted ? "bg-accent-bright text-paper-solid" : "bg-soft text-on-bright"}`}
+        >
+          {muted ? "✕" : percent === 0 ? "◁" : "◀))"}
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={muted ? 0 : percent}
+          aria-label="음량"
+          onChange={(e) => setVolume(Number(e.target.value) / 100)}
+          className="h-[4px] min-w-0 flex-1 cursor-pointer accent-accent-bright"
+        />
+        <span className={`tnum w-[40px] shrink-0 text-right text-[9px] font-bold ${muted ? "text-accent-bright" : ""}`}>{muted ? "음소거" : `${percent}%`}</span>
+      </div>
+      {a.summary && (
+        <div className="flex items-center gap-[8px]">
+          <span className="min-w-0 flex-1 text-[9px] font-bold">{a.summary}</span>
+          {a.state === "done" && <Button onClick={() => actOn(messageId, a.id, { type: "undo" })}>되돌리기</Button>}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** "한 곡만 틀어줘" can mean two things, so the listener says which, and nothing plays until they do. */
+function Choice({ messageId, a }: { messageId: string; a: ChatAction }) {
+  const { actOn } = useChat();
+  const track = a.tracks?.[0];
+  const title = track?.title ?? a.title;
+  return (
+    <li className="flex flex-col gap-[8px] rounded-[8px] bg-chart p-[10px]">
+      <div className="flex items-center gap-[6px]">
+        <span className="text-[8px] tracking-[0.8px] text-accent-bright">PLAYER</span>
+        {a.state === "cancelled" && <span className="rounded-pill bg-soft px-[7px] py-[2px] text-[7px] tracking-[0.5px] text-on-bright-muted">취소했어요</span>}
+      </div>
+      <div className="flex items-center gap-[8px]">
+        <Tile src={track?.artwork} />
+        <span className="flex min-w-0 flex-1 flex-col gap-px">
+          <span className="w-full truncate text-[11px] font-black">{title}</span>
+          <span className="w-full truncate text-[8px] tracking-[0.5px] text-on-bright-muted">{track?.artist ?? a.artist}</span>
+        </span>
+      </div>
+      {a.state === "pending" && (
+        <>
+          <p className="text-[10px] font-bold">어떻게 들을까요?</p>
+          <div className="flex flex-col gap-[6px]">
+            <button
+              type="button"
+              onClick={() => actOn(messageId, a.id, { type: "choose", value: "loop" })}
+              className="flex cursor-pointer items-center gap-[10px] rounded-[12px] bg-ink px-[12px] py-[9px] text-left transition-colors hover:bg-accent-bright"
+            >
+              <span className="text-[12px] font-bold text-paper-solid">↻</span>
+              <span className="flex flex-col gap-px">
+                <span className="text-[10px] font-bold text-paper-solid">이 곡만 계속</span>
+                <span className="text-[8px] text-paper-solid/70">끝나면 처음부터 다시 (한 곡 반복)</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => actOn(messageId, a.id, { type: "choose", value: "once" })}
+              className="rule flex cursor-pointer items-center gap-[10px] rounded-[12px] bg-paper-solid px-[12px] py-[9px] text-left transition-colors hover:bg-soft"
+            >
+              <span className="text-[12px] font-bold">▶</span>
+              <span className="flex flex-col gap-px">
+                <span className="text-[10px] font-bold">한 번만 듣기</span>
+                <span className="text-[8px] text-on-bright-muted">이 곡 하나만 틀고, 끝나면 멈춰요</span>
+              </span>
+            </button>
+          </div>
+          <div className="flex gap-[6px]">
+            <Button onClick={() => actOn(messageId, a.id, { type: "cancel" })}>취소</Button>
+          </div>
+        </>
+      )}
+      {a.state === "working" && <p className="text-[8px] tracking-[0.4px] text-on-bright-muted">재생하는 중…</p>}
+      {a.state === "done" && (
+        <div className="flex items-center gap-[8px]">
+          <span className="min-w-0 flex-1 text-[9px] font-bold">{a.chosen === "loop" ? "↻" : "▶"} {a.summary}</span>
+          {a.chosen === "loop" && <Button onClick={() => actOn(messageId, a.id, { type: "undo" })}>반복 끄기</Button>}
+        </div>
+      )}
+      {a.state === "undone" && <p className="text-[9px] font-bold text-on-bright-muted">{a.summary}</p>}
+      {a.state === "error" && <p className="text-[9px] leading-[14px] text-alert">{a.note ?? "하지 못했어요"}</p>}
+    </li>
+  );
+}
+
+/** One action of an answer. Some leave no card: moving the player on is a word, not a thing to keep. */
+export function ActionCard({ messageId, a, live }: { messageId: string; a: ChatAction; live: boolean }) {
+  if (a.kind === "like") return <Line messageId={messageId} a={a} />;
+  if (showsPlayer(a)) return <PlayerCard messageId={messageId} a={a} live={live} />;
+  if (a.kind === "volume") return <VolumeCard messageId={messageId} a={a} live={live} />;
+  if (a.kind === "choice") return <Choice messageId={messageId} a={a} />;
   if (a.kind === "station") return <Station messageId={messageId} a={a} />;
   if (a.kind === "playlist") return <Playlist messageId={messageId} a={a} />;
-  // next, previous, pause, resume: only a refusal or an already-so is worth a line
-  if (a.state === "error" || a.state === "already") {
-    return (
-      <li className={`text-[8px] leading-[12px] tracking-[0.4px] ${a.state === "error" ? "text-alert" : "text-on-bright-muted"}`}>
-        {a.state === "error" ? (a.note ?? "하지 못했어요") : a.command === "pause" ? "이미 일시정지 상태예요" : "이미 재생 중이에요"}
-      </li>
-    );
-  }
+  // next, previous: only a refusal is worth a line
+  if (a.state === "error") return <li className="text-[8px] leading-[12px] tracking-[0.4px] text-alert">{a.note ?? "하지 못했어요"}</li>;
   return null;
 }

@@ -85,6 +85,11 @@ type Ctx = {
   repeatMode: 0 | 1 | 2;
   toggleShuffle: () => Promise<void>;
   cycleRepeat: () => Promise<void>;
+  /** the exact state asked for, not a flip: "셔플 켜줘" must not turn an already-on shuffle off */
+  setShuffleTo: (on: boolean) => Promise<void>;
+  setRepeatTo: (mode: 0 | 1 | 2) => Promise<void>;
+  /** where the song is now; read when something is done, so it does not re-render for every tick */
+  getPositionMs: () => number;
   /** 0 to 1: what the listener set, which stays when muted */
   volume: number;
   muted: boolean;
@@ -533,6 +538,34 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
     [deviceId],
   );
 
+  /** Where the song is, for whoever asks at the moment of doing something. */
+  const positionRef = useRef(0);
+  useEffect(() => {
+    positionRef.current = positionMs;
+  }, [positionMs]);
+
+  /** Shuffle set to a state. A station owns its own shuffle: reordering its queue is what "on" means there. */
+  const shuffleTo = useCallback(
+    async (next: boolean) => {
+      setShuffle(next);
+      if (station.isActive) {
+        stationOwnsShuffleRef.current = next;
+        if (next) station.shuffleQueue();
+        return;
+      }
+      stationOwnsShuffleRef.current = false;
+      await setMode({ action: "shuffle", state: next });
+    },
+    [station, setMode],
+  );
+  const repeatTo = useCallback(
+    async (next: 0 | 1 | 2) => {
+      setRepeatMode(next);
+      await setMode({ action: "repeat", state: next === 0 ? "off" : next === 1 ? "context" : "track" });
+    },
+    [setMode],
+  );
+
   const value = useMemo<Ctx>(
     () => ({
       connected,
@@ -557,25 +590,15 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       muted,
       setVolume,
       toggleMute,
-      toggleShuffle: async () => {
-        const next = !shuffle;
-        setShuffle(next);
-        if (station.isActive) {
-          stationOwnsShuffleRef.current = next;
-          if (next) station.shuffleQueue();
-          return;
-        }
-        stationOwnsShuffleRef.current = false;
-        await setMode({ action: "shuffle", state: next });
+      toggleShuffle: () => shuffleTo(!shuffle),
+      cycleRepeat: () => repeatTo(((repeatMode + 1) % 3) as 0 | 1 | 2),
+      setShuffleTo: async (on) => {
+        if (on !== shuffle) await shuffleTo(on);
       },
-      cycleRepeat: async () => {
-        const next = ((repeatMode + 1) % 3) as 0 | 1 | 2;
-        setRepeatMode(next);
-        await setMode({
-          action: "repeat",
-          state: next === 0 ? "off" : next === 1 ? "context" : "track",
-        });
+      setRepeatTo: async (mode) => {
+        if (mode !== repeatMode) await repeatTo(mode);
       },
+      getPositionMs: () => positionRef.current,
       recent: recent ?? [],
       recentLive: connected && Boolean(recent?.length),
       recentLoaded: connected && recent !== null,
@@ -681,6 +704,8 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       muted,
       setVolume,
       toggleMute,
+      shuffleTo,
+      repeatTo,
       setMode,
       recent,
       recentError,

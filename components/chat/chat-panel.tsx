@@ -10,6 +10,7 @@ import { boldSpans } from "@/lib/chat/inline";
 import { TrackCard } from "@/components/ui/track-card";
 import { ChatHistory, ClockIcon } from "./chat-history";
 import { ActionCard } from "./action-card";
+import { showsPlayer } from "./chat-actions";
 import { LinkCard } from "./link-card";
 import { CHAT_SOURCES, useChat, type ChatMessage, type ChatProposal, type ChatTrack } from "./chat-provider";
 
@@ -146,8 +147,22 @@ function UserBubble({ text }: { text: string }) {
 }
 
 function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }> }) {
-  const { searchWith, retry, busy } = useChat();
-  const text = m.tracks.length ? withoutList(m.text) : m.text;
+  const { searchWith, retry, busy, messages } = useChat();
+  // of the player cards, and of the volume cards, only the newest in the conversation is live
+  const live = new Set<string>();
+  for (const kind of ["player", "volume"] as const) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const row = messages[i];
+      const hit = row.role === "assistant" ? [...row.actions].reverse().find((x) => (kind === "volume" ? x.kind === "volume" : showsPlayer(x))) : undefined;
+      if (hit) {
+        live.add(hit.id);
+        break;
+      }
+    }
+  }
+  // "옮길게요" above a card that says it could not is a contradiction: the card speaks alone
+  const failed = !m.streaming && m.actions.length > 0 && m.actions.every((x) => x.state === "error");
+  const text = failed ? "" : m.tracks.length ? withoutList(m.text) : m.text;
   const waiting = m.streaming && !text && !m.status && !m.proposal && !m.actions.length && !m.error;
   return (
     <div className="flex w-full justify-start">
@@ -181,7 +196,7 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
         {m.actions.length > 0 && (
           <ul className="flex flex-col gap-[6px]">
             {m.actions.map((a) => (
-              <ActionCard key={a.id} messageId={m.id} a={a} />
+              <ActionCard key={a.id} messageId={m.id} a={a} live={live.has(a.id)} />
             ))}
           </ul>
         )}

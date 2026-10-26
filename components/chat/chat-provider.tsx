@@ -13,7 +13,7 @@ import {
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useCustomTags } from "@/components/station/use-custom-tags";
 import { loadChat, saveChat } from "@/lib/chat/history";
-import { actionFrom, cancelAction, makePlaylist, startAction, undoAction, type ActionEnv, type ChatAction } from "./chat-actions";
+import { actionFrom, cancelAction, chooseOption, makePlaylist, startAction, undoAction, type ActionEnv, type ChatAction } from "./chat-actions";
 import { snapshot as likedSnapshot } from "@/lib/likes";
 import { updateCustomDefinition } from "@/lib/station/custom-tags";
 import type { CustomMoodKey } from "@/lib/station/filter";
@@ -119,7 +119,11 @@ type Ctx = {
   setWidth: (px: number) => void;
   maxWidth: number;
   /** a press on an action's card: take it back, stop it, make the playlist under this name, or try it again */
-  actOn: (messageId: string, actionId: string, op: { type: "undo" | "cancel" | "retry" } | { type: "confirm"; name: string }) => void;
+  actOn: (
+    messageId: string,
+    actionId: string,
+    op: { type: "undo" | "cancel" | "retry" } | { type: "confirm"; name: string } | { type: "choose"; value: "loop" | "once" },
+  ) => void;
   /** the listener picked where to look next, for the question this answer was about */
   searchWith: (messageId: string, source: ChatSource) => void;
   /** asks again the question an answer gave up on, in place of the failed pair */
@@ -322,6 +326,7 @@ function historyOf(messages: ChatMessage[]): { role: "user" | "assistant"; conte
       const did = m.actions.length
         ? `\n(해 준 동작: ${m.actions
             .map((a) => {
+              if (a.summary && a.kind !== "like") return `${a.summary} (${{ working: "하는 중", pending: "고르기 전", done: "했음", undone: "되돌림", cancelled: "취소됨", already: "이미 그랬음", busy: "-", error: "못 했음" }[a.state]})`;
               const what = a.kind === "like" ? "좋아요" : a.kind === "station" ? "스테이션" : a.kind === "playlist" ? `플레이리스트 '${a.name ?? ""}'` : "재생";
               const subject = a.tracks?.[0] ? ` ${a.tracks[0].title}` : a.title ? ` ${a.title}` : "";
               const state = { working: "하는 중", pending: "만들기 전", done: "했음", undone: "취소됨", cancelled: "취소됨", already: "이미 그랬음", busy: "다른 스테이션 만드는 중", error: "못 했음" }[a.state];
@@ -543,6 +548,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         else if (op.type === "retry") {
           patchAction(messageId, actionId, { state: "working", note: undefined });
           patchAction(messageId, actionId, await startAction({ ...action, state: "working" }, actionEnv()));
+        } else if (op.type === "choose") {
+          patchAction(messageId, actionId, { state: "working" });
+          patchAction(messageId, actionId, await chooseOption(action, op.value, actionEnv()));
         } else if (op.type === "confirm") {
           patchAction(messageId, actionId, { state: "working" });
           patchAction(messageId, actionId, await makePlaylist(action, op.name));
@@ -616,7 +624,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     ? "지금 듣는 곡을 확인하는 중…"
                     : event.name === "station_info"
                       ? "스테이션을 확인하는 중…"
-                    : ["like_track", "playback", "start_station", "make_playlist"].includes(String(event.name))
+                    : ["like_track", "playback", "player_mode", "seek", "volume", "play_one", "start_station", "make_playlist"].includes(String(event.name))
                       ? "준비하는 중…"
                     : event.name === "top_tracks"
                     ? "곡을 찾는 중…"
