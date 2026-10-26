@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useDetail } from "@/components/detail/use-detail";
+import { useConnectDialog } from "@/components/player/connect-dialog";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useHydrated } from "@/components/ui/use-hydrated";
@@ -16,6 +17,7 @@ import type { Profile } from "@/lib/data";
  */
 export function AccountBanner() {
   const { connected: session, ready: deviceReady, logout } = useSpotify();
+  const { ask, dialog } = useConnectDialog();
   /**
    * Browser-only knowledge, held back until React has finished comparing this
    * subtree against the server HTML. Gated here rather than in the provider,
@@ -110,17 +112,12 @@ export function AccountBanner() {
 
       <button
         type="button"
-        onClick={() => {
-          if (session) return void logout();
-          // a full navigation: the login route answers 302 to Spotify's own
-          // accounts host, which the router cannot follow off the application
-          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-          window.location.href = "/api/spotify/login";
-        }}
+        onClick={() => (session ? void logout() : ask())}
         className="mt-[2px] flex h-[28px] shrink-0 cursor-pointer items-center whitespace-nowrap rounded-pill border-[1.5px] border-on-dark-muted px-[20px] text-[9px] tracking-[0.6px] text-on-dark transition-colors hover:bg-white/10"
       >
         {connected ? "연결 해제" : "Spotify 연결"}
       </button>
+      {dialog}
     </section>
   );
 }

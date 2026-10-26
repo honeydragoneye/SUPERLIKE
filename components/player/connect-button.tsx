@@ -1,6 +1,7 @@
 "use client";
 
 import { useHydrated } from "@/components/ui/use-hydrated";
+import { useConnectDialog } from "./connect-dialog";
 import { useSpotify } from "./spotify-provider";
 
 /**
@@ -27,32 +28,24 @@ export function ConnectButton() {
   const { connected, ready, logout } = useSpotify();
   const hydrated = useHydrated();
   const live = hydrated && connected;
+  const { ask, dialog } = useConnectDialog();
 
   return (
-    <button
-      type="button"
-      onClick={() => {
-        if (connected) return void logout();
-        /**
-         * A full navigation, not a router push.
-         *
-         * `/api/spotify/login` is not a page: it answers 302 to Spotify's own
-         * accounts host to begin the OAuth handshake. The router cannot follow
-         * a redirect off the application, so the lint rule's premise — that
-         * this is an internal destination — does not hold here.
-         */
-        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.href = "/api/spotify/login";
-      }}
-      title={live ? "연결 해제" : "Spotify 연결"}
-      className="flex shrink-0 flex-col items-end gap-[2px] whitespace-nowrap text-[8px] tracking-[0.6px]"
-    >
-      {/* green only once the device is actually live: CONNECTING is not yet a
+    <>
+      <button
+        type="button"
+        onClick={() => (connected ? void logout() : ask())}
+        title={live ? "연결 해제" : "Spotify 연결"}
+        className="flex shrink-0 flex-col items-end gap-[2px] whitespace-nowrap text-[8px] tracking-[0.6px]"
+      >
+        {/* green only once the device is actually live: CONNECTING is not yet a
           connection, and colouring it would promise something not true */}
-      <span className={live && ready ? "font-black text-spotify" : undefined}>
-        {live ? (ready ? "CONNECTED" : "CONNECTING…") : "CONNECT"}
-      </span>
-      <span className="text-muted">{live ? "DISCONNECT" : "SPOTIFY"}</span>
-    </button>
+        <span className={live && ready ? "font-black text-spotify" : undefined}>
+          {live ? (ready ? "CONNECTED" : "CONNECTING…") : "CONNECT"}
+        </span>
+        <span className="text-muted">{live ? "DISCONNECT" : "SPOTIFY"}</span>
+      </button>
+      {dialog}
+    </>
   );
 }
