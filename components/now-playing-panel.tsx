@@ -10,6 +10,7 @@ import { useHydrated } from "./ui/use-hydrated";
 import { LoadingDots } from "./ui/loading-dots";
 import { useRouter } from "next/navigation";
 import { useLyricsView } from "./lyrics/lyrics-view";
+import { VolumeControl } from "./player/volume-control";
 import { LyricsPopover } from "./lyrics/lyrics-panel";
 import { clock } from "@/lib/time";
 import type { Track } from "@/lib/data";
@@ -153,13 +154,16 @@ export function NowPlayingPanel() {
    * closes the other. Escape or a press anywhere outside closes it.
    */
   const [queueOpen, setQueueOpen] = useState(false);
+  /** the volume slider is the smallest of them: it hangs from its own button, but opening one closes the rest */
+  const [volumeOpen, setVolumeOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const popover = queueOpen || lyricsOpen || moreOpen;
+  const popover = queueOpen || lyricsOpen || moreOpen || volumeOpen;
   useEffect(() => {
     if (!popover) return;
     const shut = () => {
       setQueueOpen(false);
       setMoreOpen(false);
+      setVolumeOpen(false);
       closeLyrics();
     };
     const onDown = (e: globalThis.MouseEvent) => {
@@ -490,6 +494,15 @@ export function NowPlayingPanel() {
       </div>
 
       <div className="flex w-[330px] shrink-0 items-center justify-end gap-[6px]">
+        <VolumeControl
+          open={volumeOpen}
+          onToggle={() => {
+            setQueueOpen(false);
+            setMoreOpen(false);
+            closeLyrics();
+            setVolumeOpen((v) => !v);
+          }}
+        />
         <button
           type="button"
           aria-label="다음에 재생할 곡"
@@ -499,6 +512,7 @@ export function NowPlayingPanel() {
           onClick={() => {
             closeLyrics();
             setMoreOpen(false);
+            setVolumeOpen(false);
             setQueueOpen((v) => !v);
           }}
           className={`flex h-[30px] shrink-0 cursor-pointer items-center gap-[6px] rounded-pill px-[14px] text-[9px] tracking-[0.8px] transition-colors ${
@@ -528,6 +542,7 @@ export function NowPlayingPanel() {
           onClick={() => {
             setQueueOpen(false);
             setMoreOpen(false);
+            setVolumeOpen(false);
             toggleLyrics();
           }}
           className={`flex h-[30px] shrink-0 items-center rounded-pill px-[12px] text-[10px] leading-none transition-colors rule disabled:opacity-40 ${
@@ -547,6 +562,7 @@ export function NowPlayingPanel() {
           onClick={() => {
             setQueueOpen(false);
             setMoreOpen(false);
+            setVolumeOpen(false);
             closeLyrics();
             setAdding(true);
           }}
@@ -562,6 +578,7 @@ export function NowPlayingPanel() {
             pressed={moreOpen}
             onClick={() => {
               setQueueOpen(false);
+              setVolumeOpen(false);
               closeLyrics();
               setMoreOpen((v) => !v);
             }}

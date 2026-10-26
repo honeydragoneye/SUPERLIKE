@@ -6,6 +6,7 @@ import {
   type PlayOutcome,
   type StationSeed,
 } from "@/components/station/use-station";
+import { subscribeVolume, volumeServerSnapshot, volumeSnapshot, writeVolume } from "@/lib/volume";
 import type { StationCandidate } from "@/lib/station/types";
 import type { StationFilter } from "@/lib/station/filter";
 import type { RejectTarget } from "@/lib/station/rejects";
@@ -17,6 +18,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 const SDK_SRC = "https://sdk.scdn.co/spotify-player.js";
@@ -83,6 +85,12 @@ type Ctx = {
   repeatMode: 0 | 1 | 2;
   toggleShuffle: () => Promise<void>;
   cycleRepeat: () => Promise<void>;
+  /** 0 to 1: what the listener set, which stays when muted */
+  volume: number;
+  muted: boolean;
+  /** raising it from silence also lifts the mute */
+  setVolume: (v: number) => void;
+  toggleMute: () => void;
   /** the signed-in user's listening history */
   recent: RecentTrack[];
   recentLive: boolean;
@@ -212,6 +220,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
   const sourceOrderRef = useRef<QueueTrack[]>([]);
   const [shuffle, setShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<0 | 1 | 2>(0);
+  const { v: volume, muted } = useSyncExternalStore(subscribeVolume, volumeSnapshot, volumeServerSnapshot);
   const [recent, setRecent] = useState<RecentTrack[] | null>(null);
   const [recentError, setRecentError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -407,6 +416,17 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
     };
   }, [connected, recentNonce]);
 
+  /** The player takes the level whenever it changes, and when it first becomes ready. */
+  useEffect(() => {
+    void playerRef.current?.setVolume(muted ? 0 : volume);
+  }, [volume, muted, ready]);
+  /** Raising the level from a mute also lifts the mute. */
+  const setVolume = useCallback((v: number) => writeVolume({ v, muted: false }), []);
+  const toggleMute = useCallback(() => {
+    const now = volumeSnapshot();
+    writeVolume({ v: now.v, muted: !now.muted });
+  }, []);
+
   const play = useCallback(
     async (opts: PlayOptions = {}): Promise<PlayOutcome> => {
       if (!deviceId) return "unavailable";
@@ -533,6 +553,10 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
        * own shuffle can reorder it — it swaps the upcoming order without
        * reloading the stream, but never reports the order it produced.
        */
+      volume,
+      muted,
+      setVolume,
+      toggleMute,
       toggleShuffle: async () => {
         const next = !shuffle;
         setShuffle(next);
@@ -653,6 +677,10 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       queueIndex,
       shuffle,
       repeatMode,
+      volume,
+      muted,
+      setVolume,
+      toggleMute,
       setMode,
       recent,
       recentError,
