@@ -3,7 +3,7 @@ import { mirrorLike } from "@/components/player/account-sync";
 import { seedFrom } from "@/components/ui/station-button";
 import { lookUp, type Found } from "@/components/ui/track-card";
 import { isLiked, toggle } from "@/lib/likes";
-import { addToPlaylist, createPlaylist, playlistErrorText } from "@/lib/playlists";
+import { addToPlaylist, createPlaylist, listPlaylists, playlistErrorText } from "@/lib/playlists";
 import type { ChatTrack } from "./chat-provider";
 import { lookUpLink } from "./link-card";
 
@@ -43,7 +43,7 @@ export type Before = {
 
 export type ChatAction = {
   id: string;
-  kind: "like" | "playback" | "mode" | "seek" | "volume" | "choice" | "queue" | "lyrics" | "stopStation" | "station" | "playlist";
+  kind: "like" | "playback" | "mode" | "seek" | "volume" | "choice" | "queue" | "addTo" | "lyrics" | "stopStation" | "station" | "playlist";
   /** where the subject came from: the song playing (now), named by the listener, an artist, the songs shown, the station */
   source: "now" | "named" | "artist" | "shown" | "station";
   command?: "play" | "pause" | "resume" | "next" | "previous";
@@ -78,13 +78,15 @@ export type ChatAction = {
   chosen?: "loop" | "once";
   /** the playlist that was made */
   playlistId?: string;
+  /** an add-to-playlist card: the playlists to choose from, and which already hold the song */
+  lists?: { id: string; name: string; count: number; has: boolean }[];
   /** a queue card: how many more songs follow the ones listed */
   more?: number;
   /** a queue card: whose order it is, which decides how a row is played */
   via?: "station" | "queue";
 };
 
-const KINDS = ["like", "playback", "mode", "seek", "volume", "choice", "queue", "lyrics", "stopStation", "station", "playlist"] as const;
+const KINDS = ["like", "playback", "mode", "seek", "volume", "choice", "queue", "addTo", "lyrics", "stopStation", "station", "playlist"] as const;
 const SOURCES = ["now", "named", "artist", "shown", "station"] as const;
 const COMMANDS = ["play", "pause", "resume", "next", "previous"] as const;
 const line = (v: unknown, n: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, n) : "");
@@ -116,6 +118,7 @@ export function actionFrom(raw: unknown): ChatAction | null {
     title: line(a.title, 120),
     artist: line(a.artist, 120),
     ...(kind === "playlist" ? { name: line(a.name, 60) || "새 플레이리스트" } : {}),
+    ...(kind === "addTo" ? { name: line(a.name, 60) } : {}),
     ...(kind === "mode" ? { shuffle, repeat } : {}),
     ...(kind === "seek" ? { seconds, relative: a.relative === true } : {}),
     ...(kind === "volume" ? { level, change, mute } : {}),
@@ -282,6 +285,14 @@ export async function startAction(a: ChatAction, env: ActionEnv): Promise<Partia
       if (!track) return fail(NOT_FOUND);
       // nothing plays yet: the listener says which way to listen
       return { state: "pending", tracks: [track] };
+    }
+
+    if (a.kind === "addTo") {
+      const track = await subject(a, env);
+      if (!track) return fail(a.source === "now" ? NOTHING_PLAYING : NOT_FOUND);
+      const lists = (await listPlaylists(track.id)).map((p) => ({ id: p.id, name: p.name, count: p.count, has: p.has }));
+      // nothing is put in until the listener presses a row
+      return { state: "pending", tracks: [track], lists };
     }
 
     if (a.kind === "queue") {
@@ -464,4 +475,24 @@ export async function playQueued(a: ChatAction, track: ActionTrack, sp: Spotify)
   const rest = at >= 0 ? sp.nextUp.slice(at) : [];
   if (rest.length > 1) return void (await sp.play({ uris: rest.map((t) => t.uri), tracks: rest }));
   await sp.play({ uris: [track.uri], tracks: [{ uri: track.uri, title: track.title, artist: track.artist, artwork: track.artwork, durationMs: track.durationMs }] });
+}
+
+/** A row of an add-to-playlist card pressed: put the song in that playlist, or in a new one made for it. */
+export async function putInPlaylist(a: ChatAction, target: string | "new"): Promise<Partial<ChatAction>> {
+  const track = a.tracks?.[0];
+  if (!track) return fail("담을 곡이 없어요");
+  const lists = a.lists ?? [];
+  try {
+    if (target === "new") {
+      const name = a.name || "새 플레이리스트";
+      const id = await createPlaylist(name, false, track);
+      return { state: "pending", lists: [{ id, name, count: 1, has: true }, ...lists], summary: `‘${name}’을 만들어 담았어요` };
+    }
+    const list = lists.find((l) => l.id === target);
+    if (!list) return {};
+    await addToPlaylist(list.id, track);
+    return { state: "pending", lists: lists.map((l) => (l.id === list.id ? { ...l, has: true, count: l.count + 1 } : l)), summary: `‘${list.name}’에 담았어요` };
+  } catch (e) {
+    return { note: playlistErrorText(e) };
+  }
 }

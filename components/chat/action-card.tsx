@@ -431,6 +431,58 @@ function Choice({ messageId, a }: { messageId: string; a: ChatAction }) {
 }
 
 /** One action of an answer. Some leave no card: moving the player on is a word, not a thing to keep. */
+/** One song, and the playlists it could go to: a press puts it in, and more than one is fine. */
+function AddTo({ messageId, a }: { messageId: string; a: ChatAction }) {
+  const { actOn } = useChat();
+  const [sent, setSent] = useState<string[]>([]);
+  const track = a.tracks?.[0];
+  if (a.state === "error" || !track) return <li className="text-[8px] leading-[12px] tracking-[0.4px] text-alert">{a.note ?? "하지 못했어요"}</li>;
+  const put = (target: string) => {
+    setSent((all) => [...all, target]);
+    actOn(messageId, a.id, { type: "addTo", target });
+  };
+  const lists = a.lists ?? [];
+  return (
+    <li className="flex flex-col gap-[8px] rounded-[8px] bg-chart p-[10px]">
+      <span className="text-[8px] tracking-[0.8px] text-accent-bright">ADD TO PLAYLIST</span>
+      <div className="flex items-center gap-[8px]">
+        <Tile src={track.artwork} />
+        <span className="flex min-w-0 flex-1 flex-col gap-px">
+          <span className="w-full truncate text-[11px] font-black">{track.title}</span>
+          <span className="w-full truncate text-[8px] tracking-[0.5px] text-on-bright-muted">{track.artist}</span>
+        </span>
+      </div>
+      <ul className="flex flex-col gap-[4px]">
+        {lists.map((l) => (
+          <li key={l.id} className="flex items-center gap-[8px] rounded-[8px] bg-paper-solid px-[10px] py-[6px]">
+            <span className="flex min-w-0 flex-1 flex-col gap-px">
+              <span className="w-full truncate text-[10px] font-bold">{l.name}</span>
+              <span className="text-[7px] tracking-[0.4px] text-on-bright-muted">{l.count}곡</span>
+            </span>
+            {l.has ? (
+              <span className="shrink-0 rounded-pill border-[1.5px] border-ink px-[10px] py-[4px] text-[8px] tracking-[0.6px]">담았어요 ✓</span>
+            ) : (
+              <Button dark disabled={sent.includes(l.id) && !a.note} onClick={() => put(l.id)}>
+                담기
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        disabled={sent.includes("new") && !a.note}
+        onClick={() => put("new")}
+        className="rule cursor-pointer rounded-pill border-[1.5px] border-ink px-[12px] py-[7px] text-left text-[9px] font-bold transition-colors hover:bg-soft disabled:cursor-default disabled:opacity-40"
+      >
+        + 새 플레이리스트에 담기
+      </button>
+      {a.summary && <p className="text-[8px] font-bold tracking-[0.4px] text-on-bright-muted">{a.summary}</p>}
+      {a.note && <p className="text-[8px] leading-[12px] tracking-[0.4px] text-alert">{a.note}</p>}
+    </li>
+  );
+}
+
 /** What comes next, as UP NEXT lists it: a few rows, each playable, and a count of the rest. */
 function Queue({ a, live }: { a: ChatAction; live: boolean }) {
   const sp = useSpotify();
@@ -469,6 +521,7 @@ export function ActionCard({ messageId, a, live }: { messageId: string; a: ChatA
   if (a.kind === "volume") return <VolumeCard messageId={messageId} a={a} live={live} />;
   if (a.kind === "choice") return <Choice messageId={messageId} a={a} />;
   if (a.kind === "queue") return <Queue a={a} live={live} />;
+  if (a.kind === "addTo") return <AddTo messageId={messageId} a={a} />;
   if (a.kind === "station") return <Station messageId={messageId} a={a} />;
   if (a.kind === "playlist") return <Playlist messageId={messageId} a={a} />;
   // next, previous: only a refusal is worth a line

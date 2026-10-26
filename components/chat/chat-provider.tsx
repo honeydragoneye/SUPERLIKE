@@ -14,7 +14,7 @@ import { useLyricsView } from "@/components/lyrics/lyrics-view";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useCustomTags } from "@/components/station/use-custom-tags";
 import { loadChat, saveChat } from "@/lib/chat/history";
-import { actionFrom, cancelAction, chooseOption, makePlaylist, startAction, undoAction, type ActionEnv, type ChatAction } from "./chat-actions";
+import { actionFrom, cancelAction, chooseOption, makePlaylist, putInPlaylist, startAction, undoAction, type ActionEnv, type ChatAction } from "./chat-actions";
 import { snapshot as likedSnapshot } from "@/lib/likes";
 import { updateCustomDefinition } from "@/lib/station/custom-tags";
 import type { CustomMoodKey } from "@/lib/station/filter";
@@ -123,7 +123,7 @@ type Ctx = {
   actOn: (
     messageId: string,
     actionId: string,
-    op: { type: "undo" | "cancel" | "retry" } | { type: "confirm"; name: string } | { type: "choose"; value: "loop" | "once" },
+    op: { type: "undo" | "cancel" | "retry" } | { type: "confirm"; name: string } | { type: "choose"; value: "loop" | "once" } | { type: "addTo"; target: string },
   ) => void;
   /** the listener picked where to look next, for the question this answer was about */
   searchWith: (messageId: string, source: ChatSource) => void;
@@ -555,6 +555,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         } else if (op.type === "choose") {
           patchAction(messageId, actionId, { state: "working" });
           patchAction(messageId, actionId, await chooseOption(action, op.value, actionEnv()));
+        } else if (op.type === "addTo") {
+          patchAction(messageId, actionId, await putInPlaylist(action, op.target));
         } else if (op.type === "confirm") {
           patchAction(messageId, actionId, { state: "working" });
           patchAction(messageId, actionId, await makePlaylist(action, op.name));
@@ -628,7 +630,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     ? "지금 듣는 곡을 확인하는 중…"
                     : event.name === "station_info"
                       ? "스테이션을 확인하는 중…"
-                    : ["like_track", "playback", "player_mode", "seek", "volume", "play_one", "up_next", "lyrics", "stop_station", "start_station", "make_playlist"].includes(String(event.name))
+                    : ["like_track", "playback", "player_mode", "seek", "volume", "play_one", "add_to_playlist", "up_next", "lyrics", "stop_station", "start_station", "make_playlist"].includes(String(event.name))
                       ? "준비하는 중…"
                     : event.name === "top_tracks"
                     ? "곡을 찾는 중…"
