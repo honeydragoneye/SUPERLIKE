@@ -12,7 +12,7 @@ import { MANUAL, type ManualBlock, type ManualSection } from "./content";
 export function ManualPage() {
   return (
     <DetailShell eyebrow="ABOUT" title="이용 안내">
-      <div className="flex max-w-[760px] flex-col pt-[4px]">
+      <div className="flex max-w-[1080px] flex-col pt-[4px]">
         {MANUAL.map((section, i) => (
           <Section key={section.id} index={i + 1} section={section} />
         ))}
@@ -140,7 +140,7 @@ function Block({ block }: { block: ManualBlock }) {
             className="relative w-full overflow-hidden rounded-[6px] bg-well rule"
             style={{ aspectRatio: String(block.ratio) }}
           >
-            <Image src={block.src} alt={block.alt} fill sizes="760px" className="object-cover object-top" unoptimized />
+            <Image src={block.src} alt={block.alt} fill sizes="1080px" className="object-cover object-top" unoptimized />
           </div>
           <figcaption className="text-[11px] font-normal leading-[17px] text-on-bright-muted">{block.caption}</figcaption>
         </figure>
