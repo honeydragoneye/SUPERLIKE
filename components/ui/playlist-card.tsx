@@ -71,9 +71,11 @@ export function PlaylistCard({
           onClick={() => onPlay(playlist.uri)}
           aria-label={`${playlist.name} 재생`}
           title="재생"
-          className="absolute right-[8px] top-[8px] flex size-[30px] items-center justify-center rounded-pill bg-accent opacity-0 transition-opacity group-hover:opacity-100 rule"
+          className="absolute right-[8px] top-[100px] flex size-[32px] cursor-pointer items-center justify-center rounded-full bg-accent-bright text-paper-solid transition-transform hover:scale-105"
         >
-          <Icon name="play-sm" size={12} />
+          <svg width="11" height="11" viewBox="0 0 10 11" aria-hidden fill="currentColor" className="ml-[2px]">
+            <path d="M0 0 10 5.5 0 11z" />
+          </svg>
         </button>
       )}
 
