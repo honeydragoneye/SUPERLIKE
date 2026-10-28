@@ -48,14 +48,14 @@ function RoundButton({
       title={label}
       onClick={onClick}
       disabled={disabled}
-      className={`flex shrink-0 items-center justify-center rounded-pill rule ${
-        pressed ? "bg-accent" : "bg-[rgba(231,236,241,0.82)]"
+      className={`flex shrink-0 items-center justify-center rounded-pill text-ink rule ${
+        pressed ? "bg-accent" : "bg-glass"
       }${onClick && !disabled ? " cursor-pointer transition-colors" : ""}${
         disabled ? " opacity-40" : ""
       }`}
       style={{ width: size, height: size }}
     >
-      <Icon name={name} size={icon} />
+      <TintedIcon name={name} size={icon} />
     </button>
   );
 }
@@ -548,7 +548,7 @@ export function NowPlayingPanel() {
           className={`flex h-[30px] shrink-0 items-center rounded-pill px-[12px] text-[10px] leading-none transition-colors rule disabled:opacity-40 ${
             lyricsOpen
               ? "bg-accent-bright text-paper-solid"
-              : "bg-[rgba(231,236,241,0.82)] text-ink"
+              : "bg-glass text-ink"
           }`}
         >
           가사
@@ -591,7 +591,7 @@ export function NowPlayingPanel() {
           ref={popoverRef}
           role="dialog"
           aria-label="다음에 재생할 곡"
-          className="absolute bottom-[calc(100%+8px)] right-[16px] z-30 flex w-[380px] flex-col gap-[12px] rounded-[8px] bg-ink p-[16px] shadow-[0_-4px_20px_rgba(0,0,0,0.35)]"
+          className="absolute bottom-[calc(100%+8px)] right-[16px] z-30 flex w-[380px] flex-col gap-[12px] rounded-[8px] bg-panel p-[16px] shadow-[0_-4px_20px_rgba(0,0,0,0.35)]"
         >
           {/* the status itself opens the station screen; STOP stays a separate
               control beside it, since a button cannot be nested inside a button */}

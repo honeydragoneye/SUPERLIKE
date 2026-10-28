@@ -5,7 +5,7 @@ import type { StationCandidate } from "@/lib/station/types";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import { Icon } from "@/components/ui/icon";
+import { Icon, TintedIcon } from "@/components/ui/icon";
 import { clock } from "@/lib/time";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
@@ -79,7 +79,7 @@ function StationRow({
         title="세부 기능"
         className="flex h-[24px] w-[24px] shrink-0 cursor-pointer items-center justify-center rounded-pill hover:bg-soft aria-expanded:bg-soft"
       >
-        <Icon name="more" size={14} />
+        <TintedIcon name="more" size={14} />
       </button>
     </li>
   );
@@ -164,7 +164,7 @@ export function StationPage() {
       </div>
 
       {seed && (
-        <div className="flex w-full shrink-0 items-center gap-[12px] overflow-hidden rounded-[4px] bg-ink p-[12px]">
+        <div className="flex w-full shrink-0 items-center gap-[12px] overflow-hidden rounded-[4px] bg-panel p-[12px]">
           <span className="relative size-[56px] shrink-0 overflow-hidden rounded-[4px]">
             {seed.artwork ? (
               <Image

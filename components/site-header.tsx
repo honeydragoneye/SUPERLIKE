@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Icon } from "./ui/icon";
+import { Icon, TintedIcon } from "./ui/icon";
 import { useChat } from "./chat/chat-provider";
 import { useHydrated } from "./ui/use-hydrated";
 import { ConnectButton } from "./player/connect-button";
@@ -28,14 +28,14 @@ function IconButton({
 }) {
   /* the ones with nothing behind them yet stay flat: a hover highlight on a
      control that does nothing reads as a fault, not an affordance */
-  const className = `flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper rule${
+  const className = `flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink rule${
     href || onClick ? " cursor-pointer transition-colors hover:bg-accent" : ""
   }`;
 
   if (href) {
     return (
       <Link href={href} aria-label={label} title={label} className={className}>
-        <Icon name={name} size={16} />
+        <TintedIcon name={name} size={16} />
       </Link>
     );
   }
@@ -48,7 +48,7 @@ function IconButton({
       onClick={onClick}
       className={className}
     >
-      <Icon name={name} size={16} />
+      <TintedIcon name={name} size={16} />
     </button>
   );
 }
@@ -72,11 +72,17 @@ function ChatButton() {
       aria-pressed={on}
       title={on ? "챗봇 닫기" : "챗봇 열기"}
       onClick={toggle}
-      className={`relative size-[39.6px] shrink-0 cursor-pointer rounded-pill bg-ink transition-colors hover:bg-accent-bright ${
-        on ? "ring-2 ring-accent-bright ring-offset-2 ring-offset-white" : ""
+      className={`relative size-[39.6px] shrink-0 cursor-pointer group rounded-pill bg-ink transition-colors hover:bg-accent-bright ${
+        on ? "ring-2 ring-accent-bright ring-offset-2 ring-offset-header" : ""
       }`}
     >
-      <Icon name="eyes-white" size={20} className="absolute left-[4.1px] top-[12.8px]" />
+      {/* white eyes on the dark button, black ones when the button turns light; a press turns it blue, which wants white again */}
+      <span className="absolute left-[4.1px] top-[12.8px] block size-[20px] dark:hidden dark:group-hover:block">
+        <Icon name="eyes-white" size={20} />
+      </span>
+      <span className="absolute left-[4.1px] top-[12.8px] hidden size-[20px] dark:block dark:group-hover:hidden">
+        <Icon name="eyes-ink" size={20} />
+      </span>
     </button>
   );
 }
@@ -85,7 +91,7 @@ export function SiteHeader() {
   const { focus } = useSearchFocus();
 
   return (
-    <header className="flex h-[84px] shrink-0 items-center gap-[18px] overflow-hidden bg-white pl-[40px] pr-[34px]">
+    <header className="flex h-[84px] shrink-0 items-center gap-[18px] overflow-hidden bg-header pl-[40px] pr-[34px]">
       <Link
         href="/"
         aria-label="홈으로"
