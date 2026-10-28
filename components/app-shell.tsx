@@ -8,6 +8,7 @@ import { RightRail } from "./right-rail";
 import { SiteHeader } from "./site-header";
 import { useRecordListening } from "./player/use-listening";
 import { useAccountSync } from "./player/use-account-sync";
+import { useSpaceToggle } from "./player/use-space-toggle";
 import { TagSpace } from "./tag-space";
 import { ArtistRail } from "./rail/artist-rail";
 import { AlbumRail } from "./rail/album-rail";
@@ -121,6 +122,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
    */
   useRecordListening();
   useAccountSync();
+  useSpaceToggle();
 
   /**
    * The column beside the page, pinned: under the action bar when the bar spans
