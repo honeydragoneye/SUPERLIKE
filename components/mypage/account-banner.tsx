@@ -16,7 +16,7 @@ import type { Profile } from "@/lib/data";
  * account is the subject.
  */
 export function AccountBanner() {
-  const { connected: session, ready: deviceReady, logout } = useSpotify();
+  const { connected: session, ready: deviceReady } = useSpotify();
   const { ask, dialog } = useConnectDialog();
   /**
    * Browser-only knowledge, held back until React has finished comparing this
@@ -110,13 +110,16 @@ export function AccountBanner() {
         ))}
       </div>
 
-      <button
-        type="button"
-        onClick={() => (session ? void logout() : ask())}
-        className="mt-[2px] flex h-[28px] shrink-0 cursor-pointer items-center whitespace-nowrap rounded-pill border-[1.5px] border-on-dark-muted px-[20px] text-[9px] tracking-[0.6px] text-on-dark transition-colors hover:bg-white/10"
-      >
-        {connected ? "연결 해제" : "Spotify 연결"}
-      </button>
+      {/* disconnecting is not offered here; once connected there is nothing to press */}
+      {!connected && (
+        <button
+          type="button"
+          onClick={ask}
+          className="mt-[2px] flex h-[28px] shrink-0 cursor-pointer items-center whitespace-nowrap rounded-pill border-[1.5px] border-on-dark-muted px-[20px] text-[9px] tracking-[0.6px] text-on-dark transition-colors hover:bg-white/10"
+        >
+          Spotify 연결
+        </button>
+      )}
       {dialog}
     </section>
   );
