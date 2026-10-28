@@ -9,6 +9,8 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 import { SEARCH_PAGE, type SearchResults } from "@/lib/data";
+import { searchNotice, untilOf } from "@/lib/spotify/limit";
+import { noteSearchLimit, searchLimitedUntil, useSearchLimit } from "./search-limit";
 
 export type SearchTab = "track" | "album" | "artist" | "playlist";
 
@@ -33,6 +35,8 @@ type Ctx = {
   query: string;
   loading: boolean;
   error: string | null;
+  /** when Spotify's refusal of searches lifts, or 0 when it is not refusing */
+  limitedUntil: number;
   results: SearchResults;
   tab: SearchTab;
   setTab: (t: SearchTab) => void;
@@ -46,6 +50,9 @@ type Ctx = {
 
 const SearchContext = createContext<Ctx | null>(null);
 
+/** `error` while Spotify is refusing searches; the words come from the clock, so they stay true as it runs down. */
+const LIMITED = "limited";
+
 /** Typing is faster than the API; wait for a pause before spending a request. */
 const DEBOUNCE_MS = 400;
 
@@ -58,6 +65,7 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<SearchTab>("track");
+  const limitedUntil = useSearchLimit();
 
   /**
    * Whether each tab has more to give, tracked per tab because they run out
@@ -100,6 +108,13 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
 
     const run = ++runRef.current;
     const timer = setTimeout(async () => {
+      // already known to be refused: do not ask, say why
+      const known = searchLimitedUntil();
+      if (known) {
+        setError(LIMITED);
+        setFetched(EMPTY);
+        return;
+      }
       setLoading(true);
       try {
         const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}`, {
@@ -107,13 +122,15 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
         });
         if (run !== runRef.current) return;
         if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as { detail?: string };
-          setError(
-            res.status === 401
-              ? "Spotify를 연결해 주세요"
-              : // a lockout has a duration, and the listener deserves the number
-                (res.status === 429 && body.detail) || "검색에 실패했습니다",
-          );
+          const body = (await res.json().catch(() => ({}))) as { retryAfterSec?: number };
+          if (res.status === 429 && body.retryAfterSec) {
+            // a lockout has a duration, and the listener deserves the number
+            const at = untilOf(body.retryAfterSec);
+            noteSearchLimit(at);
+            setError(LIMITED);
+          } else {
+            setError(res.status === 401 ? "Spotify를 연결해 주세요" : "검색에 실패했습니다");
+          }
           setFetched(EMPTY);
           return;
         }
@@ -203,7 +220,8 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     return {
       query,
       loading,
-      error,
+      error: limitedUntil ? searchNotice(limitedUntil) : error === LIMITED ? null : error,
+      limitedUntil,
       results,
       tab,
       setTab,

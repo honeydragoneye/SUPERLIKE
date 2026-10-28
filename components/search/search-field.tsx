@@ -8,6 +8,8 @@ import { useSpotify } from "@/components/player/spotify-provider";
 import { clock } from "@/lib/time";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useSearchFocus } from "./search-focus";
+import { whenText } from "@/lib/spotify/limit";
+import { useSearchLimit } from "./search-limit";
 import { useSuggest, SUGGEST_LIMIT } from "./search-suggest";
 import { followersLabel } from "@/lib/suggest";
 import { addRecent } from "@/lib/recent-searches";
@@ -62,6 +64,7 @@ export function SearchField() {
   const showing = open && text.trim().length > 0 && !settled;
   // the suggestion query trails the field by one completed character
   const { items, entities, loading } = useSuggest(showing ? settledText : "");
+  const limitedUntil = useSearchLimit();
   const { artist, albums } = entities;
   // an artist or an album the typed name belongs to goes first; songs fill the rest of the six rows
   const named = (artist ? 1 : 0) + albums.length;
@@ -159,7 +162,12 @@ export function SearchField() {
              enough for the click that follows to land on a row */
           onMouseDown={() => blurTimer.current && clearTimeout(blurTimer.current)}
         >
-          {empty ? (
+          {limitedUntil ? (
+            <div className="flex flex-col gap-[4px] px-[14px] py-[14px]">
+              <p className="text-[12px] font-black text-on-bright">Spotify 검색 요청 한도에 걸렸어요</p>
+              <p className="text-[10px] text-on-bright-muted">{whenText(limitedUntil)} 다시 쓸 수 있어요</p>
+            </div>
+          ) : empty ? (
             <p className="flex items-center gap-[8px] px-[14px] py-[12px] text-[10px] text-muted">
               {loading ? (
                 <>
@@ -265,16 +273,19 @@ export function SearchField() {
             </ul>
           )}
 
-          <button
-            type="button"
-            onClick={submit}
-            className="flex w-full items-center justify-between gap-[8px] bg-soft px-[14px] py-[10px] text-left text-[9px] tracking-[0.6px] transition-colors hover:bg-soft"
-          >
-            <span className="truncate">&ldquo;{text.trim()}&rdquo; 전체 검색 결과</span>
-            <span aria-hidden className="shrink-0 text-[11px]">
-              →
-            </span>
-          </button>
+          {/* while searches are refused the page it leads to would only say the same thing */}
+          {!limitedUntil && (
+            <button
+              type="button"
+              onClick={submit}
+              className="flex w-full items-center justify-between gap-[8px] bg-soft px-[14px] py-[10px] text-left text-[9px] tracking-[0.6px] transition-colors hover:bg-soft"
+            >
+              <span className="truncate">&ldquo;{text.trim()}&rdquo; 전체 검색 결과</span>
+              <span aria-hidden className="shrink-0 text-[11px]">
+                →
+              </span>
+            </button>
+          )}
         </div>
       )}
     </div>

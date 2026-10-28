@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { SearchResults, SearchTrack } from "@/lib/data";
 import { pickEntities, type Entities } from "@/lib/suggest";
+import { untilOf } from "@/lib/spotify/limit";
+import { noteSearchLimit, searchLimitedUntil } from "./search-limit";
 
 /** Suggestions are a glance, not a page: six rows fit under the field. */
 export const SUGGEST_LIMIT = 6;
@@ -50,6 +52,8 @@ export function useSuggest(text: string): { items: SearchTrack[]; entities: Enti
     const mine = ++run.current;
     const controller = new AbortController();
     const timer = setTimeout(async () => {
+      // already known to be refused: the panel says so, and nothing is asked
+      if (searchLimitedUntil()) return;
       setLoading(true);
       try {
         const res = await fetch(
@@ -58,6 +62,10 @@ export function useSuggest(text: string): { items: SearchTrack[]; entities: Enti
           { cache: "no-store", signal: controller.signal },
         );
         if (mine !== run.current) return;
+        if (res.status === 429) {
+          const body = (await res.json().catch(() => ({}))) as { retryAfterSec?: number };
+          if (body.retryAfterSec) noteSearchLimit(untilOf(body.retryAfterSec));
+        }
         const data = res.ok ? ((await res.json()) as Partial<SearchResults>) : {};
         setFetched({
           q,
