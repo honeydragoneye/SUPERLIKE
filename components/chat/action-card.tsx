@@ -435,11 +435,14 @@ function Choice({ messageId, a }: { messageId: string; a: ChatAction }) {
 function AddTo({ messageId, a }: { messageId: string; a: ChatAction }) {
   const { actOn } = useChat();
   const [sent, setSent] = useState<string[]>([]);
+  /** the name field of a new playlist is open, and what has been typed in it */
+  const [naming, setNaming] = useState(false);
+  const [title, setTitle] = useState(a.name ?? "");
   const track = a.tracks?.[0];
   if (a.state === "error" || !track) return <li className="text-[8px] leading-[12px] tracking-[0.4px] text-alert">{a.note ?? "하지 못했어요"}</li>;
-  const put = (target: string) => {
+  const put = (target: string, name?: string) => {
     setSent((all) => [...all, target]);
-    actOn(messageId, a.id, { type: "addTo", target });
+    actOn(messageId, a.id, { type: "addTo", target, name });
   };
   const lists = a.lists ?? [];
   return (
@@ -469,14 +472,51 @@ function AddTo({ messageId, a }: { messageId: string; a: ChatAction }) {
           </li>
         ))}
       </ul>
-      <button
-        type="button"
-        disabled={sent.includes("new") && !a.note}
-        onClick={() => put("new")}
-        className="rule cursor-pointer rounded-pill border-[1.5px] border-ink px-[12px] py-[7px] text-left text-[9px] font-bold transition-colors hover:bg-soft disabled:cursor-default disabled:opacity-40"
-      >
-        + 새 플레이리스트에 담기
-      </button>
+      {naming && !sent.includes("new") ? (
+        <form
+          className="flex flex-col gap-[6px]"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!title.trim()) return;
+            put("new", title);
+            setNaming(false);
+          }}
+        >
+          <input
+            autoFocus
+            value={title}
+            maxLength={60}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setNaming(false)}
+            placeholder="새 플레이리스트 이름"
+            aria-label="새 플레이리스트 이름"
+            className="rule rounded-pill bg-paper-solid px-[12px] py-[8px] text-[11px] font-bold outline-none placeholder:font-medium placeholder:text-on-bright-muted"
+          />
+          <div className="flex gap-[6px]">
+            <Button
+              dark
+              disabled={!title.trim()}
+              onClick={() => {
+                if (!title.trim()) return;
+                put("new", title);
+                setNaming(false);
+              }}
+            >
+              만들고 담기
+            </Button>
+            <Button onClick={() => setNaming(false)}>취소</Button>
+          </div>
+        </form>
+      ) : (
+        <button
+          type="button"
+          disabled={sent.includes("new") && !a.note}
+          onClick={() => setNaming(true)}
+          className="rule cursor-pointer rounded-pill border-[1.5px] border-ink px-[12px] py-[7px] text-left text-[9px] font-bold transition-colors hover:bg-soft disabled:cursor-default disabled:opacity-40"
+        >
+          + 새 플레이리스트에 담기
+        </button>
+      )}
       {a.summary && <p className="text-[8px] font-bold tracking-[0.4px] text-on-bright-muted">{a.summary}</p>}
       {a.note && <p className="text-[8px] leading-[12px] tracking-[0.4px] text-alert">{a.note}</p>}
     </li>

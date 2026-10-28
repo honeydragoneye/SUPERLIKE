@@ -123,7 +123,7 @@ type Ctx = {
   actOn: (
     messageId: string,
     actionId: string,
-    op: { type: "undo" | "cancel" | "retry" } | { type: "confirm"; name: string } | { type: "choose"; value: "loop" | "once" } | { type: "addTo"; target: string },
+    op: { type: "undo" | "cancel" | "retry" } | { type: "confirm"; name: string } | { type: "choose"; value: "loop" | "once" } | { type: "addTo"; target: string; name?: string },
   ) => void;
   /** the listener picked where to look next, for the question this answer was about */
   searchWith: (messageId: string, source: ChatSource) => void;
@@ -556,7 +556,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           patchAction(messageId, actionId, { state: "working" });
           patchAction(messageId, actionId, await chooseOption(action, op.value, actionEnv()));
         } else if (op.type === "addTo") {
-          patchAction(messageId, actionId, await putInPlaylist(action, op.target));
+          patchAction(messageId, actionId, await putInPlaylist(action, op.target, op.name));
         } else if (op.type === "confirm") {
           patchAction(messageId, actionId, { state: "working" });
           patchAction(messageId, actionId, await makePlaylist(action, op.name));

@@ -477,14 +477,17 @@ export async function playQueued(a: ChatAction, track: ActionTrack, sp: Spotify)
   await sp.play({ uris: [track.uri], tracks: [{ uri: track.uri, title: track.title, artist: track.artist, artwork: track.artwork, durationMs: track.durationMs }] });
 }
 
-/** A row of an add-to-playlist card pressed: put the song in that playlist, or in a new one made for it. */
-export async function putInPlaylist(a: ChatAction, target: string | "new"): Promise<Partial<ChatAction>> {
+/**
+ * A row of an add-to-playlist card pressed: put the song in that playlist, or in a new one made for it.
+ * A new one is named by what the listener typed; the name the chat guessed is only the fallback.
+ */
+export async function putInPlaylist(a: ChatAction, target: string | "new", typed?: string): Promise<Partial<ChatAction>> {
   const track = a.tracks?.[0];
   if (!track) return fail("담을 곡이 없어요");
   const lists = a.lists ?? [];
   try {
     if (target === "new") {
-      const name = a.name || "새 플레이리스트";
+      const name = (typed ?? a.name ?? "").replace(/\s+/g, " ").trim().slice(0, 60) || "새 플레이리스트";
       const id = await createPlaylist(name, false, track);
       return { state: "pending", lists: [{ id, name, count: 1, has: true }, ...lists], summary: `‘${name}’을 만들어 담았어요` };
     }
