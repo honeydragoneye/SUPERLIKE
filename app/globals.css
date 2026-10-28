@@ -52,6 +52,11 @@
   --color-on-bright: rgba(0, 0, 0, 0.92);
   --color-on-bright-muted: rgba(0, 0, 0, 0.62);
 
+  /* the ON AIR bar: its dot is the connection, and hearts are pink wherever they are */
+  --color-live: #3ddc84;
+  --color-offline: #ff4d4d;
+  --color-heart: #ff8fc0;
+
   --radius-pill: 40px;
 }
 
@@ -173,6 +178,17 @@
   35% {
     transform: translateY(calc(var(--lift, 4px) * -1));
     opacity: 1;
+  }
+}
+
+/* the ON AIR bar's equalizer: bars that rise and fall out of step */
+@keyframes radio-eq {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
   }
 }
 

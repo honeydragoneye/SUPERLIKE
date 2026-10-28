@@ -161,3 +161,25 @@ create index if not exists playlist_tracks_order on playlist_tracks (playlist_id
 -- the cover colours of a playlist, taken from the album of its first song (lib/palette-server);
 -- null while it is empty
 alter table playlists add column if not exists palette jsonb;
+
+-- Radio stations a listener hearted in the ON AIR bar. Per user like everything
+-- above. Only what is needed to draw the row is kept: the stream address is not,
+-- because Radio Browser hands out ones that expire (signed HLS links), so it is
+-- asked for again each time a station is played (lib/radio/client).
+create table if not exists radio_favorites (
+  user_id         text not null references users (spotify_id) on delete cascade,
+  station_uuid    text not null,
+  name            text not null,
+  country         text,
+  country_code    text,
+  tags            jsonb not null default '[]',
+  favicon         text,
+  favorited_at    timestamptz not null default now(),
+  last_played_at  timestamptz,
+  primary key (user_id, station_uuid)
+);
+create index if not exists radio_favorites_user_recent
+  on radio_favorites (user_id, coalesce(last_played_at, favorited_at) desc);
+
+-- the station's own website, so its name in the list can link to it
+alter table radio_favorites add column if not exists homepage text;
