@@ -166,6 +166,9 @@ function readableError(
   switch (restriction?.reason) {
     case "explicit":
       return "명시적 콘텐츠로 설정된 곡입니다. Spotify 설정에서 허용해 주세요";
+    case "age_verification_required":
+      // not the explicit-content switch: Spotify wants the account's age confirmed first
+      return "19금 곡은 Spotify 계정의 연령 확인을 마쳐야 들을 수 있어요";
     case "market":
       return "이 지역에서는 재생할 수 없는 곡입니다";
     case "product":

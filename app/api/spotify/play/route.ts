@@ -92,29 +92,39 @@ export async function PUT(request: NextRequest) {
   let restriction:
     | { isPlayable?: boolean; reason?: string; explicit?: boolean }
     | undefined;
-  if (res.status === 403 && uris?.length) {
-    const id = uris[0].split(":").pop();
+  if (res.status === 403 && (uris?.length || contextUri)) {
     try {
-      const probe = await spotifyHttp(`${API}/tracks/${id}?market=${MARKET}`, {
-        headers,
-        cache: "no-store",
-      });
-      if (probe.ok) {
-        const track = (await probe.json()) as {
-          is_playable?: boolean;
-          explicit?: boolean;
-          restrictions?: { reason?: string };
-        };
-        restriction = {
-          isPlayable: track.is_playable,
-          reason: track.restrictions?.reason,
-          explicit: track.explicit,
-        };
+      // an album or playlist is asked about through the track it would start with
+      let id = uris?.[0]?.split(":").pop();
+      if (!id && contextUri?.startsWith("spotify:album:")) {
+        const first = await spotifyHttp(
+          `${API}/albums/${contextUri.split(":").pop()}/tracks?limit=1&market=${MARKET}`,
+          { headers, cache: "no-store" },
+        );
+        if (first.ok) id = ((await first.json()) as { items?: { id?: string }[] }).items?.[0]?.id;
+      }
+      if (id) {
+        const probe = await spotifyHttp(`${API}/tracks/${id}?market=${MARKET}`, {
+          headers,
+          cache: "no-store",
+        });
+        if (probe.ok) {
+          const track = (await probe.json()) as {
+            is_playable?: boolean;
+            explicit?: boolean;
+            restrictions?: { reason?: string };
+          };
+          restriction = {
+            isPlayable: track.is_playable,
+            reason: track.restrictions?.reason,
+            explicit: track.explicit,
+          };
+        }
       }
     } catch {
       // diagnosis is best-effort; the 403 below is the answer either way
     }
-    console.warn("[play] refused", uris[0], restriction ?? "(no track detail)");
+    console.warn("[play] refused", uris?.[0] ?? contextUri, restriction ?? "(no track detail)");
   }
 
   /**
