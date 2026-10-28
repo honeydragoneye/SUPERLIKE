@@ -106,9 +106,6 @@ export function SiteHeader() {
       </Link>
 
       <IconButton name="search" label="검색" onClick={focus} />
-      {/* the list, not the switch: liking a track is the Now Playing panel's
-          heart, which is beside the track it would act on */}
-      <IconButton name="heart-outline" label="좋아요한 음악" href="/mypage" />
       <ChatButton />
 
       <ConnectButton />
