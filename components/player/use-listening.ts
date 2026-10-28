@@ -40,10 +40,20 @@ export function useRecordListening(): void {
   const uri = now?.uri ?? null;
   const playing = Boolean(uri) && now?.paused === false;
   /** the track's name for the account's copy of the tally, read when a play is counted */
-  const meta = useRef<{ title: string; artist: string; artistId: string | null; albumId: string | null }>({ title: "", artist: "", artistId: null, albumId: null });
+  const meta = useRef<{
+    title: string;
+    artist: string;
+    artistId: string | null;
+    albumId: string | null;
+    albumName: string | null;
+    albumArtwork: string | null;
+  }>({ title: "", artist: "", artistId: null, albumId: null, albumName: null, albumArtwork: null });
   useEffect(() => {
-    meta.current = { title: now?.title ?? "", artist: now?.artist ?? "", artistId: now?.artistId ?? null, albumId: now?.albumId ?? null };
-  }, [now?.title, now?.artist, now?.artistId, now?.albumId]);
+    meta.current = { title: now?.title ?? "", artist: now?.artist ?? "", artistId: now?.artistId ?? null, albumId: now?.albumId ?? null,
+      albumName: now?.album || null,
+      albumArtwork: now?.artwork ?? null,
+    };
+  }, [now?.title, now?.artist, now?.artistId, now?.albumId, now?.album, now?.artwork]);
 
   /**
    * The uri is a dependency, so a track change tears this down and sets it up
@@ -69,8 +79,8 @@ export function useRecordListening(): void {
       if (!counted && heard >= PLAY_THRESHOLD_MS) {
         counted = true;
         countPlay(id);
-        const { title, artist, artistId, albumId } = meta.current;
-        if (title && artist) void mirrorPlay({ trackId: id, title, artist, artistId, albumId });
+        const { title, artist, artistId, albumId, albumName, albumArtwork } = meta.current;
+        if (title && artist) void mirrorPlay({ trackId: id, title, artist, artistId, albumId, albumName, albumArtwork });
       }
     };
 

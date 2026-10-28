@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useChat } from "@/components/chat/chat-provider";
 import { SectionHead } from "@/components/mypage/section-head";
@@ -10,6 +11,7 @@ import { LoadingDots } from "@/components/ui/loading-dots";
 import { lookUp, type Found } from "@/components/ui/track-card";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { SLEEVE_TONES } from "@/lib/data";
+import type { RecentAlbum } from "@/lib/db/albums";
 
 type Rec = { title: string; artist: string; because: string };
 type Taste = {
@@ -52,6 +54,8 @@ export function TasteBlock() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [round, setRound] = useState(0);
   const [again, setAgain] = useState(false);
+  /** null until the first answer; the albums do not hold the taste back */
+  const [albums, setAlbums] = useState<RecentAlbum[] | null>(null);
 
   const load = useCallback(async (next: number): Promise<State> => {
     try {
@@ -68,6 +72,10 @@ export function TasteBlock() {
     if (!connected) return;
     let live = true;
     void load(0).then((s) => live && setState(s));
+    fetch("/api/me/albums", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body: { albums?: RecentAlbum[] } | null) => live && setAlbums(body?.albums ?? []))
+      .catch(() => live && setAlbums([]));
     return () => {
       live = false;
     };
@@ -87,15 +95,12 @@ export function TasteBlock() {
   };
 
   const taste = state.kind === "ok" ? state.taste : null;
-  const note =
-    taste?.ready
-      ? `재생 기록 기준 · 최근 ${taste.days / 7}주 · ${taste.totalPlays}번 들음`
-      : `재생 기록 기준 · 최근 4주`;
+  const note = "재생 기록 기준 · 최근 들은 앨범";
 
   return (
     <section className="flex w-full shrink-0 flex-col gap-[16px] border-b-[1.5px] border-ink px-[24px] pb-[24px] pt-[20px]">
       <SectionHead title="당신의 취향" note={note}>
-        <span className="text-[8px] tracking-[0.6px] text-on-bright-muted">20초 이상 들은 곡만 셉니다</span>
+        <span className="text-[8px] tracking-[0.6px] text-on-bright-muted">앨범을 누르면 앨범 페이지 · ▶ 앨범 전곡 재생</span>
       </SectionHead>
 
       {!hydrated || (connected && state.kind === "loading") ? (
@@ -139,30 +144,22 @@ export function TasteBlock() {
         </div>
       ) : taste ? (
         <>
-          <ul className="flex w-full gap-[8px]" aria-label="많이 들은 가수">
-            {taste.artists.map((a, i) => (
-              <li
-                key={a.name}
-                className={`flex h-[66px] min-w-0 flex-1 flex-col justify-center gap-[6px] rounded-[8px] px-[12px] rule ${
-                  i === 0 ? "bg-ink text-paper-solid" : "bg-paper-solid"
-                }`}
-              >
-                <p className="flex items-baseline gap-[8px]">
-                  <span
-                    className={`tnum text-[10px] font-black ${i === 0 ? "text-accent-bright" : "text-on-bright-muted"}`}
-                  >
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="truncate text-[13px] font-black tracking-[-0.2px]" title={a.name}>
-                    {a.name}
-                  </span>
-                </p>
-                <p className={`text-[8px] tracking-[0.6px] ${i === 0 ? "text-on-dark-muted" : "text-on-bright-muted"}`}>
-                  {a.plays}번 들음
-                </p>
-              </li>
-            ))}
-          </ul>
+          {albums === null ? (
+            <p className="flex items-center gap-[8px] text-[10px] tracking-[0.5px] text-on-bright-muted">
+              <LoadingDots size={4} label="최근 들은 앨범 불러오는 중" />
+              최근 들은 앨범을 보고 있어요
+            </p>
+          ) : albums.length === 0 ? (
+            <p className="text-[10px] tracking-[0.5px] text-on-bright-muted">
+              앨범이 확인되는 재생 기록이 아직 없어요. 곡을 20초 이상 들으면 여기에 쌓여요.
+            </p>
+          ) : (
+            <div className="scroll-x flex w-full shrink-0 gap-[10px] pb-[8px]" role="region" aria-label="최근 들은 앨범" tabIndex={0}>
+              {albums.map((a, i) => (
+                <AlbumCard key={a.id} album={a} index={i} />
+              ))}
+            </div>
+          )}
 
           <div className="flex w-full items-start justify-between gap-[16px]">
             <div className="flex min-w-0 flex-col gap-px">
@@ -272,6 +269,62 @@ function RecCard({ rec, index }: { rec: Rec; index: number }) {
         </p>
         <p className="truncate text-[9px] uppercase tracking-[0.4px] text-on-bright-muted" title={rec.artist}>
           {rec.artist}
+        </p>
+      </div>
+    </article>
+  );
+}
+
+/**
+ * One album the listener played lately: the cover opens the album page, the
+ * round button over it plays the whole album from its first track.
+ *
+ * The two are siblings rather than a button inside a link, which HTML does
+ * not allow. Until Spotify has been asked for the name and cover of an album
+ * played before they were kept, the card shows the plain disc and still links.
+ */
+function AlbumCard({ album, index }: { album: RecentAlbum; index: number }) {
+  const { connected, play } = useSpotify();
+  const hydrated = useHydrated();
+  const tone = SLEEVE_TONES[index % SLEEVE_TONES.length];
+  const name = album.name ?? "앨범";
+
+  return (
+    <article className="group relative flex w-[150px] shrink-0 snap-start flex-col gap-[8px]">
+      <Link
+        href={`/album/${album.id}`}
+        aria-label={`${name} 앨범 열기`}
+        title="앨범 열기"
+        className={`relative block aspect-square w-full shrink-0 overflow-hidden rounded-[4px] ${sleeve[tone]}`}
+      >
+        {album.artwork ? (
+          <Image src={album.artwork} alt="" fill sizes="150px" className="object-cover" unoptimized />
+        ) : (
+          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <Icon name="release-disc" size={77} />
+            <Icon name="release-ring" size={32} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
+            <Icon name="release-hole" size={9} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
+          </span>
+        )}
+      </Link>
+      <button
+        type="button"
+        disabled={!hydrated || !connected}
+        onClick={() => void play({ contextUri: `spotify:album:${album.id}` })}
+        aria-label={`${name} 앨범 전곡 재생`}
+        title="앨범 전곡 재생"
+        className="absolute right-[8px] top-[110px] flex size-[32px] cursor-pointer items-center justify-center rounded-full bg-accent-bright text-paper-solid transition-transform hover:scale-105 disabled:cursor-default disabled:opacity-50"
+      >
+        <svg width="11" height="11" viewBox="0 0 10 11" aria-hidden fill="currentColor" className="ml-[2px]">
+          <path d="M0 0 10 5.5 0 11z" />
+        </svg>
+      </button>
+      <div className="flex flex-col gap-[2px]">
+        <p className="truncate text-[12px]" title={name}>
+          {name}
+        </p>
+        <p className="truncate text-[9px] uppercase tracking-[0.4px] text-on-bright-muted" title={album.artist}>
+          {album.artist}
         </p>
       </div>
     </article>

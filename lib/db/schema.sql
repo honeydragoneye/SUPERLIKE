@@ -183,3 +183,12 @@ create index if not exists radio_favorites_user_recent
 
 -- the station's own website, so its name in the list can link to it
 alter table radio_favorites add column if not exists homepage text;
+
+-- What "당신의 취향" needs to draw the albums a listener played lately: the album's
+-- name and cover, and when it was last heard. Kept on the play row because the
+-- browser has all three at the moment of the play, while asking Spotify for them
+-- later costs a throttled request per album. Plays from before these existed are
+-- filled in from Spotify the first time they are asked for (app/api/me/albums).
+alter table plays_daily add column if not exists album_name text;
+alter table plays_daily add column if not exists album_artwork text;
+alter table plays_daily add column if not exists last_played_at timestamptz;

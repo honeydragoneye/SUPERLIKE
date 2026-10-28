@@ -33,6 +33,8 @@ export async function mirrorPlay(play: {
   artist: string;
   artistId: string | null;
   albumId: string | null;
+  albumName: string | null;
+  albumArtwork: string | null;
 }): Promise<void> {
   try {
     await fetch("/api/me/plays", {
