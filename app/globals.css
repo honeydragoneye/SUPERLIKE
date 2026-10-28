@@ -43,7 +43,7 @@
   --color-paper-press: #dfe6ee;
   /* errors only: it is the one place a warning has to be told from the rest at a glance */
   --color-alert: #ff383c;
-  --color-shell: #ffffff;
+  --color-shell: #f3f6f9;
 
   /* Readability layer: the same hues pushed to a legible alpha, used only where
      the surface (the dark panel, the accent) demands it. */
