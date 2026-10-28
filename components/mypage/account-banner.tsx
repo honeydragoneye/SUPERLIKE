@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useDetail } from "@/components/detail/use-detail";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { LoadingDots } from "@/components/ui/loading-dots";
+import { useTheme } from "@/components/theme/use-theme";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import type { Profile } from "@/lib/data";
 
@@ -29,9 +30,10 @@ export function AccountBanner() {
   // a profile fetched before disconnecting must not outlive the session
   const profile = connected ? data : null;
   const premium = profile?.product === "premium";
+  const { theme, setTheme } = useTheme();
 
   return (
-    <section className="flex h-[132px] w-full shrink-0 items-start gap-[20px] border-b-[1.5px] border-ink bg-panel pl-[24px] pr-[56px] pt-[28px]">
+    <section className="flex h-[132px] w-full shrink-0 items-start gap-[20px] border-b-[1.5px] border-rule bg-panel pl-[24px] pr-[56px] pt-[28px]">
       <span className="relative size-[76px] shrink-0 overflow-hidden rounded-pill bg-artwork">
         {profile?.avatar && (
           <Image
@@ -87,27 +89,29 @@ export function AccountBanner() {
         </p>
       </div>
 
-      {/* light is the only look there is, so it shows as chosen and dark waits: a switch that
-          moved and changed nothing would read as broken, where a disabled one reads as not yet */}
+      {/* the system decides until a press: the pressed one is what the page shows now, chosen or not */}
       <div role="group" aria-label="화면 모드" className="mt-[2px] flex shrink-0 items-center gap-[6px]">
-        {(["라이트", "다크"] as const).map((mode, i) => (
+        {(
+          [
+            ["light", "라이트"],
+            ["dark", "다크"],
+          ] as const
+        ).map(([mode, label]) => (
           <button
             key={mode}
             type="button"
-            disabled
-            aria-pressed={i === 0}
-            title="준비 중"
-            className={`flex h-[28px] shrink-0 cursor-default items-center whitespace-nowrap rounded-pill px-[16px] text-[9px] tracking-[0.6px] ${
-              i === 0
+            onClick={() => setTheme(mode)}
+            aria-pressed={theme === mode}
+            className={`flex h-[28px] shrink-0 cursor-pointer items-center whitespace-nowrap rounded-pill px-[16px] text-[9px] tracking-[0.6px] ${
+              theme === mode
                 ? "bg-paper-solid text-black"
-                : "border-[1.5px] border-on-dark-muted text-on-dark-muted"
+                : "border-[1.5px] border-on-dark-muted text-on-dark-muted transition-colors hover:text-on-dark"
             }`}
           >
-            {mode}
+            {label}
           </button>
         ))}
       </div>
-
     </section>
   );
 }

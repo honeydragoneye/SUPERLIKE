@@ -51,6 +51,12 @@ Spotify에 연결합니다. `localhost`가 아니라 `127.0.0.1`로 접속해야
 
 화면의 색은 **잉크 · 쿨 화이트 · 포인트 블루(`#3D5AFE`)** 세 가지입니다(`app/globals.css`의 `@theme`). 포인트(`accent`)는 재생, 선택, 눌림, 맨 위 띠에만 쓰고, 칸이나 칩은 색 대신 한 단계 진한 쿨 화이트(`soft`)로 나눕니다. 앨범 표지에서 뽑는 색(에디터스 픽, 레코드, 플레이리스트 커버)은 음원의 색이라 이 팔레트 밖입니다. 에러 표시(`alert`)만 따로 붉은색입니다. 주간 메일은 자기 색 체계(`scripts/issue.mjs`의 컨셉 4종)를 그대로 씁니다.
 
+### 다크 모드
+
+마이페이지 계정 배너의 **라이트 / 다크** 버튼으로 고르고, 고르기 전에는 기기 설정(`prefers-color-scheme`)을 따릅니다. 선택은 `localStorage`의 `superlike-theme`에 저장됩니다. 화면 코드는 그대로 두고 `app/globals.css`의 `:root[data-theme="dark"]`가 같은 색 토큰에 다른 값을 줍니다. `<html>`의 `data-theme`은 첫 화면이 그려지기 전에 `<head>`의 작은 스크립트(`components/theme/use-theme.ts`의 `THEME_SCRIPT`)가 넣어서 색이 깜빡이지 않습니다.
+
+한 색이 두 역할이던 토큰은 나눴습니다: 카드·입력창 면은 `card`, 검정 버튼 위 글자는 `on-ink`, 테두리·구분선은 `rule`, 움푹 들어간 패널은 `well`, 맨 위 흰 띠는 `header`, 플레이어의 둥근 버튼 면은 `glass`. 앨범 커버가 놓이는 자리는 `ink` 대신 `artwork`, 어두운 팝업은 `panel`을 씁니다. 선 아이콘은 글자색을 따르는 `TintedIcon`으로 그립니다. 다크에서도 그대로인 것은 포인트 블루, ON AIR 바, 앨범 커버와 레코드입니다.
+
 ## 글꼴
 
 영문과 숫자는 **Hanken Grotesk**, 한글은 **Noto Sans KR**입니다(`app/layout.tsx`, 둘 다 `next/font/google`로 내려받아 직접 호스팅). Hanken Grotesk에는 한글이 없어서, 글꼴 순서를 Hanken → Noto로 두면 한 문장 안에서도 글자마다 알맞은 쪽이 쓰입니다.

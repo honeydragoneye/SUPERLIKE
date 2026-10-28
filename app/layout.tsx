@@ -8,6 +8,8 @@ import { AppShell } from "@/components/app-shell";
 import { ChatProvider } from "@/components/chat/chat-provider";
 import { LyricsViewProvider } from "@/components/lyrics/lyrics-view";
 import { SearchFocusProvider } from "@/components/search/search-focus";
+import { InlineScript } from "@/components/theme/inline-script";
+import { THEME_SCRIPT } from "@/components/theme/use-theme";
 import "./globals.css";
 
 /**
@@ -38,7 +40,11 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ko" className={`${hankenGrotesk.variable} ${notoSansKR.variable}`}>
+    // data-theme is set by the script below before the first paint, so the server's markup never has it
+    <html lang="ko" className={`${hankenGrotesk.variable} ${notoSansKR.variable}`} suppressHydrationWarning>
+      <head>
+        <InlineScript html={THEME_SCRIPT} />
+      </head>
       <body className="font-[family-name:var(--font-hanken-grotesk),var(--font-noto-sans-kr)] font-bold">
         <SpotifyProvider>
           <RadioProvider>
