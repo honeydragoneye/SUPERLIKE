@@ -18,11 +18,13 @@ const EMPTY: Lyrics = { instrumental: null, lines: [], plain: [] };
  * scrolls, and the current line is kept in view so the listener never has to
  * chase it.
  *
+ * Clicking a timed line seeks the song to that line's stamp.
+ *
  * With only plain text the lines still all show, unhighlighted — a lyric sheet
  * rather than a follow-along.
  */
 export const LyricsPopover = forwardRef<HTMLDivElement>(function LyricsPopover(_, ref) {
-  const { now } = useSpotify();
+  const { now, seek } = useSpotify();
   const positionMs = usePlaybackPosition();
 
   const [held, setHeld] = useState<{ uri: string; data: Lyrics } | null>(null);
@@ -133,10 +135,25 @@ export const LyricsPopover = forwardRef<HTMLDivElement>(function LyricsPopover(_
           <p
             key={`${line.ms}-${i}`}
             ref={i === current ? currentRef : null}
+            role={line.text ? "button" : undefined}
+            tabIndex={line.text ? 0 : undefined}
+            title={line.text ? "이 줄부터 재생" : undefined}
+            onClick={line.text ? () => void seek(line.ms) : undefined}
+            onKeyDown={
+              line.text
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      void seek(line.ms);
+                    }
+                  }
+                : undefined
+            }
             className={
-              i === current
+              (i === current
                 ? "shrink-0 text-[13.2px] font-black leading-[19px] text-accent-bright"
-                : "shrink-0 text-[12px] leading-[17px] text-on-dark-muted"
+                : "shrink-0 text-[12px] leading-[17px] text-on-dark-muted") +
+              (line.text ? " cursor-pointer transition-colors hover:text-on-dark" : "")
             }
           >
             {line.text || " "}
