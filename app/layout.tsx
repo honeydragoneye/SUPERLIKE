@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { Noto_Sans_KR } from "next/font/google";
+import { Hanken_Grotesk, Noto_Sans_KR } from "next/font/google";
 import { SpotifyProvider } from "@/components/player/spotify-provider";
 import { RadioProvider } from "@/components/radio/radio-provider";
 import { SearchProvider } from "@/components/search/search-provider";
@@ -9,6 +9,17 @@ import { ChatProvider } from "@/components/chat/chat-provider";
 import { LyricsViewProvider } from "@/components/lyrics/lyrics-view";
 import { SearchFocusProvider } from "@/components/search/search-focus";
 import "./globals.css";
+
+/**
+ * English and numerals. Hanken Grotesk has no Hangul, so the stack below falls
+ * through to Noto Sans KR for every Korean character, glyph by glyph: one
+ * sentence can carry both without either font being asked for what it lacks.
+ */
+const hankenGrotesk = Hanken_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-hanken-grotesk",
+  display: "swap",
+});
 
 const notoSansKR = Noto_Sans_KR({
   subsets: ["latin"],
@@ -27,8 +38,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ko" className={notoSansKR.variable}>
-      <body className="font-[family-name:var(--font-noto-sans-kr)] font-bold">
+    <html lang="ko" className={`${hankenGrotesk.variable} ${notoSansKR.variable}`}>
+      <body className="font-[family-name:var(--font-hanken-grotesk),var(--font-noto-sans-kr)] font-bold">
         <SpotifyProvider>
           <RadioProvider>
             {/* the search query lives in the URL, and reading it opts the tree
