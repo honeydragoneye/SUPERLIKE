@@ -42,7 +42,7 @@ export function ActionBar() {
   return (
     /* no overflow-hidden: the search field hangs its suggestion panel below
        the bar, and clipping here would cut it off at 76px */
-    <div className="flex h-[76px] shrink-0 items-center gap-[12px] bg-soft pl-[16px] pr-[12px]">
+    <div className="flex h-[76px] shrink-0 items-center gap-[12px] bg-shell pl-[16px] pr-[12px]">
       <SearchField />
 
       <div className="min-w-px flex-1" />
