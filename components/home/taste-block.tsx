@@ -164,13 +164,6 @@ export function TasteBlock() {
           <div className="flex w-full items-start justify-between gap-[16px]">
             <div className="flex min-w-0 flex-col gap-px">
               <h3 className="text-[13px] font-black tracking-[-0.2px]">이 취향으로 골랐어요</h3>
-              <p className="truncate text-[8px] tracking-[0.6px] text-on-bright-muted">
-                {taste.artists
-                  .slice(0, 2)
-                  .map((a) => a.name)
-                  .join(" · ")}
-                와 비슷한 곡 · 이미 들은 곡은 뺐어요
-              </p>
             </div>
             <button
               type="button"
@@ -254,9 +247,6 @@ function RecCard({ rec, index }: { rec: Rec; index: number }) {
             <Icon name="release-hole" size={9} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
           </span>
         )}
-        <span className="absolute bottom-[8px] left-[8px] max-w-[calc(100%-16px)] truncate rounded-pill bg-ink px-[8px] py-[3px] text-[8px] tracking-[0.4px] text-paper-solid">
-          {rec.because} 기반
-        </span>
         {seed && (
           <span className="absolute right-[8px] top-[8px] flex size-[30px] items-center justify-center rounded-pill bg-accent opacity-0 transition-opacity group-hover:opacity-100 rule">
             <Icon name="play-sm" size={12} />
