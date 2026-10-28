@@ -8,6 +8,7 @@ import {
 } from "@/components/station/use-station";
 import { subscribeVolume, volumeServerSnapshot, volumeSnapshot, writeVolume } from "@/lib/volume";
 import type { StationCandidate } from "@/lib/station/types";
+import { playNotice } from "@/lib/spotify/limit";
 import type { StationFilter } from "@/lib/station/filter";
 import type { RejectTarget } from "@/lib/station/rejects";
 import {
@@ -159,6 +160,7 @@ function readableError(
   detail?: string,
   fallback?: string,
   restriction?: Restriction,
+  retryAfterSec?: number,
 ): string {
   const text = detail ?? "";
   // Spotify's own 403 says `reason: "UNKNOWN"`; the play route looks the track
@@ -189,7 +191,9 @@ function readableError(
   if (status === 404 || /NO_ACTIVE_DEVICE|Device not found/i.test(text)) {
     return "재생 기기를 찾을 수 없습니다. 페이지를 새로고침해 주세요";
   }
-  if (status === 429) return "요청이 몰렸습니다. 잠시 후 다시 시도해 주세요";
+  if (status === 429) {
+    return retryAfterSec ? playNotice(retryAfterSec) : "요청이 몰렸습니다. 잠시 후 다시 시도해 주세요";
+  }
   return fallback ?? "재생에 실패했습니다";
 }
 
@@ -490,7 +494,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json().catch(() => ({}));
         console.warn("[play]", res.status, data);
         setError(
-          readableError(res.status, data.detail, "재생에 실패했습니다", data.restriction),
+          readableError(res.status, data.detail, "재생에 실패했습니다", data.restriction, data.retryAfterSec),
         );
         /**
          * Only a 403 is Spotify having looked at the track and said no.
