@@ -65,10 +65,6 @@ export const MANUAL: ManualSection[] = [
         kind: "tip",
         text: "Superlike는 내 Spotify 라이브러리와 플레이리스트를 읽지 않습니다. 좋아요와 만든 플레이리스트는 Superlike에만 저장됩니다.",
       },
-      {
-        kind: "warn",
-        text: "개발 중인 앱이라 로컬에서 열 때는 주소창에 localhost가 아니라 127.0.0.1로 접속해야 로그인이 됩니다.",
-      },
       { kind: "h", text: "연결하지 않아도 되는 것, 연결해야 하는 것" },
       {
         kind: "table",
