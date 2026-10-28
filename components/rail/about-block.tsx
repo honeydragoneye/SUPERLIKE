@@ -9,7 +9,8 @@ export type Fact = [label: string, value: string];
  *
  * `about` is null while it loads; the facts do not wait for it, because the
  * page already has them. The source is named whichever it came from, and links
- * to the article when there is one.
+ * to the article when there is one. With no text found there is nothing in its
+ * place: a line saying so would only report a gap.
  */
 export function AboutBlock({
   label,
@@ -36,9 +37,7 @@ export function AboutBlock({
         </p>
       ) : about?.text ? (
         <p className="text-[10px] font-medium leading-[15px] text-on-bright">{about.text}</p>
-      ) : (
-        <p className="text-[10px] font-medium text-on-bright-muted">소개 글을 찾지 못했습니다</p>
-      )}
+      ) : null}
       {facts.length > 0 && (
         <dl className="flex flex-col gap-[3px]">
           {facts.map(([k, v]) => (
