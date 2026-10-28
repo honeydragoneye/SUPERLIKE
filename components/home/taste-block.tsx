@@ -99,9 +99,7 @@ export function TasteBlock() {
 
   return (
     <section className="flex w-full shrink-0 flex-col gap-[16px] border-b-[1.5px] border-ink px-[24px] pb-[24px] pt-[20px]">
-      <SectionHead title="당신의 취향" note={note}>
-        <span className="text-[8px] tracking-[0.6px] text-on-bright-muted">앨범을 누르면 앨범 페이지 · ▶ 앨범 전곡 재생</span>
-      </SectionHead>
+      <SectionHead title="당신의 취향" note={note} />
 
       {!hydrated || (connected && state.kind === "loading") ? (
         <p className="flex items-center gap-[8px] text-[10px] tracking-[0.5px] text-on-bright-muted">
