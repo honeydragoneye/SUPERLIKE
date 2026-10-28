@@ -86,6 +86,12 @@ Superlike 안에서 만드는 플레이리스트입니다(Spotify 계정에 만�
 - **공개 범위**: 만들 때 고를 수 있고 저장은 하지만, 지금은 본인만 볼 수 있습니다(다른 사람에게 보여 주는 기능은 아직 없습니다).
 - 모든 조회·수정·삭제는 서버가 확인한 로그인 계정으로만 걸립니다. `GET·POST /api/me/playlists`(`?track=<id>`로 그 곡이 담긴 곳 표시), `GET·PATCH·DELETE /api/me/playlists/[id]`, `POST·DELETE /api/me/playlists/[id]/tracks`.
 
+## 이용 안내(사용자 매뉴얼)
+
+`/about`는 11절짜리 매뉴얼입니다: 시작하기, 홈, 검색, 재생 바, 스테이션, 챗봇, ON AIR 라디오, 마이페이지, 금요일의 앨범 편지, 문제 해결, 데이터와 개인정보. 글은 `components/manual/content.ts`에 데이터로 있고(블록 종류: 문단·목록·순서·TIP/주의·표·챗봇 대화·캡처·FAQ), `components/manual/manual-page.tsx`가 그립니다. 오른쪽 열은 목차(`components/rail/manual-rail.tsx`)이고, 스크롤하면 읽는 절이 파랗게 표시되며 누르면 그 절로 이동합니다. 기능이 바뀌면 그 절의 글도 같이 고칩니다.
+
+그림은 `public/manual/`의 캡처입니다. `node scripts/manual-shots.mjs`(개발 서버와 Chrome 필요)가 로그인한 사용자, 재생 중인 플레이어, 스테이션, 챗봇 답을 페이지 안에서 흉내 내 실제 화면을 찍습니다. 개인 정보는 들어가지 않고 앨범 커버만 실제 신보 차트에서 가져옵니다.
+
 ## Spotify 요청 한도
 
 Spotify는 요청이 몰리면 `429`와 `Retry-After`(몇 시간일 때도 있음)로 답합니다. 서버는 그동안 Spotify로 가는 요청을 보내지 않고 바로 실패시킵니다(`lib/http/throttle.ts`). 검색 API는 이때 502 대신 `429`와 남은 시간(`retryAfterSec`)을 돌려주고, 화면은 같은 문구(`lib/spotify/limit.ts`)로 알립니다: 검색 결과 화면의 안내 카드, 검색창 아래 패널의 한 줄, 재생 바의 파란 글자. 알고 난 뒤에는 한도가 풀릴 때까지 브라우저도 검색을 다시 묻지 않고, 풀리면 안내가 저절로 사라집니다.
