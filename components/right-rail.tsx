@@ -189,15 +189,17 @@ function ArtistOfTheWeek() {
   const when = data?.previous ? "지난주" : "이번 주";
 
   return (
-    <section className="flex min-h-0 flex-[1_0_294px] flex-col gap-[10px] overflow-hidden bg-soft p-[14px]">
+    <section className="flex min-h-0 flex-[0_0_294px] flex-col gap-[10px] overflow-hidden bg-chart p-[14px]">
       <p className="h-[10px] shrink-0 whitespace-nowrap text-[8px] leading-[10px] tracking-[1px] text-muted">
         ARTIST OF THE WEEK{data?.previous ? " · 지난주" : ""}
       </p>
 
       {/* stays square while absorbing the block's slack: height comes from
-          flex, width follows the ratio. 203×203 at the design height. */}
+          flex, width follows the ratio. 203×203 at the design height. Both
+          sides are capped at the rail's width: capping only the width left a
+          tall rectangle whenever the rail had more room than the photo. */}
       <div
-        className="relative aspect-square min-h-0 w-auto max-w-[302px] flex-1 self-center overflow-hidden rounded-[4px] bg-ink transition-colors duration-700"
+        className="relative aspect-square min-h-0 w-auto max-h-[302px] max-w-[302px] flex-1 self-center overflow-hidden rounded-[4px] bg-ink transition-colors duration-700"
         // the colour of the photo behind it, so a photo with a margin does not show black
         style={palette ? { backgroundColor: palette.bg } : undefined}
       >
@@ -239,12 +241,40 @@ function ArtistOfTheWeek() {
   );
 }
 
+const FOOTER_LINKS = [
+  { href: "/about", label: "이용 안내" },
+  { href: "/privacy", label: "개인정보" },
+  { href: "/contact", label: "문의·제보" },
+];
+
+/** What the rail stands on, and where to read more: the foot of the column. */
+function RailFooter() {
+  return (
+    <footer className="flex shrink-0 flex-col gap-[12px] px-[14px] pb-[18px] pt-[18px]">
+      <p className="text-[8px] tracking-[1px] text-muted">ABOUT SUPERLIKE</p>
+      <p className="text-[9px] font-normal leading-[14px]">
+        재생은 Spotify, 신보·차트는 Apple Music에서 가져와요. 연결하지 않아도 둘러볼 수 있고, 재생은 Spotify Premium 계정이 필요해요.
+      </p>
+      <nav className="flex gap-[14px] text-[9px] font-medium">
+        {FOOTER_LINKS.map((l) => (
+          <Link key={l.href} href={l.href} className="underline underline-offset-2 transition-colors hover:text-accent-bright">
+            {l.label}
+          </Link>
+        ))}
+      </nav>
+      <div className="h-px bg-soft" />
+      <p className="text-[8px] tracking-[0.3px] text-muted">© SUPERLIKE 2026 · honeydragoneye</p>
+    </footer>
+  );
+}
+
 export function RightRail() {
   return (
-    <div className="rail-scroll flex h-full flex-col">
+    <div className="rail-scroll flex h-full flex-col bg-chart">
       <EditorsPick />
       <StayConnected />
       <ArtistOfTheWeek />
+      <RailFooter />
     </div>
   );
 }

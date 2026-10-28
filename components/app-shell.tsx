@@ -107,7 +107,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
        screen it opens would offer the same button twice */
     pathname.startsWith("/subscribe") ||
     pathname.startsWith("/editors-pick") ||
-    pathname.startsWith("/weekly-artist");
+    pathname.startsWith("/weekly-artist") ||
+    pathname.startsWith("/about") ||
+    pathname.startsWith("/privacy") ||
+    pathname.startsWith("/contact");
   const rail = !railless;
   /** The chat takes the rail's column, at the width it was dragged to. */
   const { open: chat, width: chatWidth } = useChat();
