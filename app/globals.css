@@ -57,8 +57,61 @@
   --color-offline: #ff4d4d;
   --color-heart: #ff8fc0;
 
+  /* roles that were one colour in light and must be two in dark */
+  /* a card or an input: paper at full strength, as a surface */
+  --color-card: #fafcfe;
+  /* what a press of an ink-filled control puts on it: light on the ink, dark when the ink turns light */
+  --color-on-ink: #fafcfe;
+  /* the 1.5px rule every block carries */
+  --color-rule: rgba(0, 0, 0, 0.8);
+  /* the sunk panel behind the tag filter and the chat */
+  --color-well: #dfe5ec;
+  /* the white strip with the logo */
+  --color-header: #ffffff;
+  /* the round controls on the player, a frosted soft */
+  --color-glass: rgba(231, 236, 241, 0.82);
+
   --radius-pill: 40px;
 }
+
+/*
+ * Dark mode: the same tokens with other values, nothing else.
+ *
+ * `data-theme` is set on <html> before the first paint (see the script in
+ * layout.tsx) from the listener's choice, or from the system when they have not
+ * chosen. Roles that stay put in both modes: the accent, the ON AIR bar, the
+ * album covers and records, and the colours on top of them.
+ */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-ink: rgba(238, 241, 245, 0.92);
+  --color-paper: rgba(27, 31, 38, 0.72);
+  --color-muted: rgba(154, 163, 175, 1);
+  --color-soft: #232830;
+  --color-soft-press: #2c323b;
+  --color-violet: #2a3039;
+  --color-mint: #262b33;
+  --color-spotify: #8a9bff;
+  --color-panel: #1c2027;
+  --color-chart: #0e1014;
+  --color-tag-blue: #2b3566;
+  --color-tag-blue-press: #38458a;
+  --color-paper-press: #2c323b;
+  --color-shell: #0e1014;
+  --color-on-bright: rgba(238, 241, 245, 0.92);
+  --color-on-bright-muted: rgba(238, 241, 245, 0.62);
+
+  --color-card: #1b1f26;
+  --color-on-ink: #0e1014;
+  --color-rule: rgba(255, 255, 255, 0.28);
+  --color-well: #181b21;
+  --color-header: #14171c;
+  --color-glass: rgba(35, 40, 48, 0.82);
+}
+
+/* `dark:` follows the attribute, not the system, so a listener's choice wins */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @layer base {
   html {
@@ -74,15 +127,15 @@
 @layer utilities {
   /* every block in the design carries the same 1.5px inside rule */
   .rule {
-    border: 1.5px solid var(--color-ink);
+    border: 1.5px solid var(--color-rule);
   }
   .rule-b {
-    border-bottom: 1px solid var(--color-ink);
+    border-bottom: 1px solid var(--color-rule);
   }
   /* blocks that separate with horizontal rules instead of a full border */
   .rule-y {
-    border-top: 1px solid var(--color-ink);
-    border-bottom: 1px solid var(--color-ink);
+    border-top: 1px solid var(--color-rule);
+    border-bottom: 1px solid var(--color-rule);
   }
   /* horizontal rail: slim ink scrollbar that fits the block's spare 8px */
   .scroll-x {

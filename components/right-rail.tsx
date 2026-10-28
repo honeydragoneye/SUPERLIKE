@@ -55,7 +55,7 @@ function EditorsPick() {
 
   return (
     <section
-      className="relative min-h-0 flex-[0_0_268px] overflow-hidden bg-ink transition-colors duration-700"
+      className="relative min-h-0 flex-[0_0_268px] overflow-hidden bg-artwork transition-colors duration-700"
       // the cover's own colour; the near-black stays until there is one
       style={palette ? { backgroundColor: palette.bg } : undefined}
     >
@@ -81,7 +81,7 @@ function EditorsPick() {
             <span className="absolute left-1/2 top-1/2 block size-[74px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full">
               <Image src={album.artwork} alt="" fill sizes="74px" className="object-cover" unoptimized />
             </span>
-            <span className="absolute left-1/2 top-1/2 block size-[10px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink" />
+            <span className="absolute left-1/2 top-1/2 block size-[10px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-artwork" />
           </span>
         </span>
       ) : (
@@ -132,9 +132,9 @@ export function StayConnected({ onSubscribe, open = false }: { onSubscribe?: () 
   // the mail rotates through four themes; this is the one going out this week
   const theme = weekTheme();
   return (
-    <section className="relative flex min-h-0 flex-[0_0_186px] flex-col overflow-hidden bg-paper-solid px-[20px] py-[18px]">
+    <section className="relative flex min-h-0 flex-[0_0_186px] flex-col overflow-hidden bg-card px-[20px] py-[18px]">
       {/* the stamp's perforated edge */}
-      <div aria-hidden className="pointer-events-none absolute inset-[8px] border border-dashed border-ink/45" />
+      <div aria-hidden className="pointer-events-none absolute inset-[8px] border border-dashed border-rule/45" />
       <p className="text-[8px] tracking-[0.8px] text-accent-bright">{theme} · 이번 주 컨셉</p>
       <h2 className="mt-[6px] text-[24px] font-black leading-[28px] tracking-[-0.5px] text-on-bright">
         <Link href="/issues" className="transition-colors hover:text-accent-bright">
@@ -162,14 +162,14 @@ export function StayConnected({ onSubscribe, open = false }: { onSubscribe?: () 
             type="button"
             onClick={onSubscribe}
             aria-expanded={open}
-            className={`flex h-[28px] items-center whitespace-nowrap rounded-pill px-[18px] text-[10px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-accent-bright ${open ? "bg-accent-bright" : "bg-ink"}`}
+            className={`flex h-[28px] items-center whitespace-nowrap rounded-pill px-[18px] text-[10px] tracking-[0.6px] transition-colors hover:bg-accent-bright hover:text-paper-solid ${open ? "bg-accent-bright text-paper-solid" : "bg-ink text-on-ink"}`}
           >
             {open ? "접기 ↑" : "신청하기 →"}
           </button>
         ) : (
           <Link
             href="/subscribe"
-            className="flex h-[28px] items-center whitespace-nowrap rounded-pill bg-ink px-[18px] text-[10px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-accent-bright"
+            className="flex h-[28px] items-center whitespace-nowrap rounded-pill bg-ink px-[18px] text-[10px] tracking-[0.6px] text-on-ink transition-colors hover:bg-accent-bright hover:text-paper-solid"
           >
             신청하기 →
           </Link>
@@ -199,7 +199,7 @@ function ArtistOfTheWeek() {
           sides are capped at the rail's width: capping only the width left a
           tall rectangle whenever the rail had more room than the photo. */}
       <div
-        className="relative aspect-square min-h-0 w-auto max-h-[302px] max-w-[302px] flex-1 self-center overflow-hidden rounded-[4px] bg-ink transition-colors duration-700"
+        className="relative aspect-square min-h-0 w-auto max-h-[302px] max-w-[302px] flex-1 self-center overflow-hidden rounded-[4px] bg-artwork transition-colors duration-700"
         // the colour of the photo behind it, so a photo with a margin does not show black
         style={palette ? { backgroundColor: palette.bg } : undefined}
       >
@@ -232,7 +232,7 @@ function ArtistOfTheWeek() {
       <div className="flex h-[31px] w-full shrink-0 items-center justify-between">
         <Link
           href="/weekly-artist"
-          className="flex h-[31px] shrink-0 items-center rounded-pill bg-ink px-[18px] text-[11px] leading-none tracking-[0.8px] text-paper transition-colors hover:bg-accent-bright"
+          className="flex h-[31px] shrink-0 items-center rounded-pill bg-ink px-[18px] text-[11px] leading-none tracking-[0.8px] text-on-ink transition-colors hover:bg-accent-bright hover:text-paper-solid"
         >
           자세히 보기
         </Link>

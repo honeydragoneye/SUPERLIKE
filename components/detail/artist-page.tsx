@@ -53,7 +53,7 @@ export function ArtistPage({ id }: { id: string }) {
                   durationMs: data.topTracks[0].durationMs,
                 })
               }
-              className="shrink-0 whitespace-nowrap rounded-pill bg-accent px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid transition-colors hover:bg-ink"
+              className="shrink-0 whitespace-nowrap rounded-pill bg-accent px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid transition-colors hover:bg-ink hover:text-on-ink"
             >
               스테이션 시작
             </button>
@@ -71,7 +71,7 @@ export function ArtistPage({ id }: { id: string }) {
                   })),
                 })
               }
-              className="shrink-0 whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid"
+              className="shrink-0 whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-on-ink"
             >
               인기곡 재생
             </button>
@@ -84,7 +84,7 @@ export function ArtistPage({ id }: { id: string }) {
       {data && (
         <div className="flex w-full flex-1 flex-col gap-[14px]">
           <div className="flex w-full shrink-0 items-center gap-[14px]">
-            <span className="relative size-[96px] shrink-0 overflow-hidden rounded-pill bg-ink">
+            <span className="relative size-[96px] shrink-0 overflow-hidden rounded-pill bg-artwork">
               {data.image && (
                 <Image src={data.image} alt="" fill sizes="96px" className="object-cover" unoptimized />
               )}
@@ -172,7 +172,7 @@ export function ArtistPage({ id }: { id: string }) {
                   title={a.name}
                   className="flex w-[120px] shrink-0 cursor-pointer flex-col gap-[6px] text-left"
                 >
-                  <span className="relative aspect-square w-full overflow-hidden rounded-[4px] bg-ink">
+                  <span className="relative aspect-square w-full overflow-hidden rounded-[4px] bg-artwork">
                     {a.artwork && (
                       <Image src={a.artwork} alt="" fill sizes="120px" className="object-cover" unoptimized />
                     )}

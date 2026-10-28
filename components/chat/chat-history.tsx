@@ -83,7 +83,7 @@ export const ChatHistory = function ChatHistory({
       ref={popoverRef}
       role="dialog"
       aria-label="대화 이력"
-      className="absolute inset-x-[16px] top-[58px] z-20 flex max-h-[calc(100%-74px)] flex-col gap-[10px] rounded-[10px] bg-paper-solid px-[14px] pb-[10px] pt-[14px] shadow-[0_6px_16px_rgba(0,0,0,0.18)] rule"
+      className="absolute inset-x-[16px] top-[58px] z-20 flex max-h-[calc(100%-74px)] flex-col gap-[10px] rounded-[10px] bg-card px-[14px] pb-[10px] pt-[14px] shadow-[0_6px_16px_rgba(0,0,0,0.18)] rule"
     >
       <div className="flex w-full shrink-0 items-center justify-between gap-[8px]">
         <p className="text-[12px] font-black text-on-bright">대화 이력</p>

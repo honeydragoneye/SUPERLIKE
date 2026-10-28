@@ -74,7 +74,7 @@ export function LikedTracks() {
 
   return (
     <section
-      className={`flex w-full shrink-0 flex-col gap-[16px] border-b-[1.5px] border-ink px-[24px] pb-[24px] pt-[20px] ${
+      className={`flex w-full shrink-0 flex-col gap-[16px] border-b-[1.5px] border-rule px-[24px] pb-[24px] pt-[20px] ${
         listed ? "" : "min-h-[306px]"
       }`}
     >
@@ -83,7 +83,7 @@ export function LikedTracks() {
           <button
             type="button"
             onClick={() => playFrom(liked[0].uri)}
-            className="flex h-[26px] cursor-pointer items-center whitespace-nowrap rounded-pill bg-ink px-[12px] text-[9px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-accent hover:text-on-bright rule"
+            className="flex h-[26px] cursor-pointer items-center whitespace-nowrap rounded-pill bg-ink px-[12px] text-[9px] tracking-[0.6px] text-on-ink transition-colors hover:bg-accent hover:text-on-bright rule"
           >
             전체 재생
           </button>

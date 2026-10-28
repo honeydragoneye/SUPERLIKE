@@ -17,11 +17,11 @@ import { FollowCounts, Listeners } from "./side-panels";
  */
 export function Mypage() {
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-paper-solid text-on-bright">
+    <div className="flex min-h-full flex-1 flex-col bg-card text-on-bright">
       <AccountBanner />
 
       <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col border-r-[1.5px] border-ink">
+        <div className="flex min-w-0 flex-1 flex-col border-r-[1.5px] border-rule">
           <RecentlyPlayed />
         </div>
 

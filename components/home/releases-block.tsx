@@ -82,7 +82,7 @@ export function ReleasesBlock() {
   }, [country, loaded]);
 
   return (
-    <section className="flex w-full shrink-0 flex-col gap-[16px] border-b-[1.5px] border-ink px-[24px] pb-[24px] pt-[20px]">
+    <section className="flex w-full shrink-0 flex-col gap-[16px] border-b-[1.5px] border-rule px-[24px] pb-[24px] pt-[20px]">
       <SectionHead
         title="최근 발매"
         note="Apple Music 인기 차트에서 최근 30일 안에 나온 앨범 · 라이브·리마스터·기념판 제외"
@@ -95,7 +95,7 @@ export function ReleasesBlock() {
               aria-pressed={key === country}
               onClick={() => setCountry(key)}
               className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[14px] py-[7px] text-[9px] tracking-[0.7px] rule ${
-                key === country ? "bg-ink text-paper" : "bg-soft text-on-bright"
+                key === country ? "bg-ink text-on-ink" : "bg-soft text-on-bright"
               }`}
             >
               {label}
@@ -115,7 +115,7 @@ export function ReleasesBlock() {
           <button
             type="button"
             onClick={() => setLoaded((all) => ({ ...all, [country]: undefined }))}
-            className="cursor-pointer rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.8px] text-paper-solid transition-colors hover:bg-accent-bright"
+            className="cursor-pointer rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.8px] text-on-ink transition-colors hover:bg-accent-bright hover:text-paper-solid"
           >
             다시 시도
           </button>
@@ -181,11 +181,11 @@ function ReleaseCard({ album, index }: { album: Release; index: number }) {
             <Icon name="release-hole" size={9} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
           </span>
         )}
-        <span className="tnum absolute bottom-[8px] left-[8px] rounded-pill bg-ink px-[8px] py-[3px] text-[8px] tracking-[0.4px] text-paper-solid">
+        <span className="tnum absolute bottom-[8px] left-[8px] rounded-pill bg-ink px-[8px] py-[3px] text-[8px] tracking-[0.4px] text-on-ink">
           {day(album.releaseDate)}
         </span>
         {busy && (
-          <span className="absolute inset-0 flex items-center justify-center bg-ink/50">
+          <span className="absolute inset-0 flex items-center justify-center bg-black/50">
             <LoadingDots size={4} label="앨범 찾는 중" />
           </span>
         )}

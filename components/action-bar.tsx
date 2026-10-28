@@ -84,7 +84,7 @@ export function ActionBar() {
         }
         className="flex shrink-0 items-center gap-[14px] rounded-pill bg-ink py-[6px] pl-[20px] pr-[6px] disabled:opacity-50"
       >
-        <span className="whitespace-nowrap text-[13px] tracking-[0.6px] text-paper-solid">
+        <span className="whitespace-nowrap text-[13px] tracking-[0.6px] text-on-ink">
           {isPlaying ? "PLAYING" : "PLAY ALL"}
         </span>
         <span className="flex size-[34px] items-center justify-center rounded-pill bg-accent">

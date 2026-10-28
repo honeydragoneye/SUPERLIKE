@@ -136,9 +136,9 @@ function Sleeve({ src }: { src: string | null }) {
     return <img src={src} alt="" className="size-[34px] shrink-0 rounded-[4px] object-cover" />;
   }
   return (
-    <span className="relative flex size-[34px] shrink-0 items-center justify-center rounded-[4px] bg-ink">
+    <span className="relative flex size-[34px] shrink-0 items-center justify-center rounded-[4px] bg-artwork">
       <span className="size-[18px] rounded-full bg-accent-bright" />
-      <span className="absolute size-[5px] rounded-full bg-ink" />
+      <span className="absolute size-[5px] rounded-full bg-artwork" />
     </span>
   );
 }
@@ -205,7 +205,7 @@ export function TrackCard({ track, rank }: { track: TrackCardTrack; rank?: numbe
               : "재생"
         }
         onClick={() => seed && void play({ uris: [seed.uri] })}
-        className="flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-pill bg-ink text-paper-solid transition-colors enabled:hover:bg-accent-bright disabled:cursor-default disabled:opacity-40"
+        className="flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-pill bg-ink text-on-ink transition-colors enabled:hover:bg-accent-bright enabled:hover:text-paper-solid disabled:cursor-default disabled:opacity-40"
       >
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden className="ml-[1px]">
           <path d="M2 1 9 5 2 9Z" fill="currentColor" />

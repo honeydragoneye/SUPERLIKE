@@ -19,7 +19,7 @@ const TABS: { key: SearchTab; label: string }[] = [
 function Thumb({ src, size = 32 }: { src: string | null; size?: number }) {
   return (
     <span
-      className="relative shrink-0 overflow-hidden rounded-[4px] bg-ink"
+      className="relative shrink-0 overflow-hidden rounded-[4px] bg-artwork"
       style={{ width: size, height: size }}
     >
       {src && (
@@ -94,7 +94,7 @@ export function SearchResults() {
                 aria-pressed={active}
                 onClick={() => setTab(key)}
                 className={`shrink-0 whitespace-nowrap rounded-pill px-[14px] py-[7px] text-[9px] tracking-[0.7px] rule ${
-                  active ? "bg-ink text-paper" : "bg-soft text-on-bright"
+                  active ? "bg-ink text-on-ink" : "bg-soft text-on-bright"
                 }`}
               >
                 {label}
@@ -117,7 +117,7 @@ export function SearchResults() {
         </div>
       )}
 
-      <div className="h-px w-full shrink-0 bg-ink" />
+      <div className="h-px w-full shrink-0 bg-rule" />
 
       <div className="w-full flex-1">
         {tab === "track" && (
@@ -211,7 +211,7 @@ export function SearchResults() {
                   onClick={() => router.push(`/artist/${a.id}`)}
                   className="flex h-[56px] w-full cursor-pointer items-center gap-[12px] text-left"
                 >
-                <span className="relative size-[40px] shrink-0 overflow-hidden rounded-pill bg-ink">
+                <span className="relative size-[40px] shrink-0 overflow-hidden rounded-pill bg-artwork">
                   {a.image && (
                     <Image src={a.image} alt="" fill sizes="40px" className="object-cover" unoptimized />
                   )}

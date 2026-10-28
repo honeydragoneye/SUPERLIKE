@@ -18,13 +18,13 @@ import { useChat } from "./chat-provider";
 
 const Tile = ({ src, round }: { src: string | null | undefined; round?: boolean }) =>
   src ? (
-    <span className={`relative size-[30px] shrink-0 overflow-hidden bg-ink ${round ? "rounded-full" : "rounded-[4px]"}`}>
+    <span className={`relative size-[30px] shrink-0 overflow-hidden bg-artwork ${round ? "rounded-full" : "rounded-[4px]"}`}>
       <Image src={src} alt="" fill sizes="30px" className="object-cover" unoptimized />
     </span>
   ) : (
     <span className="relative flex size-[30px] shrink-0 items-center justify-center rounded-[4px] bg-artwork">
       <span className="size-[16px] rounded-full bg-accent-bright" />
-      <span className="absolute size-[4px] rounded-full bg-ink" />
+      <span className="absolute size-[4px] rounded-full bg-artwork" />
     </span>
   );
 
@@ -45,7 +45,7 @@ function Button({
       disabled={disabled}
       onClick={onClick}
       className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.6px] transition-colors rule disabled:cursor-default disabled:opacity-40 ${
-        dark ? "bg-ink text-paper-solid enabled:hover:bg-accent-bright" : "bg-paper-solid text-on-bright enabled:hover:bg-soft"
+        dark ? "bg-ink text-on-ink enabled:hover:bg-accent-bright enabled:hover:text-paper-solid" : "bg-card text-on-bright enabled:hover:bg-soft"
       }`}
     >
       {children}
@@ -112,7 +112,7 @@ function Station({ messageId, a }: { messageId: string; a: ChatAction }) {
     <li className="flex flex-col gap-[8px] rounded-[8px] bg-chart p-[10px]">
       <div className="flex items-center gap-[6px]">
         <span className="text-[8px] tracking-[0.8px] text-accent-bright">STATION</span>
-        {a.state === "done" && <span className="rounded-pill bg-ink px-[7px] py-[2px] text-[7px] tracking-[0.5px] text-paper-solid">시작했어요 ✓</span>}
+        {a.state === "done" && <span className="rounded-pill bg-ink px-[7px] py-[2px] text-[7px] tracking-[0.5px] text-on-ink">시작했어요 ✓</span>}
         {a.state === "cancelled" && <span className="rounded-pill bg-soft px-[7px] py-[2px] text-[7px] tracking-[0.5px] text-on-bright-muted">취소했어요</span>}
       </div>
       <div className="flex items-center gap-[8px]">
@@ -175,7 +175,7 @@ function Playlist({ messageId, a }: { messageId: string; a: ChatAction }) {
     <li className="flex flex-col gap-[8px] rounded-[8px] bg-chart p-[10px]">
       <div className="flex items-center gap-[6px]">
         <span className="text-[8px] tracking-[0.8px] text-accent-bright">PLAYLIST</span>
-        {a.state === "done" && <span className="rounded-pill bg-ink px-[7px] py-[2px] text-[7px] tracking-[0.5px] text-paper-solid">만들었어요 ✓</span>}
+        {a.state === "done" && <span className="rounded-pill bg-ink px-[7px] py-[2px] text-[7px] tracking-[0.5px] text-on-ink">만들었어요 ✓</span>}
         {a.state === "cancelled" && <span className="rounded-pill bg-soft px-[7px] py-[2px] text-[7px] tracking-[0.5px] text-on-bright-muted">취소했어요</span>}
       </div>
       <input
@@ -184,7 +184,7 @@ function Playlist({ messageId, a }: { messageId: string; a: ChatAction }) {
         maxLength={60}
         onChange={(e) => setName(e.target.value)}
         aria-label="플레이리스트 이름"
-        className={`rounded-pill bg-paper-solid px-[12px] py-[8px] text-[11px] font-bold outline-none disabled:opacity-70 ${a.state === "error" && !tracks.length ? "border-[1.5px] border-alert" : "rule"}`}
+        className={`rounded-pill bg-card px-[12px] py-[8px] text-[11px] font-bold outline-none disabled:opacity-70 ${a.state === "error" && !tracks.length ? "border-[1.5px] border-alert" : "rule"}`}
       />
       {gathering && <p className="text-[8px] leading-[12px] tracking-[0.4px] text-on-bright-muted">담을 곡을 찾는 중…</p>}
       {tracks.length > 0 && (
@@ -251,7 +251,7 @@ const Ico = ({ children, on = false, big = false, label, onClick, disabled }: { 
     disabled={disabled}
     onClick={onClick}
     className={`flex shrink-0 cursor-pointer items-center justify-center rounded-full text-[10px] font-bold transition-colors disabled:cursor-default disabled:opacity-40 ${
-      big ? "size-[30px] bg-accent-bright text-paper-solid enabled:hover:bg-ink" : `size-[22px] ${on ? "bg-[#d4dcff] text-accent-bright" : "text-on-bright enabled:hover:bg-soft"}`
+      big ? "size-[30px] bg-accent-bright text-paper-solid enabled:hover:bg-ink enabled:hover:text-on-ink" : `size-[22px] ${on ? "bg-[#d4dcff] text-accent-bright" : "text-on-bright enabled:hover:bg-soft"}`
     }`}
   >
     {children}
@@ -392,18 +392,18 @@ function Choice({ messageId, a }: { messageId: string; a: ChatAction }) {
             <button
               type="button"
               onClick={() => actOn(messageId, a.id, { type: "choose", value: "loop" })}
-              className="flex cursor-pointer items-center gap-[10px] rounded-[12px] bg-ink px-[12px] py-[9px] text-left transition-colors hover:bg-accent-bright"
+              className="flex cursor-pointer items-center gap-[10px] group rounded-[12px] bg-ink px-[12px] py-[9px] text-left transition-colors hover:bg-accent-bright"
             >
-              <span className="text-[12px] font-bold text-paper-solid">↻</span>
+              <span className="text-[12px] font-bold text-on-ink group-hover:text-paper-solid">↻</span>
               <span className="flex flex-col gap-px">
-                <span className="text-[10px] font-bold text-paper-solid">이 곡만 계속</span>
-                <span className="text-[8px] text-paper-solid/70">끝나면 처음부터 다시 (한 곡 반복)</span>
+                <span className="text-[10px] font-bold text-on-ink group-hover:text-paper-solid">이 곡만 계속</span>
+                <span className="text-[8px] text-on-ink/70 group-hover:text-paper-solid/70">끝나면 처음부터 다시 (한 곡 반복)</span>
               </span>
             </button>
             <button
               type="button"
               onClick={() => actOn(messageId, a.id, { type: "choose", value: "once" })}
-              className="rule flex cursor-pointer items-center gap-[10px] rounded-[12px] bg-paper-solid px-[12px] py-[9px] text-left transition-colors hover:bg-soft"
+              className="rule flex cursor-pointer items-center gap-[10px] rounded-[12px] bg-card px-[12px] py-[9px] text-left transition-colors hover:bg-soft"
             >
               <span className="text-[12px] font-bold">▶</span>
               <span className="flex flex-col gap-px">
@@ -457,13 +457,13 @@ function AddTo({ messageId, a }: { messageId: string; a: ChatAction }) {
       </div>
       <ul className="flex flex-col gap-[4px]">
         {lists.map((l) => (
-          <li key={l.id} className="flex items-center gap-[8px] rounded-[8px] bg-paper-solid px-[10px] py-[6px]">
+          <li key={l.id} className="flex items-center gap-[8px] rounded-[8px] bg-card px-[10px] py-[6px]">
             <span className="flex min-w-0 flex-1 flex-col gap-px">
               <span className="w-full truncate text-[10px] font-bold">{l.name}</span>
               <span className="text-[7px] tracking-[0.4px] text-on-bright-muted">{l.count}곡</span>
             </span>
             {l.has ? (
-              <span className="shrink-0 rounded-pill border-[1.5px] border-ink px-[10px] py-[4px] text-[8px] tracking-[0.6px]">담았어요 ✓</span>
+              <span className="shrink-0 rounded-pill border-[1.5px] border-rule px-[10px] py-[4px] text-[8px] tracking-[0.6px]">담았어요 ✓</span>
             ) : (
               <Button dark disabled={sent.includes(l.id) && !a.note} onClick={() => put(l.id)}>
                 담기
@@ -490,7 +490,7 @@ function AddTo({ messageId, a }: { messageId: string; a: ChatAction }) {
             onKeyDown={(e) => e.key === "Escape" && setNaming(false)}
             placeholder="새 플레이리스트 이름"
             aria-label="새 플레이리스트 이름"
-            className="rule rounded-pill bg-paper-solid px-[12px] py-[8px] text-[11px] font-bold outline-none placeholder:font-medium placeholder:text-on-bright-muted"
+            className="rule rounded-pill bg-card px-[12px] py-[8px] text-[11px] font-bold outline-none placeholder:font-medium placeholder:text-on-bright-muted"
           />
           <div className="flex gap-[6px]">
             <Button
@@ -512,7 +512,7 @@ function AddTo({ messageId, a }: { messageId: string; a: ChatAction }) {
           type="button"
           disabled={sent.includes("new") && !a.note}
           onClick={() => setNaming(true)}
-          className="rule cursor-pointer rounded-pill border-[1.5px] border-ink px-[12px] py-[7px] text-left text-[9px] font-bold transition-colors hover:bg-soft disabled:cursor-default disabled:opacity-40"
+          className="rule cursor-pointer rounded-pill border-[1.5px] border-rule px-[12px] py-[7px] text-left text-[9px] font-bold transition-colors hover:bg-soft disabled:cursor-default disabled:opacity-40"
         >
           + 새 플레이리스트에 담기
         </button>

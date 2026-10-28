@@ -60,11 +60,11 @@ const NOTHING: never[] = [];
  * None of them changes on hover: a press is the only thing that darkens one.
  */
 const KIND = {
-  basic: "bg-paper-solid text-ink enabled:active:bg-paper-press",
+  basic: "bg-card text-ink enabled:active:bg-paper-press",
   mood: "bg-soft text-ink enabled:active:bg-soft-press",
   custom: "bg-tag-blue text-ink",
 } as const;
-const ON = "bg-ink text-paper-solid";
+const ON = "bg-ink text-on-ink";
 
 const PILL =
   "shrink-0 rounded-pill px-[14px] py-[8px] text-[10px] tracking-[0.6px] transition-colors rule disabled:opacity-40";
@@ -159,7 +159,7 @@ export function TagFilter() {
       : { ...stationFilter, lyrics: on(t) ? null : LYRICS_OF[t.label] };
 
   return (
-    <section className="rail-scroll flex h-full w-full flex-col gap-[12px] bg-[#dfe5ec] p-[16px]">
+    <section className="rail-scroll flex h-full w-full flex-col gap-[12px] bg-well p-[16px]">
       <div className="flex w-full shrink-0 flex-col gap-px">
         <h2 className="text-[19px] font-black tracking-[-0.4px] text-on-bright">TAGS</h2>
         <p className="text-[8px] tracking-[0.7px] text-on-bright-muted">
@@ -180,7 +180,7 @@ export function TagFilter() {
             }
             disabled={locked || !isFiltered(stationFilter)}
             onClick={() => void setStationFilter(NO_FILTER)}
-            className={`${PILL} bg-ink text-paper-solid enabled:hover:bg-accent-bright`}
+            className={`${PILL} bg-ink text-on-ink enabled:hover:bg-accent-bright enabled:hover:text-paper-solid`}
           >
             해제
           </button>
@@ -291,7 +291,7 @@ export function TagFilter() {
               type="button"
               title={`내 태그 만들기 (${custom.length}/${MAX_CUSTOM_TAGS})`}
               onClick={() => setAdding(true)}
-              className={`${PILL} bg-transparent text-ink active:bg-black/10`}
+              className={`${PILL} bg-transparent text-ink active:bg-ink/10`}
             >
               + 태그 추가
             </button>
@@ -302,7 +302,7 @@ export function TagFilter() {
 
       {adding && (
         <form
-          className="flex w-full shrink-0 flex-col gap-[6px] rounded-[6px] bg-paper-solid p-[10px] rule"
+          className="flex w-full shrink-0 flex-col gap-[6px] rounded-[6px] bg-card p-[10px] rule"
           onSubmit={(e) => {
             e.preventDefault();
             submit();
@@ -329,7 +329,7 @@ export function TagFilter() {
             <p className="text-[8px] leading-[12px] text-on-bright-muted">{formError}</p>
           )}
           <div className="flex gap-[6px]">
-            <button type="submit" className={`${PILL} bg-ink text-paper-solid hover:bg-accent-bright`}>
+            <button type="submit" className={`${PILL} bg-ink text-on-ink hover:bg-accent-bright hover:text-paper-solid`}>
               추가
             </button>
             <button

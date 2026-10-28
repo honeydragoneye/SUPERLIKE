@@ -17,7 +17,7 @@ function HowItWorks() {
       <ol className="flex max-w-[600px] flex-col gap-[14px]">
         {MAIL_STEPS.map((step, i) => (
           <li key={step} className="flex items-start gap-[14px]">
-            <span className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-ink text-[12px] font-bold text-paper-solid">{i + 1}</span>
+            <span className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-ink text-[12px] font-bold text-on-ink">{i + 1}</span>
             <span className="text-[14px] leading-[22px]">{step}</span>
           </li>
         ))}
@@ -80,7 +80,7 @@ function Settle({ token, action }: { token: string; action: "confirm" | "unsubsc
           type="button"
           onClick={run}
           disabled={phase === "busy"}
-          className="rounded-pill bg-ink px-[16px] py-[8px] text-[10px] tracking-[0.7px] text-paper-solid disabled:opacity-50"
+          className="rounded-pill bg-ink px-[16px] py-[8px] text-[10px] tracking-[0.7px] text-on-ink disabled:opacity-50"
         >
           {confirm ? "구독 확인" : "구독 해지"}
         </button>
@@ -132,7 +132,7 @@ function Form() {
       <button
         type="submit"
         disabled={phase === "busy"}
-        className="self-start rounded-pill bg-ink px-[16px] py-[8px] text-[10px] tracking-[0.7px] text-paper-solid disabled:opacity-50"
+        className="self-start rounded-pill bg-ink px-[16px] py-[8px] text-[10px] tracking-[0.7px] text-on-ink disabled:opacity-50"
       >
         {phase === "busy" ? "보내는 중…" : "신청하기"}
       </button>

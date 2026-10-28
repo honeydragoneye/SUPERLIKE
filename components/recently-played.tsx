@@ -134,7 +134,7 @@ export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
                 title={option === "TODAY" ? "오늘 재생한 곡" : "이번 주 재생한 곡"}
                 onClick={() => setRange(option)}
                 className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors rule ${
-                  active ? "bg-ink text-paper" : "bg-soft text-ink hover:bg-accent"
+                  active ? "bg-ink text-on-ink" : "bg-soft text-ink hover:bg-accent"
                 }`}
               >
                 {option}
@@ -164,7 +164,7 @@ export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
               onClick={() => {
                 if (!chat.open) chat.toggle();
               }}
-              className="cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[14px] py-[7px] text-[8px] tracking-[0.8px] text-paper transition-colors hover:bg-accent-bright"
+              className="cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[14px] py-[7px] text-[8px] tracking-[0.8px] text-on-ink transition-colors hover:bg-accent-bright hover:text-paper-solid"
             >
               챗봇에게 곡 추천받기 →
             </button>
@@ -179,7 +179,7 @@ export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
           href="/history"
           className="flex shrink-0 items-center gap-[10px] rounded-pill bg-ink py-[7px] pl-[14px] pr-[12px]"
         >
-          <span className="text-[8px] tracking-[0.8px] text-paper">
+          <span className="text-[8px] tracking-[0.8px] text-on-ink">
             목록 더보기
           </span>
           <span className="text-[11px] text-accent-bright">→</span>

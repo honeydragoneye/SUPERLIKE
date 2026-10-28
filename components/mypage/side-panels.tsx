@@ -6,7 +6,7 @@
 /** Marks a panel that is drawn but not wired, in the outline a disabled pill uses. */
 function Soon() {
   return (
-    <span className="shrink-0 whitespace-nowrap rounded-pill border-[1.5px] border-black/30 px-[12px] py-[4px] text-[9px] tracking-[0.6px] text-black/45">
+    <span className="shrink-0 whitespace-nowrap rounded-pill border-[1.5px] border-ink/30 px-[12px] py-[4px] text-[9px] tracking-[0.6px] text-ink/45">
       준비 중
     </span>
   );
@@ -21,7 +21,7 @@ function Soon() {
  */
 export function FollowCounts() {
   return (
-    <dl className="flex h-[84px] w-full shrink-0 gap-[112px] border-b-[1.5px] border-ink pl-[40px] pt-[20px]">
+    <dl className="flex h-[84px] w-full shrink-0 gap-[112px] border-b-[1.5px] border-rule pl-[40px] pt-[20px]">
       {(["팔로워", "팔로잉"] as const).map((label) => (
         <div key={label} className="flex w-[26px] shrink-0 flex-col gap-[4px]">
           <dt className="whitespace-nowrap text-[9px] tracking-[0.8px] text-on-bright-muted">
@@ -37,7 +37,7 @@ export function FollowCounts() {
 /** The other accounts on this app — empty until there is a list to read. */
 export function Listeners() {
   return (
-    <section className="flex min-h-[355px] w-full flex-1 flex-col gap-[20px] border-b-[1.5px] border-ink px-[24px] pb-[24px] pt-[20px]">
+    <section className="flex min-h-[355px] w-full flex-1 flex-col gap-[20px] border-b-[1.5px] border-rule px-[24px] pb-[24px] pt-[20px]">
       <div className="flex w-full items-start justify-between gap-[12px]">
         <div className="flex min-w-0 flex-col gap-[4px]">
           <h2 className="whitespace-nowrap text-[13px] font-black tracking-[-0.3px]">

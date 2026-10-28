@@ -46,7 +46,7 @@ export function WeeklyArtistPage() {
           <button
             type="button"
             onClick={() => router.push(`/artist/${artist.id}`)}
-            className="shrink-0 whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid"
+            className="shrink-0 whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-on-ink"
           >
             아티스트 페이지
           </button>
@@ -57,7 +57,7 @@ export function WeeklyArtistPage() {
         {artist ? (
           <div className="flex w-full shrink-0 items-start gap-[14px]">
             <span
-              className="relative size-[132px] shrink-0 overflow-hidden rounded-[4px] bg-ink"
+              className="relative size-[132px] shrink-0 overflow-hidden rounded-[4px] bg-artwork"
               style={artist.palette ? { backgroundColor: artist.palette.bg } : undefined}
             >
               {artist.image && <Image src={artist.image} alt="" fill sizes="132px" className="object-cover" unoptimized />}

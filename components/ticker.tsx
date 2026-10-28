@@ -80,7 +80,7 @@ export function Ticker() {
             type="button"
             onClick={() => void radio.toggle()}
             aria-label={playing || loading ? "일시정지" : "재생"}
-            className="flex size-[18px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-paper-solid text-ticker transition-opacity hover:opacity-80"
+            className="flex size-[18px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-card text-ticker transition-opacity hover:opacity-80"
           >
             {loading ? <LoadingDots size={3} /> : <PlayPauseIcon playing={playing} size={8} />}
           </button>

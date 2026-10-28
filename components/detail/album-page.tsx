@@ -83,7 +83,7 @@ export function AlbumView({
           <button
             type="button"
             onClick={() => void play({ contextUri: data.uri, tracks: rows })}
-            className="shrink-0 whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid"
+            className="shrink-0 whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-on-ink"
           >
             앨범 재생
           </button>
@@ -96,7 +96,7 @@ export function AlbumView({
       {data && (
         <div className="flex w-full flex-1 flex-col gap-[14px]">
           <div className="flex w-full shrink-0 items-start gap-[14px]">
-            <span className="relative size-[132px] shrink-0 overflow-hidden rounded-[4px] bg-ink">
+            <span className="relative size-[132px] shrink-0 overflow-hidden rounded-[4px] bg-artwork">
               {data.artwork && (
                 <Image src={data.artwork} alt="" fill sizes="132px" className="object-cover" unoptimized />
               )}

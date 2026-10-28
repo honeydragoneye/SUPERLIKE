@@ -121,13 +121,13 @@ export function PlaylistShelf() {
                     maxLength={60}
                     placeholder="이름"
                     aria-label="새 플레이리스트 이름"
-                    className="rounded-[6px] border-[1.5px] border-ink bg-paper-solid px-[10px] py-[8px] text-[12px] outline-none"
+                    className="rounded-[6px] border-[1.5px] border-rule bg-card px-[10px] py-[8px] text-[12px] outline-none"
                   />
                   <div className="flex gap-[6px]">
                     <button
                       type="submit"
                       disabled={!name.trim() || busy}
-                      className="cursor-pointer rounded-pill bg-ink px-[12px] py-[6px] text-[9px] text-paper-solid disabled:opacity-40"
+                      className="cursor-pointer rounded-pill bg-ink px-[12px] py-[6px] text-[9px] text-on-ink disabled:opacity-40"
                     >
                       만들기
                     </button>
@@ -144,7 +144,7 @@ export function PlaylistShelf() {
                 <button
                   type="button"
                   onClick={() => setNaming(true)}
-                  className="flex size-[150px] cursor-pointer flex-col items-center justify-center gap-[6px] rounded-[4px] border-[1.5px] border-dashed border-ink/50 text-[10px] tracking-[0.5px] text-on-bright-muted transition-colors hover:border-ink hover:text-on-bright"
+                  className="flex size-[150px] cursor-pointer flex-col items-center justify-center gap-[6px] rounded-[4px] border-[1.5px] border-dashed border-rule/50 text-[10px] tracking-[0.5px] text-on-bright-muted transition-colors hover:border-rule hover:text-on-bright"
                 >
                   <span className="text-[22px] leading-none">+</span>
                   새 플레이리스트

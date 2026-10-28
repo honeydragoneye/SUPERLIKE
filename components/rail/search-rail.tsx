@@ -66,7 +66,7 @@ export function SearchRail() {
       {(artist || album) && (
         <div className="flex shrink-0 flex-col gap-[8px]">
           <RailLabel>TOP RESULT</RailLabel>
-          <div className="flex flex-col gap-[10px] rounded-[8px] bg-ink p-[14px] text-on-dark">
+          <div className="flex flex-col gap-[10px] rounded-[8px] bg-panel p-[14px] text-on-dark">
             <span
               className={`relative block size-[120px] shrink-0 overflow-hidden bg-artwork ${artist ? "rounded-full" : "rounded-[4px]"}`}
             >

@@ -152,13 +152,13 @@ function Card({
   return (
     <li className="flex items-center gap-[8px] rounded-[8px] bg-chart py-[6px] pl-[6px] pr-[8px]">
       {image ? (
-        <span className={`relative size-[34px] shrink-0 overflow-hidden bg-ink ${round ? "rounded-full" : "rounded-[4px]"}`}>
+        <span className={`relative size-[34px] shrink-0 overflow-hidden bg-artwork ${round ? "rounded-full" : "rounded-[4px]"}`}>
           <Image src={image} alt="" fill sizes="34px" className="object-cover" unoptimized />
         </span>
       ) : (
-        <span className={`relative flex size-[34px] shrink-0 items-center justify-center bg-ink ${round ? "rounded-full" : "rounded-[4px]"}`}>
+        <span className={`relative flex size-[34px] shrink-0 items-center justify-center bg-artwork ${round ? "rounded-full" : "rounded-[4px]"}`}>
           <span className="size-[18px] rounded-full bg-accent-bright" />
-          <span className="absolute size-[5px] rounded-full bg-ink" />
+          <span className="absolute size-[5px] rounded-full bg-artwork" />
         </span>
       )}
       <span className={`flex min-w-0 flex-1 flex-col gap-px ${target ? "" : "opacity-55"}`}>
@@ -174,8 +174,8 @@ function Card({
         aria-label={search ? `${title} 검색에서 열기` : `${title} ${kind === "artist" ? "아티스트" : "앨범"} 페이지 열기`}
         className={
           search
-            ? "rule shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-paper-solid px-[10px] py-[5px] text-[8px] tracking-[0.6px] text-on-bright transition-colors hover:bg-soft"
-            : "shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[10px] py-[5px] text-[8px] tracking-[0.6px] text-paper-solid transition-colors enabled:hover:bg-accent-bright disabled:cursor-default disabled:opacity-35"
+            ? "rule shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-card px-[10px] py-[5px] text-[8px] tracking-[0.6px] text-on-bright transition-colors hover:bg-soft"
+            : "shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[10px] py-[5px] text-[8px] tracking-[0.6px] text-on-ink transition-colors enabled:hover:bg-accent-bright enabled:hover:text-paper-solid disabled:cursor-default disabled:opacity-35"
         }
       >
         {loading ? "찾는 중…" : search ? "검색에서 열기 →" : "페이지 열기 →"}

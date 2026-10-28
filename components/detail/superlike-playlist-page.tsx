@@ -107,7 +107,7 @@ export function SuperlikePlaylistPage({ id }: { id: string }) {
             }}
             maxLength={60}
             aria-label="플레이리스트 이름"
-            className="w-full rounded-[4px] border-[1.5px] border-ink bg-paper-solid px-[8px] text-[26px] font-black tracking-[-1px] outline-none"
+            className="w-full rounded-[4px] border-[1.5px] border-rule bg-card px-[8px] text-[26px] font-black tracking-[-1px] outline-none"
           />
         ) : (
           (data?.name ?? (error ? "플레이리스트" : <LoadingDots size={8} />))
@@ -125,7 +125,7 @@ export function SuperlikePlaylistPage({ id }: { id: string }) {
               <button
                 type="button"
                 onClick={() => playFrom(0)}
-                className="shrink-0 whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid"
+                className="shrink-0 whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-on-ink"
               >
                 전체 재생
               </button>
@@ -183,7 +183,7 @@ export function SuperlikePlaylistPage({ id }: { id: string }) {
                   durationMs: first.durationMs,
                 })
               }
-              className="w-fit shrink-0 rounded-pill bg-accent px-[12px] py-[6px] text-[9px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-ink rule"
+              className="w-fit shrink-0 rounded-pill bg-accent px-[12px] py-[6px] text-[9px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-ink hover:text-on-ink rule"
             >
               이 목록 기준으로 스테이션 시작
             </button>

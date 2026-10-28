@@ -45,7 +45,7 @@ export function VolumeControl({ open, onToggle }: { open: boolean; onToggle: () 
         title={label}
         onClick={onToggle}
         className={`flex size-[30px] shrink-0 cursor-pointer items-center justify-center rounded-pill transition-colors rule ${
-          silent ? "bg-accent-bright text-paper-solid" : "bg-[rgba(231,236,241,0.82)] text-ink"
+          silent ? "bg-accent-bright text-paper-solid" : "bg-glass text-ink"
         }`}
       >
         <Speaker waves={wavesOf(volume)} muted={silent} />
@@ -54,7 +54,7 @@ export function VolumeControl({ open, onToggle }: { open: boolean; onToggle: () 
         <div
           role="dialog"
           aria-label="음량 조절"
-          className="absolute bottom-[calc(100%+12px)] right-[-4px] z-30 flex items-center gap-[10px] whitespace-nowrap rounded-pill bg-ink py-[8px] pl-[12px] pr-[14px] shadow-[0_-4px_20px_rgba(0,0,0,0.35)]"
+          className="absolute bottom-[calc(100%+12px)] right-[-4px] z-30 flex items-center gap-[10px] whitespace-nowrap rounded-pill bg-panel py-[8px] pl-[12px] pr-[14px] shadow-[0_-4px_20px_rgba(0,0,0,0.35)]"
         >
           <button
             type="button"

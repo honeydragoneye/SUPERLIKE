@@ -7,7 +7,7 @@
  */
 export function RailShell({ children }: { children: React.ReactNode }) {
   return (
-    <section data-slot="rail" className="rail-scroll flex h-full w-full flex-col gap-[16px] border-l-[1.5px] border-ink bg-chart p-[16px]">
+    <section data-slot="rail" className="rail-scroll flex h-full w-full flex-col gap-[16px] border-l-[1.5px] border-rule bg-chart p-[16px]">
       {children}
     </section>
   );

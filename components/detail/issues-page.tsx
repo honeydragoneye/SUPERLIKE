@@ -46,7 +46,7 @@ function Sleeve({ src, size, className = "" }: { src: string | null; size: numbe
         <Image src={src} alt="" fill sizes={`${size}px`} className="object-cover" unoptimized />
       ) : (
         <>
-          <span className="absolute inset-[11%] rounded-full bg-ink" />
+          <span className="absolute inset-[11%] rounded-full bg-artwork" />
           <span className="absolute inset-[35%] rounded-full bg-accent-bright" />
         </>
       )}
@@ -58,7 +58,7 @@ function Latest({ issue }: { issue: Issue }) {
   const router = useRouter();
   const a = issue.album;
   return (
-    <section className="rule flex w-full shrink-0 items-start gap-[20px] rounded-[8px] bg-paper-solid p-[16px]">
+    <section className="rule flex w-full shrink-0 items-start gap-[20px] rounded-[8px] bg-card p-[16px]">
       <Sleeve src={a?.artwork ?? null} size={176} />
       <div className="flex min-w-0 flex-1 flex-col gap-[8px]">
         <div className="flex flex-wrap items-center gap-[8px]">
@@ -80,7 +80,7 @@ function Latest({ issue }: { issue: Issue }) {
             <button
               type="button"
               onClick={() => router.push(`/album/${a.spotifyAlbumId}`)}
-              className="whitespace-nowrap rounded-pill bg-ink px-[14px] py-[8px] text-[9px] tracking-[0.6px] text-paper-solid transition-colors hover:bg-accent-bright"
+              className="whitespace-nowrap rounded-pill bg-ink px-[14px] py-[8px] text-[9px] tracking-[0.6px] text-on-ink transition-colors hover:bg-accent-bright hover:text-paper-solid"
             >
               앨범 페이지 →
             </button>
@@ -108,7 +108,7 @@ function PastCard({ issue }: { issue: Issue }) {
       <span className="truncate text-[8px] font-bold text-on-bright-muted">{a?.artist}</span>
     </>
   );
-  const style = "rule flex min-w-0 flex-col gap-[8px] rounded-[6px] bg-paper-solid p-[10px] text-left";
+  const style = "rule flex min-w-0 flex-col gap-[8px] rounded-[6px] bg-card p-[10px] text-left";
   return a?.spotifyAlbumId ? (
     <Link href={`/album/${a.spotifyAlbumId}`} className={`${style} transition-colors hover:bg-soft`}>
       {inner}
@@ -136,7 +136,7 @@ export function IssuesPage() {
     >
       <DetailStatus loading={loading} error={error ? "지난 호를 불러오지 못했어요" : null} />
       {!loading && !error && issues.length === 0 && (
-        <p className="rule rounded-[8px] bg-paper-solid p-[16px] text-[10px] leading-[16px]">
+        <p className="rule rounded-[8px] bg-card p-[16px] text-[10px] leading-[16px]">
           아직 보낸 편지가 없어요. 첫 편지가 나가면 여기에 쌓여요.
         </p>
       )}

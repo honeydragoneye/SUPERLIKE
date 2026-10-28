@@ -105,7 +105,7 @@ export const LyricsPopover = forwardRef<HTMLDivElement>(function LyricsPopover(_
       ref={ref}
       role="dialog"
       aria-label="가사"
-      className="absolute bottom-[calc(100%+8px)] right-[16px] z-30 flex w-[380px] flex-col gap-[12px] rounded-[8px] bg-ink p-[16px] text-on-dark shadow-[0_-4px_20px_rgba(0,0,0,0.35)]"
+      className="absolute bottom-[calc(100%+8px)] right-[16px] z-30 flex w-[380px] flex-col gap-[12px] rounded-[8px] bg-panel p-[16px] text-on-dark shadow-[0_-4px_20px_rgba(0,0,0,0.35)]"
     >
       <div className="flex w-full shrink-0 items-center justify-between gap-[12px] whitespace-nowrap">
         <p className="text-[10px] tracking-[1px]">LYRICS</p>

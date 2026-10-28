@@ -76,7 +76,7 @@ export function TagMenu({
       // a second right-click on the menu itself should not open the browser's own
       onContextMenu={(e) => e.preventDefault()}
       style={{ left: at?.left ?? 0, top: at?.top ?? 0, visibility: at ? "visible" : "hidden" }}
-      className="fixed z-50 flex w-[132px] flex-col gap-[2px] rounded-[6px] bg-paper-solid p-[6px] text-ink shadow-[0_6px_18px_rgba(0,0,0,0.18)] rule"
+      className="fixed z-50 flex w-[132px] flex-col gap-[2px] rounded-[6px] bg-card p-[6px] text-ink shadow-[0_6px_18px_rgba(0,0,0,0.18)] rule"
     >
       <button
         type="button"

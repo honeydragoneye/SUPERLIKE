@@ -74,7 +74,7 @@ export function ReleaseTimeline({ albums, currentId }: { albums: ArtistAlbum[]; 
                 className="group flex min-w-0 flex-1 cursor-pointer items-center gap-[10px] text-left disabled:cursor-default"
               >
                 <span
-                  className={`relative size-[34px] shrink-0 overflow-hidden rounded-[3px] bg-ink ${
+                  className={`relative size-[34px] shrink-0 overflow-hidden rounded-[3px] bg-artwork ${
                     current ? "ring-2 ring-accent-bright ring-offset-0" : ""
                   }`}
                 >

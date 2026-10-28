@@ -98,7 +98,7 @@ export function TasteBlock() {
   const note = "재생 기록 기준 · 최근 들은 앨범";
 
   return (
-    <section className="flex w-full shrink-0 flex-col gap-[16px] border-b-[1.5px] border-ink px-[24px] pb-[24px] pt-[20px]">
+    <section className="flex w-full shrink-0 flex-col gap-[16px] border-b-[1.5px] border-rule px-[24px] pb-[24px] pt-[20px]">
       <SectionHead title="당신의 취향" note={note} />
 
       {!hydrated || (connected && state.kind === "loading") ? (
@@ -119,13 +119,13 @@ export function TasteBlock() {
               setState({ kind: "loading" });
               void load(0).then(setState);
             }}
-            className="cursor-pointer rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.8px] text-paper-solid transition-colors hover:bg-accent-bright"
+            className="cursor-pointer rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.8px] text-on-ink transition-colors hover:bg-accent-bright hover:text-paper-solid"
           >
             다시 시도
           </button>
         </div>
       ) : taste && !taste.ready ? (
-        <div className="flex w-full flex-col items-start gap-[10px] rounded-[8px] border-[1.2px] border-dashed border-ink/45 p-[24px]">
+        <div className="flex w-full flex-col items-start gap-[10px] rounded-[8px] border-[1.2px] border-dashed border-rule/45 p-[24px]">
           <p className="text-[15px] font-black tracking-[-0.2px]">아직 취향을 알 만큼 들은 기록이 없어요</p>
           <p className="text-[10px] leading-[15px] text-on-bright-muted">
             20초 이상 들은 곡이 {taste.minPlays}번 쌓이면, 가장 많이 들은 가수와 비슷한 곡을 골라 드려요.
@@ -135,7 +135,7 @@ export function TasteBlock() {
             onClick={() => {
               if (!chat.open) chat.toggle();
             }}
-            className="cursor-pointer whitespace-nowrap rounded-pill bg-paper-solid px-[14px] py-[7px] text-[9px] tracking-[0.6px] transition-colors rule hover:bg-soft"
+            className="cursor-pointer whitespace-nowrap rounded-pill bg-card px-[14px] py-[7px] text-[9px] tracking-[0.6px] transition-colors rule hover:bg-soft"
           >
             챗봇에게 추천받기
           </button>
@@ -167,7 +167,7 @@ export function TasteBlock() {
               type="button"
               disabled={again}
               onClick={() => void refresh()}
-              className="flex shrink-0 cursor-pointer items-center gap-[6px] whitespace-nowrap rounded-pill bg-paper-solid px-[16px] py-[6px] text-[9px] tracking-[0.6px] transition-colors rule enabled:hover:bg-soft disabled:cursor-default"
+              className="flex shrink-0 cursor-pointer items-center gap-[6px] whitespace-nowrap rounded-pill bg-card px-[16px] py-[6px] text-[9px] tracking-[0.6px] transition-colors rule enabled:hover:bg-soft disabled:cursor-default"
             >
               {again ? (
                 <>

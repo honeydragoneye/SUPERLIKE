@@ -130,7 +130,7 @@ export function SearchField() {
               type="button"
               onClick={submit}
               title="검색 결과 페이지로 (Enter)"
-              className="shrink-0 rounded-pill bg-ink px-[10px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid transition-colors hover:bg-accent-bright"
+              className="shrink-0 rounded-pill bg-ink px-[10px] py-[6px] text-[8px] tracking-[0.7px] text-on-ink transition-colors hover:bg-accent-bright hover:text-paper-solid"
             >
               ENTER
             </button>
@@ -145,7 +145,7 @@ export function SearchField() {
             </button>
           </>
         ) : (
-          <span className="shrink-0 rounded-pill bg-ink px-[10px] py-[6px] text-[8px] tracking-[0.7px] text-paper-solid opacity-40">
+          <span className="shrink-0 rounded-pill bg-ink px-[10px] py-[6px] text-[8px] tracking-[0.7px] text-on-ink opacity-40">
             ENTER
           </span>
         )}
@@ -154,7 +154,7 @@ export function SearchField() {
       {showing && (
         <div
           id="search-suggestions"
-          className="absolute left-0 top-full z-50 mt-[6px] w-[416px] overflow-hidden rounded-[8px] bg-paper-solid shadow-[0_6px_0_rgba(0,0,0,0.18)] rule"
+          className="absolute left-0 top-full z-50 mt-[6px] w-[416px] overflow-hidden rounded-[8px] bg-card shadow-[0_6px_0_rgba(0,0,0,0.18)] rule"
           /* mousedown fires before blur, so this keeps the panel open long
              enough for the click that follows to land on a row */
           onMouseDown={() => blurTimer.current && clearTimeout(blurTimer.current)}
@@ -182,7 +182,7 @@ export function SearchField() {
                     }}
                     className="flex h-[44px] w-full cursor-pointer items-center gap-[10px] px-[10px] text-left transition-colors hover:bg-soft"
                   >
-                    <span className="relative size-[28px] shrink-0 overflow-hidden rounded-full bg-ink">
+                    <span className="relative size-[28px] shrink-0 overflow-hidden rounded-full bg-artwork">
                       {artist.image && (
                         <Image src={artist.image} alt="" fill sizes="28px" className="object-cover" unoptimized />
                       )}
@@ -193,7 +193,7 @@ export function SearchField() {
                         {artist.followers > 0 ? `팔로워 ${followersLabel(artist.followers)}` : "아티스트"}
                       </span>
                     </span>
-                    <span className="shrink-0 rounded-pill bg-ink px-[7px] py-[3px] text-[8px] text-paper-solid">
+                    <span className="shrink-0 rounded-pill bg-ink px-[7px] py-[3px] text-[8px] text-on-ink">
                       아티스트
                     </span>
                   </button>
@@ -209,7 +209,7 @@ export function SearchField() {
                     }}
                     className="flex h-[44px] w-full cursor-pointer items-center gap-[10px] px-[10px] text-left transition-colors hover:bg-soft"
                   >
-                    <span className="relative size-[28px] shrink-0 overflow-hidden rounded-[3px] bg-ink">
+                    <span className="relative size-[28px] shrink-0 overflow-hidden rounded-[3px] bg-artwork">
                       {a.artwork && (
                         <Image src={a.artwork} alt="" fill sizes="28px" className="object-cover" unoptimized />
                       )}
@@ -222,7 +222,7 @@ export function SearchField() {
                           .join(" · ")}
                       </span>
                     </span>
-                    <span className="shrink-0 rounded-pill bg-ink px-[7px] py-[3px] text-[8px] text-paper-solid">
+                    <span className="shrink-0 rounded-pill bg-ink px-[7px] py-[3px] text-[8px] text-on-ink">
                       앨범
                     </span>
                   </button>
@@ -238,7 +238,7 @@ export function SearchField() {
                     }}
                     className="flex h-[44px] w-full cursor-pointer items-center gap-[10px] px-[10px] text-left transition-colors hover:bg-soft"
                   >
-                    <span className="relative size-[28px] shrink-0 overflow-hidden rounded-[3px] bg-ink">
+                    <span className="relative size-[28px] shrink-0 overflow-hidden rounded-[3px] bg-artwork">
                       {t.artwork && (
                         <Image
                           src={t.artwork}

@@ -48,8 +48,8 @@ function Pill({
       onClick={onClick}
       className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.6px] transition-colors rule disabled:cursor-default ${
         dark
-          ? "bg-ink text-paper-solid enabled:hover:bg-accent-bright"
-          : "bg-paper-solid text-on-bright enabled:hover:bg-soft"
+          ? "bg-ink text-on-ink enabled:hover:bg-accent-bright enabled:hover:text-paper-solid"
+          : "bg-card text-on-bright enabled:hover:bg-soft"
       }`}
     >
       {children}
@@ -139,7 +139,7 @@ function ProposalCard({ id, p }: { id: string; p: ChatProposal }) {
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex w-full justify-end">
-      <p className="max-w-[88%] whitespace-pre-wrap break-words rounded-[14px_14px_4px_14px] bg-ink px-[12px] py-[9px] text-[10px] leading-[15px] text-paper-solid">
+      <p className="max-w-[88%] whitespace-pre-wrap break-words rounded-[14px_14px_4px_14px] bg-ink px-[12px] py-[9px] text-[10px] leading-[15px] text-on-ink">
         {text}
       </p>
     </div>
@@ -166,7 +166,7 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
   const waiting = m.streaming && !text && !m.status && !m.proposal && !m.actions.length && !m.error;
   return (
     <div className="flex w-full justify-start">
-      <div className="flex w-full min-w-0 max-w-full flex-col gap-[8px] rounded-[4px_14px_14px_14px] bg-paper-solid p-[10px]">
+      <div className="flex w-full min-w-0 max-w-full flex-col gap-[8px] rounded-[4px_14px_14px_14px] bg-card p-[10px]">
         {waiting && (
           <p className="flex items-center gap-[6px] text-[8px] tracking-[0.5px] text-on-bright-muted">
             생각하는 중
@@ -294,7 +294,7 @@ export function ChatPanel() {
   return (
     <section
       aria-label="챗봇"
-      className="relative flex h-full w-full min-w-0 flex-col gap-[12px] overflow-hidden bg-[#dfe5ec] p-[16px]"
+      className="relative flex h-full w-full min-w-0 flex-col gap-[12px] overflow-hidden bg-well p-[16px]"
     >
       <div className="flex w-full shrink-0 items-center justify-between gap-[10px]">
         <div className="flex min-w-0 flex-col gap-px">
@@ -312,7 +312,7 @@ export function ChatPanel() {
               title="대화 이력"
               onClick={() => setHistoryOpen((v) => !v)}
               className={`flex size-[25px] shrink-0 cursor-pointer items-center justify-center rounded-pill transition-colors rule ${
-                historyOpen ? "bg-ink text-paper-solid" : "bg-paper-solid text-on-bright hover:bg-soft"
+                historyOpen ? "bg-ink text-on-ink" : "bg-card text-on-bright hover:bg-soft"
               }`}
             >
               <ClockIcon />
@@ -342,10 +342,10 @@ export function ChatPanel() {
             const pill = (on: boolean, none: boolean) =>
               `shrink-0 whitespace-nowrap rounded-pill px-[10px] py-[4px] text-[8px] tracking-[0.6px] transition-colors rule ${
                 none
-                  ? "cursor-default bg-paper-solid text-on-bright-muted opacity-60"
+                  ? "cursor-default bg-card text-on-bright-muted opacity-60"
                   : on
-                    ? "cursor-pointer bg-ink text-paper-solid hover:bg-accent-bright"
-                    : "cursor-pointer bg-paper-solid text-on-bright-muted hover:bg-soft"
+                    ? "cursor-pointer bg-ink text-on-ink hover:bg-accent-bright hover:text-paper-solid"
+                    : "cursor-pointer bg-card text-on-bright-muted hover:bg-soft"
               }`;
             return (
               <>
@@ -424,7 +424,7 @@ export function ChatPanel() {
               ‘{refine.label}’ 태그에 어떤 곡을 넣고 싶으세요? 말씀해 주시면 기준으로 정리하고, 어떤 곡이 통과하는지
               미리 보여 드려요.
             </p>
-            <p className="rounded-[8px] bg-paper-solid px-[10px] py-[8px] text-[9px] leading-[14px] text-on-bright-muted">
+            <p className="rounded-[8px] bg-card px-[10px] py-[8px] text-[9px] leading-[14px] text-on-bright-muted">
               지금 기준 ·{" "}
               {refine.definition === refine.label ? "설명이 없어서 이름만 쓰고 있어요" : refine.definition}
             </p>
@@ -470,7 +470,7 @@ export function ChatPanel() {
       </div>
 
       <form
-        className="flex h-[44px] w-full shrink-0 items-center gap-[8px] rounded-pill bg-paper-solid pl-[16px] pr-[6px] rule"
+        className="flex h-[44px] w-full shrink-0 items-center gap-[8px] rounded-pill bg-card pl-[16px] pr-[6px] rule"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
@@ -492,7 +492,7 @@ export function ChatPanel() {
           <button
             type="submit"
             disabled={!draft.trim()}
-            className="shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[12px] py-[8px] text-[8px] tracking-[0.6px] text-paper-solid transition-colors enabled:hover:bg-accent-bright disabled:cursor-default disabled:opacity-60"
+            className="shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[12px] py-[8px] text-[8px] tracking-[0.6px] text-on-ink transition-colors enabled:hover:bg-accent-bright enabled:hover:text-paper-solid disabled:cursor-default disabled:opacity-60"
           >
             ENTER
           </button>

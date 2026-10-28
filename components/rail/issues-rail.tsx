@@ -14,7 +14,7 @@ function Field({
       <span className="text-[8px] tracking-[0.9px] text-on-bright-muted">{label}</span>
       <input
         {...input}
-        className={`rounded-pill bg-paper-solid px-[16px] py-[10px] text-[11px] outline-none disabled:opacity-55 ${invalid ? "border-[1.5px] border-alert" : "rule"}`}
+        className={`rounded-pill bg-card px-[16px] py-[10px] text-[11px] outline-none disabled:opacity-55 ${invalid ? "border-[1.5px] border-alert" : "rule"}`}
       />
     </label>
   );
@@ -67,7 +67,7 @@ function Form() {
       <button
         type="submit"
         disabled={phase === "busy" || done}
-        className="self-start rounded-pill bg-ink px-[16px] py-[9px] text-[10px] tracking-[0.7px] text-paper-solid disabled:opacity-50"
+        className="self-start rounded-pill bg-ink px-[16px] py-[9px] text-[10px] tracking-[0.7px] text-on-ink disabled:opacity-50"
       >
         {phase === "busy" ? "보내는 중…" : done ? "보냈어요 ✓" : "신청하기"}
       </button>
@@ -83,7 +83,7 @@ function Form() {
 export function IssuesRail() {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rail-scroll flex h-full flex-col bg-paper-solid">
+    <div className="rail-scroll flex h-full flex-col bg-card">
       <StayConnected open={open} onSubscribe={() => setOpen((o) => !o)} />
       {open ? (
         <Form />
@@ -93,7 +93,7 @@ export function IssuesRail() {
           <ol className="flex flex-col gap-[10px]">
             {MAIL_STEPS.map((s, i) => (
               <li key={s} className="flex items-start gap-[10px]">
-                <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-ink text-[8px] font-bold text-paper-solid">{i + 1}</span>
+                <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-ink text-[8px] font-bold text-on-ink">{i + 1}</span>
                 <span className="text-[9px] leading-[14px]">{s}</span>
               </li>
             ))}
