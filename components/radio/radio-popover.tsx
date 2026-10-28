@@ -185,7 +185,7 @@ function Row({ station, sub, chip }: { station: RadioStation; sub: string; chip:
           playing ? "bg-accent-bright text-on-dark" : "bg-paper-solid text-black"
         }`}
       >
-        {loading ? <LoadingDots size={3} /> : <PlayPauseIcon playing={playing} size={9} />}
+        {loading ? <LoadingDots size={3} /> : <PlayPauseIcon playing={playing} size={10} />}
       </button>
     </div>
   );
