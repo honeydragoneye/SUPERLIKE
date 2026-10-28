@@ -145,15 +145,17 @@ export async function GET(request: NextRequest) {
       resolved,
     );
   } catch (e) {
-    if (e instanceof RateLimitedError) {
-      const mins = Math.ceil(e.retryAfterSec / 60);
+    // the limit comes either straight from the throttle or wrapped by spotifyGet; both mean the same
+    const limited =
+      e instanceof RateLimitedError
+        ? e.retryAfterSec
+        : e instanceof SpotifyApiError && e.status === 429
+          ? (e.retryAfterSec ?? 60)
+          : null;
+    if (limited !== null) {
       return NextResponse.json(
-        {
-          error: "rate_limited",
-          retryAfterSec: e.retryAfterSec,
-          detail: `Spotify 검색 요청 한도를 초과했습니다. 약 ${mins}분 후 다시 시도할 수 있습니다.`,
-        },
-        { status: 429 },
+        { error: "rate_limited", retryAfterSec: limited },
+        { status: 429, headers: { "Retry-After": String(limited) } },
       );
     }
     if (e instanceof NotConnectedError) {

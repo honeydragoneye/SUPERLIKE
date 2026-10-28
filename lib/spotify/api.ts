@@ -30,6 +30,8 @@ export class SpotifyApiError extends Error {
   constructor(
     readonly status: number,
     readonly detail: string,
+    /** for a 429: how long Spotify asked us to wait, which the screen turns into words */
+    readonly retryAfterSec?: number,
   ) {
     super(`spotify_${status}`);
   }
@@ -64,7 +66,7 @@ export async function spotifyGet<T>(
     });
   } catch (e) {
     // surfaced with the status so callers can tell throttling from a real error
-    if (e instanceof RateLimitedError) throw new SpotifyApiError(429, e.message);
+    if (e instanceof RateLimitedError) throw new SpotifyApiError(429, e.message, e.retryAfterSec);
     throw e;
   }
 

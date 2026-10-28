@@ -136,9 +136,17 @@ export function createThrottled(options: ThrottleOptions) {
     }
   }
 
-  return async function request(url: string, init?: RequestInit): Promise<Response> {
+  /**
+   * `force` skips the lockout check for one request.
+   *
+   * For a press the listener made themselves — play — where "failing fast" would
+   * be deciding for Spotify. The request still goes through the queue, and a 429
+   * still renews the lockout, so forcing cannot deepen it: it only finds out
+   * whether this particular call is refused too.
+   */
+  return async function request(url: string, init?: RequestInit, opts?: { force?: boolean }): Promise<Response> {
     const waitLeft = Math.ceil((blockedUntil - Date.now()) / 1000);
-    if (waitLeft > 0) throw new RateLimitedError(waitLeft, blockedDaily);
+    if (waitLeft > 0 && !opts?.force) throw new RateLimitedError(waitLeft, blockedDaily);
 
     for (let attempt = 0; ; attempt++) {
       const res = await paced(() => once(url, init));
@@ -183,7 +191,8 @@ export function createThrottled(options: ThrottleOptions) {
         continue;
       }
 
-      if (res.ok) {
+      // a forced press getting through says nothing about the calls that were not forced
+      if (res.ok && !opts?.force) {
         blockedUntil = 0;
         blockedDaily = false;
       }

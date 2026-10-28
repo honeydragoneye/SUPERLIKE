@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { resolveAccessToken, writeTokens } from "@/lib/spotify/tokens";
-import { spotifyHttp } from "@/lib/http/throttle";
+import { RateLimitedError, spotifyHttp } from "@/lib/http/throttle";
 import { MARKET } from "@/lib/spotify/api";
 
 const API = "https://api.spotify.com/v1";
@@ -13,6 +13,18 @@ const API = "https://api.spotify.com/v1";
  * issuing play. Proxying through the server keeps the token out of app code.
  */
 export async function PUT(request: NextRequest) {
+  try {
+    return await play(request);
+  } catch (e) {
+    // a press that Spotify refused for the rate limit: say so, with the wait, instead of a bare 500
+    if (e instanceof RateLimitedError) {
+      return NextResponse.json({ error: "rate_limited", retryAfterSec: e.retryAfterSec }, { status: 429 });
+    }
+    throw e;
+  }
+}
+
+async function play(request: NextRequest) {
   const resolved = await resolveAccessToken();
   if (resolved.status === "none") {
     return NextResponse.json({ error: "not_connected" }, { status: 401 });
@@ -44,12 +56,16 @@ export async function PUT(request: NextRequest) {
   };
 
   if (activate) {
-    const transfer = await spotifyHttp(`${API}/me/player`, {
-      method: "PUT",
-      headers,
-      body: JSON.stringify({ device_ids: [deviceId], play: false }),
-      cache: "no-store",
-    });
+    const transfer = await spotifyHttp(
+      `${API}/me/player`,
+      {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ device_ids: [deviceId], play: false }),
+        cache: "no-store",
+      },
+      { force: true },
+    );
     if (!transfer.ok && transfer.status !== 204) {
       return reply(
         { error: "transfer_failed", status: transfer.status, detail: await transfer.text() },
@@ -68,11 +84,15 @@ export async function PUT(request: NextRequest) {
   }
   if (positionMs != null) payload.position_ms = positionMs;
 
-  const res = await spotifyHttp(`${API}/me/player/play?device_id=${deviceId}`, {
-    method: "PUT",
-    headers,
-    body: Object.keys(payload).length ? JSON.stringify(payload) : undefined,
-  });
+  const res = await spotifyHttp(
+    `${API}/me/player/play?device_id=${deviceId}`,
+    {
+      method: "PUT",
+      headers,
+      body: Object.keys(payload).length ? JSON.stringify(payload) : undefined,
+    },
+    { force: true },
+  );
 
   if (res.status === 204 || res.ok) return reply({ ok: true });
 
