@@ -139,7 +139,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-w-[1512px] bg-shell pb-[72px]">
       <Ticker />
-      <div className="h-[8px]" aria-hidden />
       <SiteHeader />
 
       <div
@@ -198,7 +197,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               style={{
                 top: asideTop,
                 // the chat is measured (see useVisibleHeight); this is its height at the top of the page, for the first paint
-                height: `calc(100vh - ${chat ? BAR + 122 + PLAYER : asideTop + PLAYER}px)`,
+                height: `calc(100vh - ${chat ? BAR + 114 + PLAYER : asideTop + PLAYER}px)`,
               }}
             >
               {chat ? (

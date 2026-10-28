@@ -92,8 +92,8 @@ export function SiteHeader() {
         title="홈으로"
         className="shrink-0"
       >
-        <span className="whitespace-nowrap text-[36px] font-black tracking-[-1.6px]">
-          Superlike®
+        <span className="whitespace-nowrap text-[48px] font-black tracking-[-1.6px]">
+          Superlike<span className="text-[36px]">®</span>
         </span>
       </Link>
 
