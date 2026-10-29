@@ -17,7 +17,7 @@ export function InfoPage({
 }) {
   return (
     <DetailShell eyebrow={eyebrow} title={title}>
-      <div className="flex max-w-[640px] flex-col gap-[28px] pt-[12px]">
+      <div className="flex max-w-[760px] flex-col gap-[28px] pt-[12px]">
         {sections.map((s) => (
           <section key={s.heading} className="flex flex-col gap-[8px]">
             <h3 className="text-[11px] tracking-[0.8px] text-accent-bright">{s.heading}</h3>
