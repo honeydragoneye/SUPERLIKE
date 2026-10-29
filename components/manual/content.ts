@@ -198,7 +198,7 @@ export const MANUAL: ManualSection[] = [
     title: "재생 바",
     lead: "화면 맨 아래의 재생 바는 어느 화면에서나 같은 자리에서 지금 듣는 곡을 조작합니다.",
     blocks: [
-      { kind: "shot", src: "/manual/player.png", alt: "재생 바", caption: "왼쪽부터 지금 곡과 좋아요, 재생 조작, 진행 막대, UP NEXT · 가사 · 담기 · 공유 · 더보기", ratio: 21.0 },
+      { kind: "shot", src: "/manual/player.png", alt: "재생 바", caption: "왼쪽부터 지금 곡과 좋아요, 재생 조작, 진행 막대, UP NEXT · 가사 · 담기 · 더보기", ratio: 21.0 },
       {
         kind: "table",
         head: ["버튼", "하는 일"],

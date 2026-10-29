@@ -567,7 +567,6 @@ export function NowPlayingPanel() {
             setAdding(true);
           }}
         />
-        <RoundButton name="share" label="공유" size={30} icon={14} />
         <span data-popover-toggle className="flex shrink-0">
           <RoundButton
             name="more"
