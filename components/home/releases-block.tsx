@@ -82,7 +82,7 @@ export function ReleasesBlock() {
   }, [country, loaded]);
 
   return (
-    <section className="flex w-full shrink-0 flex-col gap-[16px] border-b-[1.5px] border-rule px-[24px] pb-[24px] pt-[20px]">
+    <section className="flex w-full shrink-0 flex-col gap-[16px] px-[24px] pb-[24px] pt-[20px]">
       <SectionHead
         title="최근 발매"
         note="Apple Music 인기 차트에서 최근 30일 안에 나온 앨범 · 라이브·리마스터·기념판 제외"

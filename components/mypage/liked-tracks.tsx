@@ -74,7 +74,7 @@ export function LikedTracks() {
 
   return (
     <section
-      className={`flex w-full shrink-0 flex-col gap-[16px] border-b-[1.5px] border-rule px-[24px] pb-[24px] pt-[20px] ${
+      className={`flex w-full shrink-0 flex-col gap-[16px] px-[24px] pb-[24px] pt-[20px] ${
         listed ? "" : "min-h-[306px]"
       }`}
     >
