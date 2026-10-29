@@ -37,7 +37,7 @@ export function FollowCounts() {
 /** The other accounts on this app — empty until there is a list to read. */
 export function Listeners() {
   return (
-    <section className="flex min-h-[355px] w-full flex-1 flex-col gap-[20px] border-b-[1.5px] border-rule px-[24px] pb-[24px] pt-[20px]">
+    <section className="flex min-h-[355px] w-full flex-1 flex-col gap-[20px] px-[24px] pb-[24px] pt-[20px]">
       <div className="flex w-full items-start justify-between gap-[12px]">
         <div className="flex min-w-0 flex-col gap-[4px]">
           <h2 className="whitespace-nowrap text-[13px] font-black tracking-[-0.3px]">

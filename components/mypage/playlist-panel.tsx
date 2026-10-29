@@ -79,7 +79,7 @@ export function PlaylistPanel({ id, onClose }: { id: string; onClose: () => void
     // sticky, so the panel stays in view when 열기 was pressed far down a long page
     <section
       aria-label="플레이리스트"
-      className="sticky top-0 flex max-h-[calc(100dvh-290px)] min-h-[355px] w-full flex-col gap-[14px] overflow-y-auto border-b-[1.5px] border-rule px-[24px] pb-[24px] pt-[20px]"
+      className="sticky top-0 flex max-h-[calc(100dvh-290px)] min-h-[355px] w-full flex-col gap-[14px] overflow-y-auto px-[24px] pb-[24px] pt-[20px]"
     >
       <div className="flex w-full shrink-0 items-start justify-between gap-[12px]">
         <div className="flex min-w-0 flex-col gap-px">
