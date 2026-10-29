@@ -15,6 +15,7 @@ export default function Contact() {
         {
           heading: "정보 삭제 요청",
           body: ["같은 곳에 남기거나, 구독 메일에 답장해 주세요."],
+          mail: "myyseooo@gmail.com",
         },
       ]}
     />
