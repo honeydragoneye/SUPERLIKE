@@ -54,15 +54,18 @@ const POOL = 40;
  * one carrying a single genre, votes keep out stations nobody listens to, and
  * Korean and English stations are favoured over the rest of the world's.
  *
+ * Stations in `exclude` (the ones the listener already hearted) are left out.
+ *
  * One pick comes from each genre in turn, so the round is not three stations
  * of the biggest genre. `round` moves along each genre's ranking, so
  * "다시 추천" shows others.
  */
-export async function recommendStations(tags: string[], round: number): Promise<RadioPick[]> {
+export async function recommendStations(tags: string[], round: number, exclude: ReadonlySet<string> = new Set()): Promise<RadioPick[]> {
   const found = await Promise.all(
     tags.map(async (tag) => {
       const lists = await Promise.all(variants(tag).map((v) => stationsByTag(v, POOL).catch(() => [])));
-      return { tag, stations: lists.flat() };
+      // a station already on the listener's list is theirs to play from there, so it is not offered again
+      return { tag, stations: lists.flat().filter((s) => !exclude.has(s.uuid)) };
     }),
   );
 

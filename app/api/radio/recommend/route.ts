@@ -3,6 +3,7 @@ import { NotConnectedError, SpotifyApiError } from "@/lib/spotify/api";
 import { signedInUser, withTokens } from "@/lib/db/account";
 import { DatabaseNotConfiguredError } from "@/lib/db/client";
 import { MIN_PLAYS, tasteOf } from "@/lib/db/taste";
+import { favoriteIds } from "@/lib/db/radio";
 import { recommendStations, tasteTags, type RadioPicks } from "@/lib/radio/recommend";
 
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -16,7 +17,8 @@ const kept = new Map<string, { at: number; tags: string[] }>();
  *
  * `ready: false` says there is not enough listening yet to say what they like
  * (the same floor the home taste uses), as opposed to a failure.
- * `?round=N` asks for the N-th set, for "다시 추천".
+ * `?round=N` asks for the N-th set, for "다시 추천". Stations the listener has
+ * hearted are not offered: they are played from the 즐겨찾기 tab.
  */
 export async function GET(request: NextRequest) {
   const round = Math.min(Math.max(Number(request.nextUrl.searchParams.get("round")) || 0, 0), 50);
@@ -36,7 +38,7 @@ export async function GET(request: NextRequest) {
       if (tags.length) kept.set(user.id, { at: Date.now(), tags });
     }
 
-    const stations = tags.length ? await recommendStations(tags, round) : [];
+    const stations = tags.length ? await recommendStations(tags, round, await favoriteIds(user.id)) : [];
     const body: RadioPicks & { ready: boolean } = { ready: true, tags, stations };
     return withTokens(NextResponse.json(body, { headers: NO_STORE }), user.resolved, []);
   } catch (e) {

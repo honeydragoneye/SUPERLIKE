@@ -83,6 +83,12 @@ async function fillMissingHomepages(userId: string, rows: Row[]): Promise<void> 
   }
 }
 
+/** Just the ids of the listener's stations, for leaving them out of what is recommended. */
+export async function favoriteIds(userId: string): Promise<Set<string>> {
+  const rows = await query<{ station_uuid: string }>("select station_uuid from radio_favorites where user_id = $1", [userId]);
+  return new Set(rows.map((r) => r.station_uuid));
+}
+
 export class FavoriteLimitError extends Error {
   constructor() {
     super("favorites");
