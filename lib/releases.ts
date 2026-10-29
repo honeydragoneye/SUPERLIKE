@@ -34,7 +34,7 @@ const KEEP_MS = 3 * 60 * 60 * 1000;
  * Not new music even when the date is: concert recordings, remasters and
  * anniversary reissues.
  */
-const NOT_NEW = /\b(live|tour|remaster(?:ed)?|anniversary)\b|ライブ|リマスター|周年/i;
+export const NOT_NEW = /\b(live|tour|remaster(?:ed)?|anniversary)\b|ライブ|リマスター|周年/i;
 
 type AppleAlbum = {
   id: string;

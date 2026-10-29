@@ -192,3 +192,42 @@ alter table radio_favorites add column if not exists homepage text;
 alter table plays_daily add column if not exists album_name text;
 alter table plays_daily add column if not exists album_artwork text;
 alter table plays_daily add column if not exists last_played_at timestamptz;
+
+-- Artists a listener follows, for the 새 앨범 칸 and the 소식 on 마이페이지. The
+-- artist is Spotify's (the page the follow button sits on); apple_id is the same
+-- artist in Apple's catalogue, which is where new releases are looked up, and
+-- stays null until a match is found.
+create table if not exists artist_follows (
+  user_id     text not null references users (spotify_id) on delete cascade,
+  artist_id   text not null,
+  name        text not null,
+  image       text,
+  apple_id    text,
+  followed_at timestamptz not null default now(),
+  primary key (user_id, artist_id)
+);
+create index if not exists artist_follows_apple on artist_follows (apple_id);
+
+-- What Apple lists for an artist, kept so that many followers cost one lookup,
+-- and when each artist was last asked about (once a day is enough).
+create table if not exists artist_releases (
+  apple_artist_id text not null,
+  collection_id   text not null,
+  title           text not null,
+  kind            text not null,
+  released        date not null,
+  artwork         text,
+  primary key (apple_artist_id, collection_id)
+);
+create table if not exists artist_checks (
+  apple_artist_id text primary key,
+  checked_at      timestamptz not null default now()
+);
+
+-- Which releases a listener has seen: 소식 is unread until it is here.
+create table if not exists release_reads (
+  user_id       text not null references users (spotify_id) on delete cascade,
+  collection_id text not null,
+  read_at       timestamptz not null default now(),
+  primary key (user_id, collection_id)
+);
