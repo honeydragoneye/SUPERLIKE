@@ -93,7 +93,7 @@ export function PlaylistShelf() {
           <ul className="flex flex-wrap gap-[16px]">
             {mine?.map((p) => (
               <li key={p.id} className="w-[150px]">
-                <Link href={`/playlist/${p.id}`} className="group flex flex-col gap-[8px]">
+                <Link href={`/mypage?playlist=${p.id}`} className="group flex flex-col gap-[8px]">
                   <PlaylistCover palette={p.palette} size={150} tone="bg-ink/10 text-ink" />
                   <span className="flex min-w-0 flex-col gap-px">
                     <span className="truncate text-[13px] group-hover:underline">{p.name}</span>

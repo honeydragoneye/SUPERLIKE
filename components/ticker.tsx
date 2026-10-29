@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useConnectDialog } from "@/components/player/connect-dialog";
 import { useSpotify } from "@/components/player/spotify-provider";
+import { onOpenRadioPopover } from "@/components/radio/open-popover";
 import { RadioPopover } from "@/components/radio/radio-popover";
 import { useRadio } from "@/components/radio/radio-provider";
 import { Equalizer, HeartIcon, PlayPauseIcon } from "@/components/radio/station-parts";
@@ -43,6 +44,9 @@ export function Ticker() {
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  // the mypage's "다른 방송국 찾기" opens this same popup
+  useEffect(() => onOpenRadioPopover(() => setOpen(true)), []);
 
   const live = hydrated && connected;
   const { current, status, picks } = radio;

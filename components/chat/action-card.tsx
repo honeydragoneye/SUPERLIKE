@@ -220,7 +220,7 @@ function Playlist({ messageId, a }: { messageId: string; a: ChatAction }) {
           </Button>
         )}
         {a.state === "done" && a.playlistId && (
-          <Button dark onClick={() => router.push(`/playlist/${a.playlistId}`)}>
+          <Button dark onClick={() => router.push(`/mypage?playlist=${a.playlistId}`)}>
             플레이리스트 열기 →
           </Button>
         )}
