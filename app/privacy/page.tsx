@@ -29,6 +29,11 @@ export default function Privacy() {
             "저장된 정보를 지우고 싶으면 문의·제보로 알려 주세요.",
           ],
         },
+        {
+          heading: "문의",
+          body: ["개인정보에 대해 궁금한 점은 아래 메일로 보내 주세요."],
+          mail: "myyseooo@gmail.com",
+        },
       ]}
     />
   );

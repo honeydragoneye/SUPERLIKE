@@ -1,6 +1,6 @@
 import { DetailShell } from "./detail-shell";
 
-export type InfoSection = { heading: string; body: string[] };
+export type InfoSection = { heading: string; body: string[]; /** an address to write to, shown under the paragraphs as a mail link */ mail?: string };
 
 /**
  * The plain text pages the rail's footer links to: a title and sections of
@@ -26,6 +26,14 @@ export function InfoPage({
                 {p}
               </p>
             ))}
+            {s.mail && (
+              <a
+                href={`mailto:${s.mail}`}
+                className="w-fit text-[14px] leading-[22px] text-accent-bright underline underline-offset-2"
+              >
+                {s.mail}
+              </a>
+            )}
           </section>
         ))}
       </div>
