@@ -1,5 +1,6 @@
 "use client";
 
+import { FollowButton } from "@/components/follow/follow-button";
 import Image from "next/image";
 import { clock } from "@/lib/time";
 import { useSpotify } from "@/components/player/spotify-provider";
@@ -251,6 +252,10 @@ export function SearchResults() {
                     label={a.name}
                     className="right-[152px]"
                     seed={() => seedFrom("artist", a.id)}
+                  />
+                  <FollowButton
+                    artist={{ id: a.id, name: a.name, image: a.image }}
+                    className="absolute right-[236px] top-1/2 -translate-y-1/2"
                   />
                 </li>
               ))}

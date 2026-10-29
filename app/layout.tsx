@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Hanken_Grotesk, Noto_Sans_KR } from "next/font/google";
 import { SpotifyProvider } from "@/components/player/spotify-provider";
+import { FollowSync } from "@/components/follow/follow-sync";
+import { ToastHost } from "@/components/ui/toast";
 import { RadioProvider } from "@/components/radio/radio-provider";
 import { SearchProvider } from "@/components/search/search-provider";
 import { AppShell } from "@/components/app-shell";
@@ -56,7 +58,9 @@ export default function RootLayout({
                 <LyricsViewProvider>
                   <ChatProvider>
                     <SearchFocusProvider>
+                      <FollowSync />
                       <AppShell>{children}</AppShell>
+                      <ToastHost />
                     </SearchFocusProvider>
                   </ChatProvider>
                 </LyricsViewProvider>

@@ -9,7 +9,7 @@ import { Icon } from "@/components/ui/icon";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { SLEEVE_TONES } from "@/lib/data";
-import { squash } from "@/lib/names";
+import { findSpotifyAlbum as spotifyAlbum } from "@/lib/spotify-album";
 import type { Country, Release } from "@/lib/releases";
 
 const TABS: { key: Country; label: string }[] = [
@@ -29,35 +29,6 @@ const sleeve: Record<string, string> = {
 
 /** "2026-10-19" → "10.19" */
 const day = (iso: string) => iso.slice(5).replace("-", ".");
-
-/** What the chart calls "X - EP" is "X" to Spotify. */
-const bare = (title: string) => title.replace(/\s-\s(?:EP|Single)$/i, "").trim();
-
-/** One answer per album, so a second press does not search again. */
-const found = new Map<string, Promise<string | null>>();
-
-/**
- * Apple's chart has no Spotify id, so an album is looked up by name when it is
- * pressed. The first hit only counts when its name says the same thing: a
- * wrong album opened is worse than none.
- */
-function spotifyAlbum(release: Release): Promise<string | null> {
-  const known = found.get(release.id);
-  if (known) return known;
-
-  const pending = (async () => {
-    const q = encodeURIComponent(`${bare(release.title)} ${release.artist}`);
-    const res = await fetch(`/api/spotify/search?q=${q}&type=album&limit=3`, { cache: "no-store" });
-    if (!res.ok) throw new Error(String(res.status));
-    const data = (await res.json()) as { albums?: { id: string; name: string }[] };
-    const want = squash(bare(release.title));
-    return data.albums?.find((a) => squash(a.name).includes(want) || want.includes(squash(a.name)))?.id ?? null;
-  })();
-  // a failed search is not remembered, so the next press tries again
-  pending.catch(() => found.delete(release.id));
-  found.set(release.id, pending);
-  return pending;
-}
 
 /**
  * "최근 발매": albums that came out in the last month and are charting in

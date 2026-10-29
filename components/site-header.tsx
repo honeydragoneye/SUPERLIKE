@@ -6,6 +6,7 @@ import { useChat } from "./chat/chat-provider";
 import { useHydrated } from "./ui/use-hydrated";
 import { ConnectButton } from "./player/connect-button";
 import { useSearchFocus } from "./search/search-focus";
+import { UpdatesBell } from "./follow/updates-bell";
 
 /**
  * One of the header's round controls.
@@ -112,6 +113,7 @@ export function SiteHeader() {
       </Link>
 
       <IconButton name="search" label="검색" onClick={focus} />
+      <UpdatesBell />
       <ChatButton />
 
       <ConnectButton />

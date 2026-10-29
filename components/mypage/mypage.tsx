@@ -3,9 +3,12 @@
 import { useCallback } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AccountBanner } from "./account-banner";
+import { FollowedAlbums } from "./followed-albums";
+import { FollowingPanel } from "./following-panel";
 import { PlaylistManager } from "./playlist-manager";
 import { PlaylistPanel } from "./playlist-panel";
 import { RadioManager } from "./radio-manager";
+import { UpdatesPanel } from "./updates-panel";
 import { RecentlyPlayed } from "@/components/recently-played";
 import { FollowCounts, Listeners } from "./side-panels";
 
@@ -28,11 +31,15 @@ export function Mypage() {
   const pathname = usePathname();
   const params = useSearchParams();
   const openId = params.get("playlist");
+  const panelParam = params.get("panel");
+  const panel = panelParam === "following" || panelParam === "updates" ? panelParam : null;
 
-  const open = useCallback(
-    (id: string | null) => router.replace(id ? `${pathname}?playlist=${id}` : pathname, { scroll: false }),
+  const go = useCallback(
+    (query: string) => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }),
     [router, pathname],
   );
+  const open = useCallback((id: string | null) => go(id ? `playlist=${id}` : ""), [go]);
+  const showPanel = useCallback((name: "following" | "updates" | null) => go(name ? `panel=${name}` : ""), [go]);
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-card text-on-bright">
@@ -41,13 +48,25 @@ export function Mypage() {
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col border-r-[1.5px] border-rule">
           <RecentlyPlayed />
+          <FollowedAlbums onManage={() => showPanel("following")} />
           <PlaylistManager openId={openId} onOpen={open} />
           <RadioManager />
         </div>
 
         <aside className="flex w-[341px] shrink-0 flex-col">
-          <FollowCounts />
-          {openId ? <PlaylistPanel key={openId} id={openId} onClose={() => open(null)} /> : <Listeners />}
+          <FollowCounts
+            followingOpen={!openId && panel === "following"}
+            onFollowing={() => showPanel(!openId && panel === "following" ? null : "following")}
+          />
+          {openId ? (
+            <PlaylistPanel key={openId} id={openId} onClose={() => open(null)} />
+          ) : panel === "following" ? (
+            <FollowingPanel onClose={() => showPanel(null)} />
+          ) : panel === "updates" ? (
+            <UpdatesPanel onClose={() => showPanel(null)} />
+          ) : (
+            <Listeners />
+          )}
         </aside>
       </div>
     </div>

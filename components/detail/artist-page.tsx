@@ -10,6 +10,7 @@ import { StationButton } from "@/components/ui/station-button";
 import { clock } from "@/lib/time";
 import type { ArtistPage as Artist, SearchArtist } from "@/lib/data";
 import { pickEntities } from "@/lib/suggest";
+import { FollowButton } from "@/components/follow/follow-button";
 import { DetailShell, DetailStatus } from "./detail-shell";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useDetail } from "./use-detail";
@@ -39,7 +40,11 @@ export function ArtistPage({ id }: { id: string }) {
       title={data?.name ?? <LoadingDots size={8} />}
       subtitle={facts.length ? facts.join(" · ") : undefined}
       aside={
-        data?.topTracks.length ? (
+        data ? (
+          <>
+            {/* a follow is a press away whether or not there are top tracks to play */}
+            <FollowButton artist={{ id, name: data.name, image: data.image }} />
+            {data.topTracks.length > 0 && (
           <>
             {/* the station starts from the artist's first top track, as the button at the foot of the page did */}
             <button
@@ -77,6 +82,8 @@ export function ArtistPage({ id }: { id: string }) {
             >
               인기곡 재생
             </button>
+          </>
+            )}
           </>
         ) : null
       }

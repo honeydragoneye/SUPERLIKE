@@ -1,3 +1,9 @@
+"use client";
+
+import { useFollowState } from "@/components/follow/follow-store";
+import { useSpotify } from "@/components/player/spotify-provider";
+import { useHydrated } from "@/components/ui/use-hydrated";
+
 /**
  * The right-hand column: who follows whom and who else is here. None of it has
  * anything to read yet, and each panel says so rather than showing invented people.
@@ -15,21 +21,40 @@ function Soon() {
 /**
  * Follower and following counts.
  *
- * Zero is the true figure, not a placeholder: following has to be known to
- * both people, and everything this app keeps lives in one browser. The counts
- * get a source when there is somewhere shared to store them.
+ * 팔로잉 is the number of artists followed, and pressing it opens them in the
+ * panel below. 팔로워 stays at zero: it counts people following the listener,
+ * which needs accounts to follow each other, and that is not built.
  */
-export function FollowCounts() {
+export function FollowCounts({ followingOpen, onFollowing }: { followingOpen: boolean; onFollowing: () => void }) {
+  const { connected: session } = useSpotify();
+  const connected = useHydrated() && session;
+  const { artists } = useFollowState();
+  const following = connected ? artists.length : 0;
+
   return (
     <dl className="flex h-[84px] w-full shrink-0 gap-[112px] border-b-[1.5px] border-rule pl-[40px] pt-[20px]">
-      {(["팔로워", "팔로잉"] as const).map((label) => (
-        <div key={label} className="flex w-[26px] shrink-0 flex-col gap-[4px]">
-          <dt className="whitespace-nowrap text-[9px] tracking-[0.8px] text-on-bright-muted">
-            {label}
-          </dt>
-          <dd className="tnum text-[29px] font-black leading-[34px] tracking-[-1px]">0</dd>
-        </div>
-      ))}
+      <div className="flex w-[26px] shrink-0 flex-col gap-[4px]">
+        <dt className="whitespace-nowrap text-[9px] tracking-[0.8px] text-on-bright-muted">팔로워</dt>
+        <dd className="tnum text-[29px] font-black leading-[34px] tracking-[-1px]">0</dd>
+      </div>
+      <div className="flex w-[26px] shrink-0 flex-col gap-[4px]">
+        <dt
+          className={`whitespace-nowrap text-[9px] tracking-[0.8px] ${followingOpen ? "text-accent-bright" : "text-on-bright-muted"}`}
+        >
+          팔로잉
+        </dt>
+        <dd className="text-[29px] font-black leading-[34px] tracking-[-1px]">
+          <button
+            type="button"
+            onClick={onFollowing}
+            aria-pressed={followingOpen}
+            title="팔로우 중인 가수"
+            className={`tnum cursor-pointer transition-colors hover:text-accent-bright ${followingOpen ? "text-accent-bright" : ""}`}
+          >
+            {following}
+          </button>
+        </dd>
+      </div>
     </dl>
   );
 }
