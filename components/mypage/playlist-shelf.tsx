@@ -75,7 +75,7 @@ export function PlaylistShelf() {
     <section className="flex min-h-[306px] w-full flex-1 flex-col gap-[16px] px-[24px] pb-[24px] pt-[20px]">
       <SectionHead
         title="내 플레이리스트"
-        note={mine ? `${mine.length}개 · SUPERLIKE` : "SUPERLIKE"}
+        hint={mine ? `${mine.length}개` : undefined}
       />
 
       {!connected ? (

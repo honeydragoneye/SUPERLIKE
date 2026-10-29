@@ -78,7 +78,7 @@ export function LikedTracks() {
         listed ? "" : "min-h-[306px]"
       }`}
     >
-      <SectionHead title="좋아요한 곡" note={`${liked.length}곡 · 최근 누른 순`}>
+      <SectionHead title="좋아요한 곡" hint={`${liked.length}곡 · 최근 누른 순 · 출처: Spotify`}>
         {listed && liked.length > 0 && (
           <button
             type="button"

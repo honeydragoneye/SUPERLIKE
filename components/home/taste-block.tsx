@@ -96,11 +96,11 @@ export function TasteBlock() {
   };
 
   const taste = state.kind === "ok" ? state.taste : null;
-  const note = "재생 기록 기준 · 최근 들은 앨범";
+  const hint = "출처: Spotify 재생 기록";
 
   return (
     <section className="flex w-full shrink-0 flex-col gap-[16px] px-[24px] pb-[24px] pt-[20px]">
-      <SectionHead title="당신의 취향" note={note} />
+      <SectionHead title="당신의 취향" hint={hint} />
 
       {!hydrated || (connected && state.kind === "loading") ? (
         <p className="flex items-center gap-[8px] text-[10px] tracking-[0.5px] text-on-bright-muted">

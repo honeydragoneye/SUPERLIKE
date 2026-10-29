@@ -253,7 +253,7 @@ function RailFooter() {
     <footer className="flex shrink-0 flex-col gap-[12px] px-[14px] pb-[18px] pt-[18px]">
       <p className="text-[8px] tracking-[1px] text-muted">ABOUT SUPERLIKE</p>
       <p className="text-[9px] font-normal leading-[14px]">
-        재생은 Spotify, 신보·차트는 Apple Music에서 가져와요. 연결하지 않아도 둘러볼 수 있고, 재생은 Spotify Premium 계정이 필요해요.
+        재생은 Spotify, 신보·차트는 Apple Music, 아티스트 정보는 Last.fm, 가사는 LRCLIB에서 가져와요. 연결하지 않아도 둘러볼 수 있고, 재생은 Spotify Premium 계정이 필요해요.
       </p>
       <nav className="flex gap-[14px] text-[9px] font-medium">
         {FOOTER_LINKS.map((l) => (

@@ -85,7 +85,7 @@ export function ReleasesBlock() {
     <section className="flex w-full shrink-0 flex-col gap-[16px] px-[24px] pb-[24px] pt-[20px]">
       <SectionHead
         title="최근 발매"
-        note="Apple Music 인기 차트에서 최근 30일 안에 나온 앨범 · 라이브·리마스터·기념판 제외"
+        hint="출처: Apple Music"
       >
         <div className="flex items-center gap-[6px]" role="group" aria-label="나라">
           {TABS.map(({ key, label }) => (
