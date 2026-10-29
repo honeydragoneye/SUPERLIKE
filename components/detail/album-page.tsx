@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useSpotify } from "@/components/player/spotify-provider";
+import { EXPLICIT_NOTE, LOCKED_LOOK, useExplicitLock } from "@/components/ui/explicit";
 import { useRouter } from "next/navigation";
 import { StationButton } from "@/components/ui/station-button";
 import { clock, releaseLabel } from "@/lib/time";
@@ -43,6 +44,7 @@ export function AlbumView({
   note?: string;
 }) {
   const { play } = useSpotify();
+  const lockedOf = useExplicitLock();
   const router = useRouter();
 
   const runtime = data?.tracks.reduce((a, t) => a + t.durationMs, 0) ?? 0;
@@ -127,14 +129,21 @@ export function AlbumView({
           </div>
 
           <ul className="flex w-full shrink-0 flex-col">
-            {data.tracks.map((t) => (
-              <li key={t.id} className="group relative rule-b">
+            {data.tracks.map((t) => {
+              const locked = lockedOf(t.explicit);
+              return (
+              <li
+                key={t.id}
+                title={locked ? EXPLICIT_NOTE : undefined}
+                className={`group relative rule-b ${locked ? LOCKED_LOOK : ""}`}
+              >
                 <button
                   type="button"
+                  disabled={locked}
                   onClick={() =>
                     void play({ contextUri: data.uri, offsetUri: t.uri, tracks: rows })
                   }
-                  className="flex h-[44px] w-full cursor-pointer items-center gap-[12px] text-left"
+                  className="flex h-[44px] w-full cursor-pointer items-center gap-[12px] text-left disabled:cursor-default"
                 >
                   <span className="tnum w-[32px] shrink-0 text-right text-[11px] text-on-bright-muted">
                     {multiDisc ? `${t.discNumber}-${t.trackNumber}` : t.trackNumber}
@@ -153,6 +162,7 @@ export function AlbumView({
                 <StationButton
                   label={t.name}
                   className="right-[64px]"
+                  locked={locked}
                   seed={async () => ({
                     id: t.id,
                     uri: t.uri,
@@ -163,7 +173,8 @@ export function AlbumView({
                   })}
                 />
               </li>
-            ))}
+              );
+            })}
           </ul>
 
           {data.copyrights.length > 0 && (

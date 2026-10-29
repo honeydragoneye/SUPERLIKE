@@ -11,6 +11,7 @@ type SpotifyMe = {
   id: string;
   display_name: string | null;
   product?: string;
+  explicit_content?: { filter_enabled?: boolean };
   images: { url: string; width: number | null }[] | null;
 };
 
@@ -37,6 +38,7 @@ export async function GET() {
       name: data.display_name || data.id,
       avatar: avatar(data.images),
       product: data.product ?? null,
+      explicitFilter: data.explicit_content?.filter_enabled === true,
     };
     return flushToken(
       NextResponse.json(profile, { headers: { "Cache-Control": "no-store" } }),

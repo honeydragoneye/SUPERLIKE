@@ -47,6 +47,8 @@ export type Profile = {
   avatar: string | null;
   /** Spotify's own word for the plan: "premium", "free", … */
   product: string | null;
+  /** the account filters out explicit tracks, so it will refuse them */
+  explicitFilter?: boolean;
 };
 
 /** Sleeve colours, cycled when a playlist has no cover art of its own. */

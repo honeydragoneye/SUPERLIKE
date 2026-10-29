@@ -20,12 +20,15 @@ export function StationButton({
   seed,
   label,
   className = "right-[12px]",
+  locked = false,
 }: {
   seed: () => Promise<Parameters<ReturnType<typeof useSpotify>["startStation"]>[0] | null>;
   /** what the station would be built from, for the tooltip */
   label: string;
   /** where it sits in the row — rows with trailing columns push it left */
   className?: string;
+  /** the track is one this account refuses (19금): a station seeded from it would start with a refusal */
+  locked?: boolean;
 }) {
   const { startStation, stationBusy } = useSpotify();
   const [resolving, setResolving] = useState(false);
@@ -35,6 +38,8 @@ export function StationButton({
   const busy = resolving;
   // ...and do nothing meanwhile, so a second press cannot start a second station
   const blocked = !resolving && hydrated && stationBusy !== null;
+
+  if (locked) return null;
 
   return (
     <button

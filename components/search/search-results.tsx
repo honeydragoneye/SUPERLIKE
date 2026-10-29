@@ -5,6 +5,7 @@ import { clock } from "@/lib/time";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { StationButton, seedFrom } from "@/components/ui/station-button";
 import { LoadingDots } from "@/components/ui/loading-dots";
+import { EXPLICIT_NOTE, LOCKED_LOOK, useExplicitLock } from "@/components/ui/explicit";
 import Link from "next/link";
 import { inText, whenText } from "@/lib/spotify/limit";
 import { useSearch, type SearchTab } from "./search-provider";
@@ -40,6 +41,7 @@ export function SearchResults() {
     useSearch();
   const router = useRouter();
   const { play } = useSpotify();
+  const lockedOf = useExplicitLock();
 
   /**
    * Fetches the next page when the foot of the list comes into view.
@@ -132,16 +134,23 @@ export function SearchResults() {
         <div className="w-full flex-1">
           {tab === "track" && (
             <ul className="flex w-full flex-col">
-              {results.tracks.map((t, i) => (
-                <li key={t.id} className="group relative flex h-[52px] items-center gap-[12px] rule-b">
+              {results.tracks.map((t, i) => {
+                const locked = lockedOf(t.explicit);
+                return (
+                <li
+                  key={t.id}
+                  title={locked ? EXPLICIT_NOTE : undefined}
+                  className={`group relative flex h-[52px] items-center gap-[12px] rule-b ${locked ? LOCKED_LOOK : ""}`}
+                >
                   <span className="tnum w-[32px] shrink-0 text-[16px] font-black tracking-[-0.4px] text-on-bright">
                     {String(i + 1).padStart(2, "0")}
                   </span>
                   <Thumb src={t.artwork} />
                   <button
                     type="button"
+                    disabled={locked}
                     onClick={() => void play({ uris: [t.uri] })}
-                    className="flex min-w-0 flex-1 flex-col items-start gap-px text-left"
+                    className="flex min-w-0 flex-1 flex-col items-start gap-px text-left disabled:cursor-default"
                   >
                     <span className="w-full truncate text-[13px] text-on-bright">{t.name}</span>
                     <span className="w-full truncate text-[9px] tracking-[0.4px] text-on-bright-muted">
@@ -165,6 +174,7 @@ export function SearchResults() {
                   <StationButton
                     label={t.name}
                     className="right-[244px]"
+                    locked={locked}
                     seed={async () => ({
                       id: t.id,
                       uri: t.uri,
@@ -175,7 +185,8 @@ export function SearchResults() {
                     })}
                   />
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
 

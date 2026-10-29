@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useSpotify } from "@/components/player/spotify-provider";
+import { EXPLICIT_NOTE, LOCKED_LOOK, useExplicitLock } from "@/components/ui/explicit";
 import { Icon } from "@/components/ui/icon";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { StationButton } from "@/components/ui/station-button";
@@ -20,6 +21,7 @@ import { useDetail } from "./use-detail";
 export function PlaylistPage({ id }: { id: string }) {
   const { data, loading, error } = useDetail<Playlist>(`/api/spotify/playlist/${id}`);
   const { play, startStation } = useSpotify();
+  const lockedOf = useExplicitLock();
 
   const runtime = data?.tracks.reduce((a, t) => a + t.durationMs, 0) ?? 0;
   const first = data?.tracks[0];
@@ -126,14 +128,21 @@ export function PlaylistPage({ id }: { id: string }) {
           )}
 
           <ul className="flex w-full shrink-0 flex-col">
-            {data.tracks.map((t) => (
-              <li key={`${t.id}-${t.index}`} className="group relative shrink-0 rule-b">
+            {data.tracks.map((t) => {
+              const locked = lockedOf(t.explicit);
+              return (
+              <li
+                key={`${t.id}-${t.index}`}
+                title={locked ? EXPLICIT_NOTE : undefined}
+                className={`group relative shrink-0 rule-b ${locked ? LOCKED_LOOK : ""}`}
+              >
                 <button
                   type="button"
+                  disabled={locked}
                   onClick={() =>
                     void play({ contextUri: data.uri, offsetUri: t.uri, tracks: rows })
                   }
-                  className="flex h-[46px] w-full cursor-pointer items-center gap-[12px] text-left"
+                  className="flex h-[46px] w-full cursor-pointer items-center gap-[12px] text-left disabled:cursor-default"
                 >
                   <span className="tnum w-[32px] shrink-0 text-[14px] font-black">
                     {t.index}
@@ -171,6 +180,7 @@ export function PlaylistPage({ id }: { id: string }) {
                 <StationButton
                   label={t.name}
                   className="right-[64px]"
+                  locked={locked}
                   seed={async () => ({
                     id: t.id,
                     uri: t.uri,
@@ -181,7 +191,8 @@ export function PlaylistPage({ id }: { id: string }) {
                   })}
                 />
               </li>
-            ))}
+              );
+            })}
           </ul>
         </div>
       )}

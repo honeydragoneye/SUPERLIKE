@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { useSpotify } from "@/components/player/spotify-provider";
+import { EXPLICIT_NOTE, LOCKED_LOOK, useExplicitLock } from "@/components/ui/explicit";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { StationButton } from "@/components/ui/station-button";
@@ -22,6 +23,7 @@ const ALBUM_TYPE_LABEL: Record<string, string> = {
 export function ArtistPage({ id }: { id: string }) {
   const { data, loading, error } = useDetail<Artist>(`/api/spotify/artist/${id}`);
   const { play, startStation } = useSpotify();
+  const lockedOf = useExplicitLock();
   const router = useRouter();
 
   // Spotify deprecated both, so they are often absent — say nothing rather than 0
@@ -117,12 +119,19 @@ export function ArtistPage({ id }: { id: string }) {
             title={data.topSource === "lastfm" ? "인기곡 (Last.fm 기준)" : "인기곡"}
           >
             <ul className="flex w-full flex-col">
-              {data.topTracks.map((t, i) => (
-                <li key={t.id} className="group relative rule-b">
+              {data.topTracks.map((t, i) => {
+                const locked = lockedOf(t.explicit);
+                return (
+                <li
+                  key={t.id}
+                  title={locked ? EXPLICIT_NOTE : undefined}
+                  className={`group relative rule-b ${locked ? LOCKED_LOOK : ""}`}
+                >
                   <button
                     type="button"
+                    disabled={locked}
                     onClick={() => void play({ uris: [t.uri] })}
-                    className="flex h-[46px] w-full cursor-pointer items-center gap-[12px] text-left"
+                    className="flex h-[46px] w-full cursor-pointer items-center gap-[12px] text-left disabled:cursor-default"
                   >
                     <span className="tnum w-[24px] shrink-0 text-[14px] font-black">
                       {String(i + 1).padStart(2, "0")}
@@ -148,6 +157,7 @@ export function ArtistPage({ id }: { id: string }) {
                   <StationButton
                     label={t.name}
                     className="right-[64px]"
+                    locked={locked}
                     seed={async () => ({
                       id: t.id,
                       uri: t.uri,
@@ -158,7 +168,8 @@ export function ArtistPage({ id }: { id: string }) {
                     })}
                   />
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </Section>
 

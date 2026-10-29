@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { LoadingDots } from "@/components/ui/loading-dots";
+import { EXPLICIT_NOTE, LOCKED_LOOK, useExplicitLock } from "@/components/ui/explicit";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { nameMatch, sameTitle } from "@/lib/names";
 
@@ -29,6 +30,8 @@ export type Found = Seed & {
   albumId: string | null;
   artistId: string | null;
   artistName: string;
+  /** Spotify marks the song 19금 */
+  explicit: boolean;
 };
 
 const lookups = new Map<string, Promise<Found | null>>();
@@ -54,6 +57,7 @@ export function lookUp(track: TrackCardTrack): Promise<Found | null> {
       albumId?: string | null;
       artistId?: string | null;
       artistName?: string;
+      explicit?: boolean;
     };
     const search = async (q: string, limit: number): Promise<Raw[]> => {
       const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}&type=track&limit=${limit}`, { cache: "no-store" });
@@ -119,6 +123,7 @@ export function lookUp(track: TrackCardTrack): Promise<Found | null> {
       albumId: first.albumId ?? null,
       artistId: first.artistId ?? null,
       artistName: first.artistName ?? first.artist,
+      explicit: first.explicit === true,
     };
     resolved.add(song);
     return song;
@@ -155,24 +160,29 @@ export function TrackCard({ track, rank }: { track: TrackCardTrack; rank?: numbe
   const [seed, setSeed] = useState<Seed | null>(null);
   const [looked, setLooked] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [explicit, setExplicit] = useState(false);
+  const locked = useExplicitLock()(explicit);
 
   useEffect(() => {
     if (!connected) return;
     let live = true;
     lookUp(track)
-      .then((s) => live && (setSeed(s), setLooked(true)))
+      .then((s) => live && (setSeed(s), setExplicit(s?.explicit === true), setLooked(true)))
       .catch(() => live && setLooked(true));
     return () => {
       live = false;
     };
   }, [connected, track]);
 
-  const ready = hydrated && connected && seed !== null;
+  const ready = hydrated && connected && seed !== null && !locked;
   // one station at a time: the others look as they did and ignore the press
   const blocked = hydrated && stationBusy !== null && !starting;
 
   return (
-    <li className="flex items-center gap-[8px] rounded-[8px] bg-chart py-[6px] pl-[6px] pr-[8px]">
+    <li
+      title={locked ? EXPLICIT_NOTE : undefined}
+      className={`flex items-center gap-[8px] rounded-[8px] bg-chart py-[6px] pl-[6px] pr-[8px] ${locked ? LOCKED_LOOK : ""}`}
+    >
       {rank !== undefined && (
         <span className="tnum w-[18px] shrink-0 text-right text-[11px] font-black text-on-bright">{rank}</span>
       )}

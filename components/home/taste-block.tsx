@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useChat } from "@/components/chat/chat-provider";
 import { SectionHead } from "@/components/mypage/section-head";
 import { useSpotify } from "@/components/player/spotify-provider";
+import { EXPLICIT_NOTE, LOCKED_LOOK, useExplicitLock } from "@/components/ui/explicit";
 import { Icon } from "@/components/ui/icon";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { lookUp, type Found } from "@/components/ui/track-card";
@@ -213,6 +214,7 @@ function RecCard({ rec, index }: { rec: Rec; index: number }) {
   const { connected, play } = useSpotify();
   const [seed, setSeed] = useState<Found | null>(null);
   const [looked, setLooked] = useState(false);
+  const locked = useExplicitLock()(seed?.explicit);
   const tone = SLEEVE_TONES[index % SLEEVE_TONES.length];
 
   useEffect(() => {
@@ -230,11 +232,11 @@ function RecCard({ rec, index }: { rec: Rec; index: number }) {
     <article className="flex w-[150px] shrink-0 snap-start flex-col gap-[8px]">
       <button
         type="button"
-        disabled={!seed}
+        disabled={!seed || locked}
         onClick={() => seed && void play({ uris: [seed.uri] })}
         aria-label={`${rec.title} 재생`}
-        title={looked && !seed ? "Spotify에서 이 곡을 찾지 못했어요" : "재생"}
-        className={`group relative aspect-square w-full shrink-0 overflow-hidden rounded-[4px] enabled:cursor-pointer disabled:cursor-default ${sleeve[tone]}`}
+        title={locked ? EXPLICIT_NOTE : looked && !seed ? "Spotify에서 이 곡을 찾지 못했어요" : "재생"}
+        className={`group relative aspect-square w-full shrink-0 overflow-hidden rounded-[4px] enabled:cursor-pointer disabled:cursor-default ${sleeve[tone]} ${locked ? LOCKED_LOOK : ""}`}
       >
         {seed?.artworkLarge ? (
           <Image src={seed.artworkLarge} alt="" fill sizes="150px" className="object-cover" unoptimized />
@@ -245,7 +247,7 @@ function RecCard({ rec, index }: { rec: Rec; index: number }) {
             <Icon name="release-hole" size={9} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
           </span>
         )}
-        {seed && (
+        {seed && !locked && (
           <span className="absolute right-[8px] top-[110px] flex size-[32px] items-center justify-center rounded-full bg-accent-bright text-paper-solid transition-transform group-hover:scale-105">
             <svg width="11" height="11" viewBox="0 0 10 11" aria-hidden fill="currentColor" className="ml-[2px]">
               <path d="M0 0 10 5.5 0 11z" />

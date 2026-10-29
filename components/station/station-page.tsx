@@ -5,6 +5,7 @@ import type { StationCandidate } from "@/lib/station/types";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { LoadingDots } from "@/components/ui/loading-dots";
+import { EXPLICIT_NOTE, LOCKED_LOOK, useExplicitLock } from "@/components/ui/explicit";
 import { Icon, TintedIcon } from "@/components/ui/icon";
 import { clock } from "@/lib/time";
 import { useRouter } from "next/navigation";
@@ -28,14 +29,19 @@ function StationRow({
   menuOpen: boolean;
   onMore: (anchor: HTMLElement) => void;
 }) {
+  const locked = useExplicitLock()(track.explicit);
   return (
     // two buttons side by side: one inside the other is not valid, and a click
     // on ··· must not also start the track
-    <li className="flex shrink-0 items-center gap-[12px] rule-b">
+    <li
+      title={locked ? EXPLICIT_NOTE : undefined}
+      className={`flex shrink-0 items-center gap-[12px] rule-b ${locked ? LOCKED_LOOK : ""}`}
+    >
       <button
         type="button"
+        disabled={locked}
         onClick={onPlay}
-        className="flex h-[46px] min-w-0 flex-1 cursor-pointer items-center gap-[12px] text-left"
+        className="flex h-[46px] min-w-0 flex-1 cursor-pointer items-center gap-[12px] text-left disabled:cursor-default"
       >
         <span className="tnum w-[32px] shrink-0 text-[18px] font-black tracking-[-0.5px]">
           {playing ? (

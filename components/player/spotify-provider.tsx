@@ -24,6 +24,11 @@ import {
 
 const SDK_SRC = "https://sdk.scdn.co/spotify-player.js";
 
+/** Where a refusal of a 19금 track is remembered, as the moment it stops counting. */
+const EXPLICIT_REFUSED_KEY = "superlike-explicit-refused";
+/** How long a refusal counts: long enough to spare the next presses, short enough to clear once the account is confirmed. */
+const EXPLICIT_MEMORY_MS = 30 * 60 * 1000;
+
 /**
  * One array, reused, because clearing the queue has to be free.
  *
@@ -72,6 +77,11 @@ export type PlayOptions = {
 
 type Ctx = {
   connected: boolean;
+  /**
+   * The account will refuse 19금 tracks: it filters them, or Spotify has just refused one for its age check.
+   * Lists use it to show those tracks as unplayable instead of letting a press fail.
+   */
+  explicitBlocked: boolean;
   ready: boolean;
   deviceId: string | null;
   now: NowPlaying | null;
@@ -237,6 +247,29 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
   const [recentError, setRecentError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  /** the account's own explicit-content filter, read once from /me */
+  const [explicitFilter, setExplicitFilter] = useState(false);
+  /**
+   * Spotify refused an explicit track a moment ago, for the filter or for its age check.
+   *
+   * The age check is not in /me, so a refusal is the only way to learn of it. It is remembered for
+   * a while rather than for good: once the account is confirmed the refusal stops being true, and
+   * a track that cannot be pressed could never show that.
+   */
+  const [explicitRefused, setExplicitRefused] = useState(false);
+  const refusedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rememberRefusal = useCallback((until: number) => {
+    if (refusedTimer.current) clearTimeout(refusedTimer.current);
+    const wait = until - Date.now();
+    if (wait <= 0) {
+      setExplicitRefused(false);
+      return;
+    }
+    setExplicitRefused(true);
+    refusedTimer.current = setTimeout(() => setExplicitRefused(false), wait);
+  }, []);
+  const explicitBlocked = explicitFilter || explicitRefused;
+
   const playerRef = useRef<Spotify.Player | null>(null);
   const activatedRef = useRef(false);
   /** while a station runs, shuffle is ours — Spotify's own flag stays off */
@@ -253,6 +286,20 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       setConnected(true);
+
+      // the account's explicit-content switch, so 19금 tracks can be shown as unplayable before a press fails
+      void fetch("/api/spotify/me", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((profile: { explicitFilter?: boolean } | null) => {
+          if (!cancelled && profile?.explicitFilter) setExplicitFilter(true);
+        })
+        .catch(() => {});
+      try {
+        const until = Number(localStorage.getItem(EXPLICIT_REFUSED_KEY));
+        if (until > Date.now()) rememberRefusal(until);
+      } catch {
+        // no storage: the refusal is only remembered for this visit
+      }
 
       await loadSdk();
       if (cancelled || !window.Spotify) return;
@@ -361,7 +408,8 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       playerRef.current?.disconnect();
       playerRef.current = null;
     };
-  }, []);
+    // rememberRefusal is stable (no dependencies of its own), so the player is still built once
+  }, [rememberRefusal]);
 
   // tick between SDK pushes; deps stay stable so the interval is not rebuilt
   const duration = now?.durationMs ?? 0;
@@ -496,6 +544,17 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
         setError(
           readableError(res.status, data.detail, "재생에 실패했습니다", data.restriction, data.retryAfterSec),
         );
+        // an explicit track the account cannot play: lists show those as unplayable from now on
+        const why = data.restriction as Restriction | undefined;
+        if (res.status === 403 && (why?.reason === "explicit" || why?.reason === "age_verification_required" || why?.explicit)) {
+          const until = Date.now() + EXPLICIT_MEMORY_MS;
+          try {
+            localStorage.setItem(EXPLICIT_REFUSED_KEY, String(until));
+          } catch {
+            // see above
+          }
+          rememberRefusal(until);
+        }
         /**
          * Only a 403 is Spotify having looked at the track and said no.
          *
@@ -511,7 +570,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       setError(null);
       return "played";
     },
-    [deviceId],
+    [deviceId, rememberRefusal],
   );
 
   const station = useStation({
@@ -576,6 +635,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Ctx>(
     () => ({
       connected,
+      explicitBlocked,
       ready,
       deviceId,
       now,
@@ -699,6 +759,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       connected,
+      explicitBlocked,
       ready,
       deviceId,
       now,
