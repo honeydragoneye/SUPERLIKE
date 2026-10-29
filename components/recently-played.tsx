@@ -9,6 +9,10 @@ import { useChat } from "./chat/chat-provider";
 import { useHydrated } from "./ui/use-hydrated";
 
 const RANGES = ["TODAY", "THIS WEEK"] as const;
+
+/** How many rows the mypage list shows before it scrolls, and what one row takes (46px + its 1px rule). */
+const VISIBLE_ROWS = 10;
+const ROW_H = 47;
 type Range = (typeof RANGES)[number];
 
 /** Midnight today, local — a day should end where the listener is. */
@@ -79,9 +83,11 @@ export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
         const first = new Map<string, (typeof within)[number]>();
         for (const t of within) if (!first.has(t.uri)) first.set(t.uri, t);
         const idOf = (uri: string) => uri.split(":").pop() ?? "";
-        return [...first.values()].sort(
-          (a, b) => (plays[idOf(b.uri)] ?? 0) - (plays[idOf(a.uri)] ?? 0),
-        );
+        // the number is the rank here: the history's own number (1 = the newest play) would
+        // come out as 01, 03, 04, 06… once the rows are re-ordered by plays
+        return [...first.values()]
+          .sort((a, b) => (plays[idOf(b.uri)] ?? 0) - (plays[idOf(a.uri)] ?? 0))
+          .map((t, i) => ({ ...t, index: String(i + 1).padStart(2, "0") }));
       })()
     : within;
 
@@ -153,8 +159,16 @@ export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
       </div>
 
       {/* the page behind it still does not scroll; this list does, so a ranking
-          can be read past the fold instead of being cut at whatever fits */}
-      <div className={contained ? "scroll-y scroll-y-ink min-h-0 w-full flex-1" : "w-full flex-1"}>
+          can be read past the fold instead of being cut at whatever fits. Uncontained,
+          it shows ten rows (ROW_H each) and scrolls inside that height. */}
+      <div
+        className={
+          contained
+            ? "scroll-y scroll-y-ink min-h-0 w-full flex-1"
+            : "scroll-y scroll-y-ink w-full flex-1"
+        }
+        style={contained ? undefined : { maxHeight: VISIBLE_ROWS * ROW_H }}
+      >
         {emptyNote ? (
           <div className="flex h-full min-h-[160px] flex-col items-start justify-center gap-[10px] pr-[8px]">
             <p className="text-[15px] font-black tracking-[-0.3px]">{emptyNote.head}</p>
