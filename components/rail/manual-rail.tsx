@@ -75,9 +75,6 @@ export function ManualRail() {
           );
         })}
       </nav>
-      <p className="pt-[4px] text-[10px] leading-[16px] text-on-bright-muted">
-        스크롤하면 읽고 있는 절이 파랗게 표시되고, 누르면 그 절로 이동합니다.
-      </p>
     </RailShell>
   );
 }

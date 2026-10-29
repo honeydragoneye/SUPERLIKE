@@ -64,7 +64,7 @@ const FIX = {
     artists: [{ id: "a0", uri: "spotify:artist:a0", name: C[0].artist, image: C[0].art, genres: ["k-pop"], followers: 2400000, popularity: 80 }],
     playlists: [],
   }),
-  recent: C.slice(0, 7).map((c, i) => ({ index: String(i + 1).padStart(2, "0"), title: c.name, artist: c.artist, artwork: c.art, artworkLarge: c.art, playedAt: new Date(Date.now() - i * 5400000).toISOString(), durationMs: 200000, uri: "spotify:track:r" + i })),
+  recent: C.slice(0, 12).map((c, i) => ({ index: String(i + 1).padStart(2, "0"), title: c.name, artist: c.artist, artwork: c.art, artworkLarge: c.art, playedAt: new Date(Date.now() - i * 5400000).toISOString(), durationMs: 200000, uri: "spotify:track:r" + i })),
   stationQueue: C.slice(1, 11).map((c, i) => ({ id: "s" + i, uri: "spotify:track:s" + i, name: c.name, artist: c.artist, artwork: c.art, durationMs: 190000 + i * 5000, lfmKey: "k" + i })),
   stations: [
     { uuid: "u1", name: "SomaFM Indie Pop Rocks!", country: "United States", countryCode: "US", tags: ["indie", "indie pop"], favicon: null, votes: 1200, language: "english", homepage: "https://somafm.com" },
@@ -104,10 +104,11 @@ window.fetch = (u, o) => {
   if (url.includes("/api/me/taste")) return json(FIX.taste);
   if (url.includes("/api/me/albums")) return json({ albums: FIX.albums });
   if (url.includes("/api/me/likes")) return json({ tracks: FIX.likes });
+  { const id = url.includes("/api/me/playlists/") ? url.split("/api/me/playlists/")[1].split(/[/?]/)[0] : null; if (id) { const p = FIX.playlists.find((x) => x.id === id); return p ? json({ id: p.id, name: p.name, isPublic: p.isPublic, tracks: C.slice(0, 8).map((c, i) => ({ id: "t" + i, uri: "spotify:track:t" + i, title: c.name, artist: c.artist, artwork: c.art, durationMs: 190000 + i * 7000, albumId: null })) }) : json({ error: "not_found" }, 404); } }
   if (url.includes("/api/me/playlists")) return json({ playlists: FIX.playlists });
   if (url.includes("/api/me/plays")) return json({ ok: true });
   if (url.includes("/api/me/chats")) return json({ chats: [] });
-  if (url.includes("/api/me/radio")) return json({ favorites: [] });
+  if (url.includes("/api/me/radio")) return json({ stations: FIX.stations.slice(0, 4).map((s, i) => ({ ...s, favoritedAt: Date.now() - (i + 2) * 86400000, lastPlayedAt: i === 3 ? null : Date.now() - i * 86400000 })) });
   if (url.includes("/api/radio/recommend")) return json({ ready: true, tags: ["indie", "k-pop", "city pop"], stations: FIX.stations });
   if (url.includes("/api/station/queue")) return json({ candidates: FIX.stationQueue, tags: ["pop", "dance pop", "disco"], stages: [], exhausted: false, lastfmError: null, moodError: null, moodMs: 0, genrePage: 1 });
   if (url.includes("/api/spotify/search")) return json(search(decodeURIComponent((url.split("q=")[1] || "").split("&")[0])));
@@ -162,7 +163,7 @@ if (want("home")) {
 }
 if (want("search")) { await open("/search?q=" + encodeURIComponent(C[0].artist)); await shot("search", { x: 0, y: 114, width: 1512, height: 796 }); }
 if (want("player")) { await open("/"); await shot("player", { x: 0, y: 910, width: 1512, height: 72 }); }
-if (want("mypage")) { await open("/mypage"); await shot("mypage", { x: 0, y: 114, width: 1512, height: 796 }); }
+if (want("mypage")) { await open("/mypage?playlist=p0", { h: 2000 }); await shot("mypage", { x: 0, y: 114, width: 1512, height: 1814 }); }
 if (want("dark")) { await open("/", { theme: "dark" }); await shot("dark", { x: 0, y: 0, width: 1512, height: 982 }); }
 if (want("radio")) {
   await open("/");

@@ -48,7 +48,19 @@ function Block({ block }: { block: ManualBlock }) {
     case "h":
       return <h4 className="text-[12px] tracking-[0.8px] text-accent-bright">{block.text}</h4>;
     case "p":
-      return <p className="text-[14px] font-normal leading-[22px] text-on-bright">{block.text}</p>;
+      return (
+        <div className="flex flex-col">
+          <p className="text-[14px] font-normal leading-[22px] text-on-bright">{block.text}</p>
+          {block.mail && (
+            <a
+              href={`mailto:${block.mail}`}
+              className="w-fit text-[14px] font-normal leading-[22px] text-accent-bright underline underline-offset-2"
+            >
+              {block.mail}
+            </a>
+          )}
+        </div>
+      );
     case "list":
       return (
         <ul className="flex flex-col gap-[6px]">
