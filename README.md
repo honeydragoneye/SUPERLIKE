@@ -146,6 +146,16 @@ npm run agent                                 # http://127.0.0.1:8765 에서 대
 `LASTFM_API_KEY`는 위 `.env.local` 값을 그대로 씁니다. 에이전트를 켜지 않으면 챗봇 패널에 안내 문구가 나오고
 나머지 기능은 그대로 동작합니다. 구조와 실험 스크립트는 [agent/README.md](./agent/README.md) 참고.
 
+## 팔로우와 소식
+
+가수를 팔로우하면 새 앨범을 앱 안에서 알려 줍니다. 공유 DB가 있어야 쓸 수 있습니다(`artist_follows`, `artist_releases`, `artist_checks`, `release_reads` 테이블, `npm run db:migrate`).
+
+- **팔로우**: 아티스트 페이지와 검색의 아티스트 탭에 `+ 팔로우`가 있고, 하단에 `실행 취소`가 있는 알림이 잠깐 뜹니다. 계정마다 100명까지. 연결하지 않았으면 연결 안내 창이 먼저 뜹니다.
+- **새 앨범**: Spotify에는 새 앨범을 묻는 데 알맞은 방법이 없어(요청 한도도 따로 아껴야 해서) Apple의 공개 조회(`itunes.apple.com`, 키 없음)를 씁니다. 팔로우할 때 가수 이름으로 Apple의 가수를 찾고, 이름이 정확히 하나만 같으면 그것을 쓰고, 없거나 여럿이거나 철자가 다르면(소녀시대 ↔ Girls' Generation) Spotify의 앨범 제목과 겹치는 쪽을 고릅니다. 겹치는 게 없으면 맞추지 않습니다(다른 가수의 앨범이 뜨는 것보다 낫습니다). 가수마다 하루 한 번만 묻고 결과는 `artist_releases`에 두어 여러 계정이 한 번의 조회를 나눕니다. 곧 나올 앨범은 API에 거의 올라오지 않아 발매된 앨범만 알립니다.
+- **소식**: 헤더의 종 아이콘(읽지 않은 수 배지, 최근 4개 팝업)과 마이페이지 오른쪽 패널(`?panel=updates`, 최근 180일). 팔로우한 날 이후에 나온 앨범만 읽지 않음으로 치고, 팝업을 닫으면 보인 줄이 읽음이 됩니다. 같은 제목·같은 날의 판은 하나로 봅니다.
+- **마이페이지**: `최근 재생 목록` 아래에 `팔로우한 가수의 새 앨범`(최근 30일, NEW 표시), 오른쪽 열의 `팔로잉`은 팔로우한 가수 수이며 누르면 `팔로우 중인 가수` 패널(`?panel=following`)이 열립니다. `팔로워`는 사람끼리의 팔로우라 아직 0입니다.
+- API: `GET·POST /api/me/artist-follows`(`{action: "follow"|"unfollow", artist}`), `GET /api/me/updates`(`?refresh=1`로 하루치를 새로 확인), `POST /api/me/updates`(`{action: "read", ids?}`).
+
 ## 공유 DB (선택)
 
 좋아요와 재생 기록은 기본적으로 브라우저에만 저장됩니다. `.env.local`에 `DATABASE_URL`(Neon 같은 Postgres)을
