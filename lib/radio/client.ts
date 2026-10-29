@@ -8,6 +8,8 @@
  * Server only. Mirrors are tried in turn: any one of them can be down.
  */
 
+import { lookup } from "node:dns/promises";
+
 const MIRRORS = [
   "https://de1.api.radio-browser.info",
   "https://de2.api.radio-browser.info",
@@ -105,6 +107,60 @@ function station(r: Raw): Station | null {
     language: (r.language ?? "").toLowerCase(),
     homepage: siteRoot(r.homepage),
   };
+}
+
+const resolved = new Map<string, { ok: boolean; at: number }>();
+const RESOLVED_MS = 6 * 3_600_000;
+
+/** Whether the address's host exists at all: a site that has let its domain lapse still sits in the directory. */
+export async function siteResolves(address: string): Promise<boolean> {
+  let host: string;
+  try {
+    host = new URL(address).hostname;
+  } catch {
+    return false;
+  }
+  const hit = resolved.get(host);
+  if (hit && Date.now() - hit.at < RESOLVED_MS) return hit.ok;
+  let ok = true;
+  try {
+    await lookup(host);
+  } catch (e) {
+    // only "no such host" counts as dead; a slow or failing resolver says nothing about the site
+    ok = !(e instanceof Error && "code" in e && (e.code === "ENOTFOUND" || e.code === "ENODATA"));
+  }
+  resolved.set(host, { ok, at: Date.now() });
+  return ok;
+}
+
+/** laut.fm hosts a station's stream at <name>.stream.laut.fm; the station's page is laut.fm/<name>. */
+function lautPage(stream: unknown): string | null {
+  const m = typeof stream === "string" ? /^https?:\/\/([a-z0-9-]+)\.stream\.laut\.fm\//i.exec(stream) : null;
+  return m ? `https://laut.fm/${m[1].toLowerCase()}` : null;
+}
+
+/**
+ * A working website for each station, by id: the one the directory lists, or
+ * for a station on laut.fm its page there when the listed site is gone.
+ * A station with neither is mapped to null.
+ */
+export async function liveSitesByUuids(uuids: string[]): Promise<Map<string, string | null>> {
+  const ids = uuids.filter((u) => UUID.test(u)).slice(0, 50);
+  const out = new Map<string, string | null>();
+  if (ids.length === 0) return out;
+  const rows = await get<Raw[]>(`/json/stations/byuuid?uuids=${ids.join(",")}`);
+  for (const r of rows) {
+    if (!r.stationuuid) continue;
+    let site: string | null = null;
+    for (const c of [siteRoot(r.homepage), lautPage(r.url_resolved ?? r.url)]) {
+      if (c && (await siteResolves(c))) {
+        site = c;
+        break;
+      }
+    }
+    out.set(r.stationuuid, site);
+  }
+  return out;
 }
 
 /** Working stations carrying a genre tag exactly, most voted first. Stations with no https stream are left out: the page is https, so the browser would refuse them. */

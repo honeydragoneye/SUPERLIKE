@@ -1,4 +1,4 @@
-import { siteRoot } from "@/lib/radio/client";
+import { liveSitesByUuids, siteRoot, siteResolves } from "@/lib/radio/client";
 import { query } from "./client";
 
 export type FavoriteStation = {
@@ -40,6 +40,7 @@ export async function listFavorites(userId: string): Promise<FavoriteStation[]> 
       limit ${FAVORITE_LIMIT}`,
     [userId],
   );
+  await fillMissingHomepages(userId, rows);
   return rows.map((r) => ({
     uuid: r.station_uuid,
     name: r.name,
@@ -51,6 +52,35 @@ export async function listFavorites(userId: string): Promise<FavoriteStation[]> 
     favoritedAt: Number(r.fav_ms),
     lastPlayedAt: r.played_ms ? Number(r.played_ms) : null,
   }));
+}
+
+/**
+ * The website a hearted station shows.
+ *
+ * Two things go wrong with the copy kept at heart time: a station hearted
+ * before its website was stored has none, and a site whose domain has lapsed
+ * is still what the directory lists, so the link opens "not found". Both are
+ * asked about once more (the directory, and whether the host exists) and the
+ * answer is kept. A station with no working site keeps none, so its link shows
+ * as unavailable. A failure leaves the rows as they were and is tried again on
+ * the next read.
+ */
+async function fillMissingHomepages(userId: string, rows: Row[]): Promise<void> {
+  try {
+    const doubtful: Row[] = [];
+    for (const r of rows) if (!r.homepage || !(await siteResolves(r.homepage))) doubtful.push(r);
+    if (doubtful.length === 0) return;
+    const sites = await liveSitesByUuids(doubtful.map((r) => r.station_uuid));
+    for (const r of doubtful) {
+      if (!sites.has(r.station_uuid)) continue;
+      const site = sites.get(r.station_uuid) ?? null;
+      if (site === r.homepage) continue;
+      r.homepage = site;
+      await query("update radio_favorites set homepage = $3 where user_id = $1 and station_uuid = $2", [userId, r.station_uuid, site]);
+    }
+  } catch {
+    // the directory being down is not a reason to fail the list
+  }
 }
 
 export class FavoriteLimitError extends Error {
