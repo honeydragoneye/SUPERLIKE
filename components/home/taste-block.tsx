@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useChat } from "@/components/chat/chat-provider";
 import { SectionHead } from "@/components/mypage/section-head";
 import { useSpotify } from "@/components/player/spotify-provider";
@@ -217,8 +217,22 @@ function RecCard({ rec, index }: { rec: Rec; index: number }) {
   const locked = useExplicitLock()(seed?.explicit);
   const tone = SLEEVE_TONES[index % SLEEVE_TONES.length];
 
+  // ten picks would be ten searches at once, and most sit off to the right: a card looks itself up when it scrolls into view
+  const card = useRef<HTMLElement>(null);
+  const [near, setNear] = useState(false);
   useEffect(() => {
-    if (!connected) return;
+    const el = card.current;
+    if (!el || near) return;
+    const watch = new IntersectionObserver(
+      (entries) => entries.some((e) => e.isIntersecting) && setNear(true),
+      { rootMargin: "0px 200px 0px 200px" },
+    );
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [near]);
+
+  useEffect(() => {
+    if (!connected || !near) return;
     let live = true;
     lookUp({ title: rec.title, artist: rec.artist })
       .then((s) => live && (setSeed(s), setLooked(true)))
@@ -226,10 +240,10 @@ function RecCard({ rec, index }: { rec: Rec; index: number }) {
     return () => {
       live = false;
     };
-  }, [connected, rec.title, rec.artist]);
+  }, [connected, near, rec.title, rec.artist]);
 
   return (
-    <article className="flex w-[150px] shrink-0 snap-start flex-col gap-[8px]">
+    <article ref={card} className="flex w-[150px] shrink-0 snap-start flex-col gap-[8px]">
       <button
         type="button"
         disabled={!seed || locked}

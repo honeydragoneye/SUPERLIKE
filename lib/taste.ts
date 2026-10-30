@@ -5,13 +5,13 @@ import { firstArtist, heardKey, type Taste } from "@/lib/db/taste";
 export type Recommendation = { title: string; artist: string; because: string };
 
 /** How many songs a round offers. */
-const PER_ROUND = 5;
+const PER_ROUND = 10;
 /** Artists the listener plays most are the seeds; a taste of one artist has one seed. */
 const SEEDS = 2;
 /** Similar artists asked for each seed: enough that a few rounds do not repeat. */
 const SIMILAR = 12;
 /** Similar artists tried for each seed in one round. */
-const TRIED = 4;
+const TRIED = 6;
 
 /**
  * Songs by artists Last.fm calls close to the ones the listener plays most.
@@ -22,7 +22,7 @@ const TRIED = 4;
  * a lot (those are not discoveries).
  *
  * `round` moves along each seed's list of similar artists, so pressing
- * "새로 받기" gives different songs rather than the same five.
+ * "새로 받기" gives different songs rather than the same ten.
  */
 export async function recommend(taste: Taste, round: number): Promise<Recommendation[]> {
   const own = new Set(taste.artists.map((a) => a.name.toLowerCase()));
