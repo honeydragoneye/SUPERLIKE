@@ -1,0 +1,36 @@
+# The weekly magazine, sent every Friday at 18:00 Korea time (09:00 UTC).
+# scripts/issue.mjs auto: gathers the month's theme, has Gemini write the words,
+# and mails every active subscriber. A week that was already sent is skipped, so
+# running it again (or by hand from the Actions tab) never sends twice.
+# GitHub may start a scheduled run some minutes late.
+name: weekly-issue
+
+on:
+  schedule:
+    - cron: "0 9 * * 5"
+  workflow_dispatch:
+
+concurrency:
+  group: weekly-issue
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev
+      - run: node scripts/issue.mjs auto
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OWNER_SPOTIFY_ID: ${{ secrets.OWNER_SPOTIFY_ID }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SITE_URL: ${{ secrets.SITE_URL }}
