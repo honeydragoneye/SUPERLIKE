@@ -31,7 +31,6 @@ export function FollowedAlbums({ onManage }: { onManage: () => void }) {
   const [since] = useState(() => new Date(Date.now() - NEW_DAYS * 86_400_000).toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }));
   const fresh = items.filter((i) => i.releaseDate >= since);
   const last = checkedLabel(checkedAt);
-  const names = artists.slice(0, 3).map((a) => a.name).join(", ");
 
   return (
     <section className="flex w-full shrink-0 flex-col gap-[16px] bg-chart px-[24px] pb-[24px] pt-[20px]">
@@ -91,10 +90,7 @@ export function FollowedAlbums({ onManage }: { onManage: () => void }) {
           </Link>
         </div>
       ) : fresh.length === 0 ? (
-        <p className="text-[10px] leading-[16px] tracking-[0.5px] text-on-bright-muted">
-          아직 새 앨범이 없어요. {names}
-          {artists.length > 3 ? " 등" : ""}의 새 앨범이 나오면 알려 드려요.
-        </p>
+        <p className="text-[10px] tracking-[0.5px] text-on-bright-muted">아직 새 앨범이 없어요.</p>
       ) : (
         <div className="scroll-x flex w-full shrink-0 gap-[10px] pb-[8px]" role="region" aria-label="팔로우한 가수의 새 앨범" tabIndex={0}>
           {fresh.map((u) => (

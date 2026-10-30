@@ -8,7 +8,7 @@ import { useSpotify } from "@/components/player/spotify-provider";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { loadFollows, markRead, useFollowState } from "./follow-store";
-import { checkedLabel, UpdateRow } from "./update-row";
+import { UpdateRow } from "./update-row";
 
 /** How many releases the popup lists; the rest are on the mypage. */
 const SHOWN = 4;
@@ -39,7 +39,7 @@ export function UpdatesBell() {
   const { connected: session } = useSpotify();
   const hydrated = useHydrated();
   const connected = hydrated && session;
-  const { items, unread, artists, status, checkedAt, checkError } = useFollowState();
+  const { items, unread, artists, status, checkError } = useFollowState();
   const router = useRouter();
 
   const [open, setOpen] = useState(false);
@@ -86,8 +86,6 @@ export function UpdatesBell() {
 
   if (!connected) return null;
 
-  const last = checkedLabel(checkedAt);
-  const names = artists.slice(0, 3).map((a) => a.name).join(", ");
   const heading = "text-[12px] text-on-dark";
   const note = "text-[9px] leading-[14px] tracking-[0.4px] text-on-dark-muted";
 
@@ -175,14 +173,7 @@ export function UpdatesBell() {
             )}
 
             {status === "ok" && artists.length > 0 && shown.length === 0 && (
-              <div className="flex flex-col gap-[6px] py-[4px]">
-                <p className={heading}>아직 새 앨범이 없어요</p>
-                <p className={note}>
-                  {names}
-                  {artists.length > 3 ? " 등" : ""}의 새 앨범이 나오면 알려 드려요.
-                  {last ? ` 마지막 확인 · ${last}` : ""}
-                </p>
-              </div>
+              <p className={`${heading} py-[4px]`}>아직 새 앨범이 없어요</p>
             )}
 
             {shown.length > 0 && (
