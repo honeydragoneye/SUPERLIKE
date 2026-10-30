@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Issue } from "@/lib/db/issues";
-import { THEME_COLORS } from "@/lib/week-theme";
+import { DEFAULT_THEME_COLORS, THEME_COLORS } from "@/lib/week-theme";
 import { DetailShell, DetailStatus } from "./detail-shell";
 import { useDetail } from "./use-detail";
 
@@ -27,7 +27,7 @@ const no = (n: number) => `NO.${String(n).padStart(2, "0")}`;
 /** The week's colour, as the mail wore it. */
 function ThemeChip({ theme, small }: { theme: string | null; small?: boolean }) {
   if (!theme) return null;
-  const c = THEME_COLORS[theme] ?? THEME_COLORS["A SIDE"];
+  const c = THEME_COLORS[theme] ?? DEFAULT_THEME_COLORS;
   return (
     <span
       className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-pill font-bold ${small ? "px-[6px] py-[2px] text-[6px] tracking-[0.4px]" : "gap-[6px] px-[8px] py-[3px] text-[8px] tracking-[0.6px]"}`}

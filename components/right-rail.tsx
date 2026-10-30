@@ -129,13 +129,13 @@ function EditorsPick() {
  * link to the subscribe screen.
  */
 export function StayConnected({ onSubscribe, open = false }: { onSubscribe?: () => void; open?: boolean }) {
-  // the mail rotates through four themes; this is the one going out this week
+  // the mail's subject follows the month; this is the one going out now
   const theme = weekTheme();
   return (
     <section className="relative flex min-h-0 flex-[0_0_186px] flex-col overflow-hidden bg-card px-[20px] py-[18px]">
       {/* the stamp's perforated edge */}
       <div aria-hidden className="pointer-events-none absolute inset-[8px] border border-dashed border-rule/45" />
-      <p className="text-[8px] tracking-[0.8px] text-accent-bright">{theme} · 이번 주 컨셉</p>
+      <p className="text-[8px] tracking-[0.8px] text-accent-bright">{theme} · 이번 달 주제</p>
       <h2 className="mt-[6px] text-[24px] font-black leading-[28px] tracking-[-0.5px] text-on-bright">
         <Link href="/issues" className="transition-colors hover:text-accent-bright">
           금요일의

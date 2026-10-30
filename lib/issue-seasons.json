@@ -1,0 +1,14 @@
+[
+  {"month": 1, "id": "winter", "name": "겨울", "tag": "winter", "radio": ["lounge", "chillout"], "word": "WINTER", "line": "겨울에 듣는 음악", "color": "#2b4a6b", "bg": "#0e1822", "card": "#152433", "panel": "#1b2e42", "sub": "#c4ccd6"},
+  {"month": 2, "id": "love", "name": "러브송", "tag": "love songs", "radio": ["love", "pop"], "word": "LOVE SONGS", "line": "2월에 듣는 사랑 노래", "color": "#8a2f4d", "bg": "#2c0f19", "card": "#421725", "panel": "#561d30", "sub": "#dec5cd"},
+  {"month": 3, "id": "spring", "name": "봄", "tag": "spring", "radio": ["acoustic", "pop"], "word": "SPRING", "line": "봄이 오면 듣는 음악", "color": "#3f7d5a", "bg": "#14281d", "card": "#1e3c2b", "panel": "#274e38", "sub": "#c9dbd1"},
+  {"month": 4, "id": "acoustic", "name": "봄 산책", "tag": "acoustic", "radio": ["acoustic", "folk"], "word": "WALK", "line": "걸으면서 듣기 좋은 음악", "color": "#6b7d3f", "bg": "#222814", "card": "#333c1e", "panel": "#424e27", "sub": "#d6dbc9"},
+  {"month": 5, "id": "feelgood", "name": "기분 좋은 날", "tag": "feel good", "radio": ["pop", "dance"], "word": "FEEL GOOD", "line": "기분이 좋아지는 음악", "color": "#b8782a", "bg": "#3b260d", "card": "#583a14", "panel": "#724a1a", "sub": "#ebd9c3"},
+  {"month": 6, "id": "summer", "name": "여름", "tag": "summer", "radio": ["tropical", "pop"], "word": "SUMMER", "line": "여름이 시작될 때 듣는 음악", "color": "#1f7a8c", "bg": "#0a272d", "card": "#0f3b43", "panel": "#134c57", "sub": "#c0dadf"},
+  {"month": 7, "id": "reggae", "name": "여름 휴가", "tag": "reggae", "radio": ["reggae", "beach"], "word": "VACATION", "line": "휴가지에서 듣는 음악", "color": "#2f8f5a", "bg": "#0f2e1d", "card": "#17452b", "panel": "#1d5938", "sub": "#c5e0d1"},
+  {"month": 8, "id": "festival", "name": "페스티벌", "tag": "electronic", "radio": ["electronic", "dance"], "word": "FESTIVAL", "line": "한여름 페스티벌 음악", "color": "#7a2fa0", "bg": "#270f33", "card": "#3b174d", "panel": "#4c1d63", "sub": "#dac5e4"},
+  {"month": 9, "id": "autumn", "name": "가을", "tag": "autumn", "radio": ["jazz", "lounge"], "word": "AUTUMN", "line": "가을 저녁에 듣는 음악", "color": "#9a5a2a", "bg": "#311d0d", "card": "#4a2b14", "panel": "#5f381a", "sub": "#e3d1c3"},
+  {"month": 10, "id": "halloween", "name": "핼러윈", "tag": "halloween", "radio": ["halloween", "rock"], "word": "HALLOWEEN", "line": "10월 마지막 주에 듣는 음악", "color": "#a14d12", "bg": "#341906", "card": "#4d2509", "panel": "#64300b", "sub": "#e5cdbd"},
+  {"month": 11, "id": "songwriter", "name": "첫눈 전에", "tag": "singer-songwriter", "radio": ["acoustic", "folk"], "word": "NOVEMBER", "line": "첫눈 오기 전에 듣는 음악", "color": "#4d5a6b", "bg": "#191d22", "card": "#252b33", "panel": "#303842", "sub": "#cdd1d6"},
+  {"month": 12, "id": "christmas", "name": "크리스마스", "tag": "christmas", "radio": ["christmas"], "word": "CHRISTMAS", "line": "12월에 다시 듣는 음악", "color": "#1a5c3d", "bg": "#081d14", "card": "#0c2c1d", "panel": "#103926", "sub": "#bfd1c9"}
+]

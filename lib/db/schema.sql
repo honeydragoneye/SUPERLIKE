@@ -112,6 +112,12 @@ alter table subscribers add column if not exists nickname text;
 alter table issues add column if not exists album jsonb;
 alter table issues add column if not exists theme text;
 
+-- the magazine issue: the season's albums, songs and radio, and the words the developer wrote (see scripts/issue.mjs)
+alter table issues add column if not exists magazine jsonb;
+
+-- who an issue has already been mailed to, so a send that stopped half way can be run again without mailing anyone twice
+alter table issues add column if not exists delivered text[] not null default '{}';
+
 -- the album a played track is on, so a mail can open it in the app
 alter table plays_daily add column if not exists album_id text;
 
