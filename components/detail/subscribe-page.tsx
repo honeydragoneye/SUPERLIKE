@@ -5,7 +5,7 @@ import { DetailShell } from "./detail-shell";
 
 /** What the mail is, in three lines: shown under the signup form here, and in the rail beside the mail archive. */
 export const MAIL_STEPS = [
-  "매주 금요일 아침, 그 달 주제에 맞춘 앨범·노래·라디오가 메일로 와요",
+  "매주 금요일 저녁 6시, 그 달 주제에 맞춘 앨범·노래·라디오가 메일로 와요",
   "달마다 주제와 메일 색이 바뀌어요 (12월은 크리스마스)",
   "이 페이지에서 지난 호를 언제든 다시 볼 수 있어요",
 ];

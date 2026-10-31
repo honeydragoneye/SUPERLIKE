@@ -148,11 +148,11 @@ export function StayConnected({ onSubscribe, open = false }: { onSubscribe?: () 
         className="absolute right-[20px] top-[18px] flex h-[66px] w-[56px] flex-col items-center justify-center border border-dashed border-accent-bright text-accent-bright"
       >
         <span className="text-[18px] font-black leading-none">FRI</span>
-        <span className="mt-[6px] text-[7px] tracking-[0.4px]">00:00 KST</span>
+        <span className="mt-[6px] text-[7px] tracking-[0.4px]">18:00 KST</span>
         <span className="mt-[2px] text-[8px] tracking-[0.4px]">매주</span>
       </div>
       <p className="mt-auto text-[9px] leading-[14px] text-on-bright/70">
-        용눈이가 이번 주 들은 곡 중 앨범 한 장의 이야기를
+        그 달 주제에 맞춘 앨범·노래·라디오를
         <br />
         메일로 보내드립니다.
       </p>
