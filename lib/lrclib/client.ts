@@ -37,6 +37,9 @@ export type Lyrics = {
 
 const UNKNOWN: Lyrics = { instrumental: null, lines: [], plain: [] };
 
+/** How long a track LRCLIB failed to answer about stays unasked. */
+const FAILED_KEPT_MS = 30_000;
+
 /**
  * One track's answer, and whether its timings have been vetted.
  *
@@ -46,7 +49,7 @@ const UNKNOWN: Lyrics = { instrumental: null, lines: [], plain: [] };
  * the panel through the cache, so the panel has to be able to tell that nobody
  * has checked the timings yet and take its turn.
  */
-type Entry = { lyrics: Lyrics; vetted: boolean };
+type Entry = { lyrics: Lyrics; vetted: boolean; /** LRCLIB did not answer: not a verdict, asked again later */ failed?: boolean };
 
 /**
  * Survives a page reload only as long as the server process does; that is
@@ -149,21 +152,10 @@ function artistQueries(artistName: string): string[] {
   return primary && primary !== artistName ? [artistName, primary] : [artistName];
 }
 
-/** One LRCLIB search, reduced to the answer for its best-matching hit. */
-async function search(
-  trackName: string,
-  artistName: string,
-  durationMs?: number,
-): Promise<Lyrics | null> {
-  const url =
-    "https://lrclib.net/api/search" +
-    `?track_name=${encodeURIComponent(trackName)}` +
-    `&artist_name=${encodeURIComponent(artistName)}`;
-  const res = await lrclibHttp(url);
-  if (!res.ok) return null;
-  const hits = (await res.json()) as LrclibHit[];
-  const hit = Array.isArray(hits) ? bestHit(hits, durationMs) : null;
-  if (!hit) return null;
+/** What a lookup came to: the lyrics, and whether LRCLIB failed to answer (as opposed to answering "none"). */
+type Found = { lyrics: Lyrics | null; failed: boolean };
+
+function toLyrics(hit: LrclibHit): Lyrics {
   return {
     instrumental: Boolean(hit.instrumental),
     lines: hit.syncedLyrics ? parseSynced(hit.syncedLyrics) : [],
@@ -172,6 +164,122 @@ async function search(
       .map((l) => l.trim())
       .filter(Boolean),
   };
+}
+
+/**
+ * One request, its hits or null when LRCLIB did not answer.
+ *
+ * LRCLIB answers some queries with 502/503 every time they are asked, however
+ * often they are retried: measured, "Umbrella / Rihanna" and "Pretender /
+ * Official髭男dism" fail by name and artist yet answer by track name alone.
+ * An answer of "none" and no answer at all are different things, and telling
+ * them apart is what lets the next way of asking be tried.
+ */
+async function hitsOf(url: string): Promise<LrclibHit[] | null> {
+  try {
+    const res = await lrclibHttp(url);
+    if (res.status === 404) return [];
+    if (!res.ok) return null;
+    const body = (await res.json()) as LrclibHit | LrclibHit[];
+    return Array.isArray(body) ? body : body ? [body] : [];
+  } catch {
+    return null;
+  }
+}
+
+const SEARCH = "https://lrclib.net/api/search";
+const GET = "https://lrclib.net/api/get";
+
+/** One LRCLIB search by track and artist, reduced to the answer for its best-matching hit. */
+async function search(trackName: string, artistName: string, durationMs?: number): Promise<Found> {
+  const hits = await hitsOf(`${SEARCH}?track_name=${encodeURIComponent(trackName)}&artist_name=${encodeURIComponent(artistName)}`);
+  if (hits === null) return { lyrics: null, failed: true };
+  const hit = bestHit(hits, durationMs);
+  return { lyrics: hit ? toLyrics(hit) : null, failed: false };
+}
+
+/** The exact lookup: LRCLIB's own match on name, artist and runtime. Needs the runtime. */
+async function exact(trackName: string, artistName: string, durationMs: number): Promise<Found> {
+  const hits = await hitsOf(
+    `${GET}?track_name=${encodeURIComponent(trackName)}&artist_name=${encodeURIComponent(artistName)}&duration=${Math.round(durationMs / 1000)}`,
+  );
+  if (hits === null) return { lyrics: null, failed: true };
+  return { lyrics: hits[0] ? toLyrics(hits[0]) : null, failed: false };
+}
+
+const norm = (v: string) => v.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+
+/** "Song (feat. X)" and "Song - Remastered" are the song. */
+const core = (name: string) => norm(name.replace(/\([^)]*\)|\[[^\]]*\]/g, "").replace(/\s-\s.*$/, ""));
+
+/**
+ * Whether a hit found by title alone is the song asked about.
+ *
+ * The title has to be the same, and then either the runtime or the artist
+ * settles it: within 3s when the artist reads the same, within 2s when it does
+ * not (LRCLIB often lists a Japanese act by its romaji — "Official髭男dism" is
+ * "OFFICIAL HIGE DANDISM" there). Without a runtime only the artist can say.
+ */
+function sameSong(hit: LrclibHit, trackName: string, artistName: string, durationMs?: number): boolean {
+  if (core(hit.trackName) !== core(trackName)) return false;
+  const a = norm(hit.artistName);
+  const b = norm(artistName.split(",")[0]);
+  const sameArtist = Boolean(a && b && (a.includes(b) || b.includes(a)));
+  if (!durationMs) return sameArtist;
+  const off = Math.abs((hit.duration ?? Infinity) - durationMs / 1000);
+  return off <= (sameArtist ? 3 : 2);
+}
+
+/** Title-only and free-text searches, keeping only hits that are the song asked about. */
+async function broad(trackName: string, artistName: string, durationMs?: number): Promise<Found> {
+  const primary = artistName.split(",")[0].trim();
+  const urls = [
+    `${SEARCH}?track_name=${encodeURIComponent(trackName)}`,
+    `${SEARCH}?q=${encodeURIComponent(`${trackName} ${primary}`)}`,
+  ];
+  let failed = false;
+  for (const url of urls) {
+    const hits = await hitsOf(url);
+    if (hits === null) {
+      failed = true;
+      continue;
+    }
+    const hit = bestHit(
+      hits.filter((h) => sameSong(h, trackName, artistName, durationMs)),
+      durationMs,
+    );
+    if (hit) return { lyrics: toLyrics(hit), failed: false };
+  }
+  return { lyrics: null, failed };
+}
+
+/**
+ * Other ways of asking, for a track the first search did not settle.
+ *
+ * The exact lookup comes first and is cheap. `deep` adds the title-only
+ * searches, which cost more requests: the lyrics panel (one track someone is
+ * looking at) takes them, the filter (sixty tracks at a time) does not.
+ */
+async function fallbacks(
+  trackName: string,
+  artistName: string,
+  durationMs: number | undefined,
+  deep: boolean,
+): Promise<Found> {
+  let failed = false;
+  if (durationMs) {
+    for (const artist of artistQueries(artistName)) {
+      const hit = await exact(trackName, artist, durationMs);
+      if (hit.lyrics) return hit;
+      failed = failed || hit.failed;
+    }
+  }
+  if (deep) {
+    const hit = await broad(trackName, artistName, durationMs);
+    if (hit.lyrics) return hit;
+    failed = failed || hit.failed;
+  }
+  return { lyrics: null, failed };
 }
 
 /** Nothing left to improve: no timings at all, or timings that already follow. */
@@ -191,7 +299,7 @@ async function escalate(
 ): Promise<Lyrics> {
   let best = found;
   for (const artist of artists) {
-    const alt = await search(trackName, artist, durationMs);
+    const alt = (await search(trackName, artist, durationMs)).lyrics;
     if (alt?.lines.length && deadGapMs(alt.lines) < deadGapMs(best.lines)) best = alt;
     if (timingsSettled(best)) break;
   }
@@ -210,7 +318,7 @@ function swallow(key: string, e: unknown): void {
   console.warn("[lrclib]", key, e instanceof Error ? e.message : e);
 }
 
-/** The first search, plus the second one when the caller needs good timings. */
+/** The first search, the other ways of asking when it settles nothing, and a second query when the caller needs good timings. */
 async function load(
   key: string,
   trackName: string,
@@ -218,10 +326,22 @@ async function load(
   durationMs: number | undefined,
   wantTimings: boolean,
 ): Promise<Entry> {
-  const [first, ...rest] = artistQueries(artistName);
+  const [first] = artistQueries(artistName);
   let found = UNKNOWN;
+  let failed = false;
   try {
-    found = (await search(trackName, first, durationMs)) ?? UNKNOWN;
+    const firstTry = await search(trackName, first, durationMs);
+    found = firstTry.lyrics ?? UNKNOWN;
+    failed = firstTry.failed;
+    if (!firstTry.lyrics) {
+      const other = await fallbacks(trackName, artistName, durationMs, wantTimings);
+      if (other.lyrics) {
+        found = other.lyrics;
+        failed = false;
+      } else {
+        failed = failed || other.failed;
+      }
+    }
     /**
      * A second query only where the first one actually answered badly, and
      * only for a caller that reads timings.
@@ -231,14 +351,14 @@ async function load(
      * it needs is already in hand. Charging the filter for timings it never
      * reads would be the whole 가사 없음 wait made worse for nothing.
      */
-    if (wantTimings && !timingsSettled(found)) {
-      found = await escalate(found, trackName, rest, durationMs);
+    if (wantTimings && found !== UNKNOWN && !timingsSettled(found)) {
+      found = await escalate(found, trackName, artistQueries(artistName).slice(1), durationMs);
     }
   } catch (e) {
     swallow(key, e);
-    return { lyrics: found, vetted: true };
+    return { lyrics: found, vetted: true, failed: true };
   }
-  return { lyrics: found, vetted: wantTimings || timingsSettled(found) };
+  return { lyrics: found, vetted: wantTimings || timingsSettled(found), failed };
 }
 
 /**
@@ -268,6 +388,19 @@ export async function fetchLyrics(
     cache.set(key, pending);
   }
   let entry = await pending;
+
+  /**
+   * An answer that is only "LRCLIB did not answer" is not remembered for long.
+   * Kept as a verdict it made a track read "no lyrics" until the server was
+   * restarted; kept for half a minute it spares LRCLIB the same asking over and
+   * over and lets the next press try again.
+   */
+  if (entry.failed) {
+    const seen = pending;
+    setTimeout(() => {
+      if (cache.get(key) === seen) cache.delete(key);
+    }, FAILED_KEPT_MS).unref?.();
+  }
 
   /**
    * The filter ran first and settled for what it needed; now the panel wants
