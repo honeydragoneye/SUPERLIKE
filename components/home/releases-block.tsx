@@ -7,6 +7,7 @@ import { SectionHead } from "@/components/mypage/section-head";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { Icon } from "@/components/ui/icon";
 import { LoadingDots } from "@/components/ui/loading-dots";
+import { AlbumMore } from "@/components/ui/more-menu";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { SLEEVE_TONES } from "@/lib/data";
 import { findSpotifyAlbum as spotifyAlbum } from "@/lib/spotify-album";
@@ -128,7 +129,7 @@ function ReleaseCard({ album, index }: { album: Release; index: number }) {
   };
 
   return (
-    <article className="flex w-[150px] shrink-0 snap-start flex-col gap-[8px]">
+    <article className="group flex w-[150px] shrink-0 snap-start flex-col gap-[8px]">
       <button
         type="button"
         disabled={!ready || missing}
@@ -161,13 +162,16 @@ function ReleaseCard({ album, index }: { album: Release; index: number }) {
           </span>
         )}
       </button>
-      <div className="flex flex-col gap-[2px]">
-        <p className="truncate text-[12px]" title={album.title}>
-          {album.title}
-        </p>
-        <p className="truncate text-[9px] uppercase tracking-[0.4px] text-on-bright-muted" title={album.artist}>
-          {album.artist}
-        </p>
+      <div className="flex items-center gap-[2px]">
+        <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
+          <p className="truncate text-[12px]" title={album.title}>
+            {album.title}
+          </p>
+          <p className="truncate text-[9px] uppercase tracking-[0.4px] text-on-bright-muted" title={album.artist}>
+            {album.artist}
+          </p>
+        </div>
+        <AlbumMore title={album.title} resolveId={() => spotifyAlbum(album)} />
       </div>
     </article>
   );

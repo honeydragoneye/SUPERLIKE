@@ -114,6 +114,7 @@ export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
         <span className="min-w-px flex-1">TRACK</span>
         <span className="w-[72px] shrink-0 text-right">PLAYED</span>
         <span className="w-[40px] shrink-0 text-right">TIME</span>
+        <span className="w-[40px] shrink-0" />
       </div>
 
       {/* the page behind it still does not scroll; this list does, so a ranking

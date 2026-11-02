@@ -9,6 +9,7 @@ import { useSpotify } from "@/components/player/spotify-provider";
 import { EXPLICIT_NOTE, LOCKED_LOOK, useExplicitLock } from "@/components/ui/explicit";
 import { Icon } from "@/components/ui/icon";
 import { LoadingDots } from "@/components/ui/loading-dots";
+import { AlbumMore, TrackMore } from "@/components/ui/more-menu";
 import { lookUp, type Found } from "@/components/ui/track-card";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { SLEEVE_TONES } from "@/lib/data";
@@ -243,7 +244,7 @@ function RecCard({ rec, index }: { rec: Rec; index: number }) {
   }, [connected, near, rec.title, rec.artist]);
 
   return (
-    <article ref={card} className="flex w-[150px] shrink-0 snap-start flex-col gap-[8px]">
+    <article ref={card} className="group flex w-[150px] shrink-0 snap-start flex-col gap-[8px]">
       <button
         type="button"
         disabled={!seed || locked}
@@ -269,13 +270,29 @@ function RecCard({ rec, index }: { rec: Rec; index: number }) {
           </span>
         )}
       </button>
-      <div className="flex flex-col gap-[2px]">
-        <p className="truncate text-[12px]" title={rec.title}>
-          {rec.title}
-        </p>
-        <p className="truncate text-[9px] uppercase tracking-[0.4px] text-on-bright-muted" title={rec.artist}>
-          {rec.artist}
-        </p>
+      <div className="flex items-center gap-[2px]">
+        <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
+          <p className="truncate text-[12px]" title={rec.title}>
+            {rec.title}
+          </p>
+          <p className="truncate text-[9px] uppercase tracking-[0.4px] text-on-bright-muted" title={rec.artist}>
+            {rec.artist}
+          </p>
+        </div>
+        {seed && !locked && (
+          <TrackMore
+            track={{
+              id: seed.id,
+              uri: seed.uri,
+              title: seed.name,
+              artist: seed.artist,
+              artwork: seed.artwork,
+              durationMs: seed.durationMs,
+              albumId: seed.albumId,
+              artistId: seed.artistId,
+            }}
+          />
+        )}
       </div>
     </article>
   );
@@ -325,13 +342,16 @@ function AlbumCard({ album, index }: { album: RecentAlbum; index: number }) {
           <path d="M0 0 10 5.5 0 11z" />
         </svg>
       </button>
-      <div className="flex flex-col gap-[2px]">
-        <p className="truncate text-[12px]" title={name}>
-          {name}
-        </p>
-        <p className="truncate text-[9px] uppercase tracking-[0.4px] text-on-bright-muted" title={album.artist}>
-          {album.artist}
-        </p>
+      <div className="flex items-center gap-[2px]">
+        <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
+          <p className="truncate text-[12px]" title={name}>
+            {name}
+          </p>
+          <p className="truncate text-[9px] uppercase tracking-[0.4px] text-on-bright-muted" title={album.artist}>
+            {album.artist}
+          </p>
+        </div>
+        <AlbumMore title={name} albumId={album.id} />
       </div>
     </article>
   );

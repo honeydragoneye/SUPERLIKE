@@ -5,6 +5,7 @@ import Image from "next/image";
 import { clock } from "@/lib/time";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { StationButton, seedFrom } from "@/components/ui/station-button";
+import { AlbumMore, TrackMore } from "@/components/ui/more-menu";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { EXPLICIT_NOTE, LOCKED_LOOK, useExplicitLock } from "@/components/ui/explicit";
 import Link from "next/link";
@@ -127,6 +128,8 @@ export function SearchResults() {
                 pushed ALBUM 74px left of the album text it labels */}
             <span className="w-[180px] shrink-0">ALBUM</span>
             <span className="w-[40px] shrink-0 text-right">TIME</span>
+            {/* the ··· at the end of each row */}
+            <span className="w-[40px] shrink-0" />
           </div>
         )}
 
@@ -170,11 +173,28 @@ export function SearchResults() {
                   <span className="tnum w-[40px] shrink-0 text-right text-[10px] text-on-bright">
                     {clock(t.durationMs)}
                   </span>
-                  {/* sits left of the ALBUM column: 40 (TIME) + 12 + 180 (ALBUM) + 12,
-                      so it ends where that column begins and covers neither */}
+                  {/* the ··· takes the 40px the TIME column used to end on */}
+                  <span className="w-[40px] shrink-0" />
+                  {!locked && (
+                    <TrackMore
+                      className="absolute right-[8px] top-1/2 -translate-y-1/2"
+                      track={{
+                        id: t.id,
+                        uri: t.uri,
+                        title: t.name,
+                        artist: t.artist,
+                        artwork: t.artwork,
+                        durationMs: t.durationMs,
+                        albumId: t.albumId,
+                        artistId: t.artistId,
+                      }}
+                    />
+                  )}
+                  {/* sits left of the ALBUM column: 40 (ONE ···) + 12 + 40 (TIME) + 12 + 180 (ALBUM) + 12,
+                      plus 11 more so its left edge lines up with the 곡 tab above */}
                   <StationButton
                     label={t.name}
-                    className="right-[244px]"
+                    className="right-[307px]"
                     locked={locked}
                     seed={async () => ({
                       id: t.id,
@@ -211,12 +231,18 @@ export function SearchResults() {
                   <span className="w-[90px] shrink-0 text-right text-[9px] uppercase tracking-[0.6px] text-on-bright-muted">
                     {a.albumType}
                   </span>
+                  <span className="w-[40px] shrink-0" />
                   </button>
-                  {/* left of the 연도·곡 수 column: 90 (ALBUM) + 12 + 90 + 12.
+                  <AlbumMore
+                    title={a.name}
+                    albumId={a.id}
+                    className="absolute right-[8px] top-1/2 -translate-y-1/2"
+                  />
+                  {/* left of the 연도·곡 수 column: 40 (···) + 12 + 90 (ALBUM) + 12 + 90 + 12.
                       190 landed inside it, so the button sat on the text */}
                   <StationButton
                     label={a.name}
-                    className="right-[204px]"
+                    className="right-[256px]"
                     seed={() => seedFrom("album", a.id)}
                   />
                 </li>

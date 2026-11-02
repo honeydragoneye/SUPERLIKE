@@ -66,6 +66,7 @@ export function HistoryPage() {
         <span className="min-w-px flex-1">TRACK</span>
         <span className="w-[72px] shrink-0 text-right">PLAYED</span>
         <span className="w-[40px] shrink-0 text-right">TIME</span>
+        <span className="w-[40px] shrink-0" />
       </div>
 
       <RecentList tracks={tracks} />

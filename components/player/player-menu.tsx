@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useState } from "react";
+import { forwardRef, useState, type CSSProperties } from "react";
 
 export type PlayerMenuItem = {
   key: string;
@@ -22,8 +22,18 @@ export type PlayerMenuItem = {
  * the bar — and the panel keeps the three to one open at a time. Each item is
  * offered by the panel only when it can carry it out.
  */
-export const PlayerMenu = forwardRef<HTMLDivElement, { items: PlayerMenuItem[]; onClose: () => void }>(
-  function PlayerMenu({ items, onClose }, ref) {
+/** hung above the bar's ··· */
+const ABOVE_BAR = "absolute bottom-[calc(100%+8px)] right-[16px] z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.35)]";
+
+/**
+ * The same menu serves the ··· on a song row or an album cover: `className` and
+ * `style` then say where it sits (components/ui/more-menu.tsx pins it to the button).
+ */
+export const PlayerMenu = forwardRef<
+  HTMLDivElement,
+  { items: PlayerMenuItem[]; onClose: () => void; className?: string; style?: CSSProperties }
+>(
+  function PlayerMenu({ items, onClose, className = ABOVE_BAR, style }, ref) {
     const [said, setSaid] = useState<string | null>(null);
 
     return (
@@ -31,7 +41,8 @@ export const PlayerMenu = forwardRef<HTMLDivElement, { items: PlayerMenuItem[]; 
         ref={ref}
         role="menu"
         aria-label="세부 기능"
-        className="absolute bottom-[calc(100%+8px)] right-[16px] z-30 flex w-[248px] flex-col rounded-[8px] bg-[#1f1f1f] p-[8px] text-on-dark shadow-[0_-4px_20px_rgba(0,0,0,0.35)]"
+        style={style}
+        className={`flex w-[248px] flex-col rounded-[8px] bg-[#1f1f1f] p-[8px] text-on-dark ${className}`}
       >
         {items.map((item) => (
           <div key={item.key} className="contents">

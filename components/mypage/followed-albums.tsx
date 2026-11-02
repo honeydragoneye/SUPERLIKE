@@ -8,6 +8,7 @@ import { checkedLabel, dayOf, updateNote } from "@/components/follow/update-row"
 import { loadFollows, markRead, useFollowState } from "@/components/follow/follow-store";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { LoadingDots } from "@/components/ui/loading-dots";
+import { AlbumMore } from "@/components/ui/more-menu";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { findSpotifyAlbum } from "@/lib/spotify-album";
 import type { UpdateItem } from "@/lib/db/follows";
@@ -134,7 +135,7 @@ function AlbumCard({ item }: { item: UpdateItem }) {
   };
 
   return (
-    <article className="flex w-[150px] shrink-0 snap-start flex-col gap-[8px]">
+    <article className="group flex w-[150px] shrink-0 snap-start flex-col gap-[8px]">
       <button
         type="button"
         onClick={() => void open()}
@@ -157,13 +158,20 @@ function AlbumCard({ item }: { item: UpdateItem }) {
           </span>
         )}
       </button>
-      <div className="flex flex-col gap-[2px]">
-        <p className="truncate text-[12px]" title={item.title}>
-          {item.title}
-        </p>
-        <p className="truncate text-[9px] tracking-[0.4px] text-on-bright-muted" title={updateNote(item)}>
-          {item.artist} · {dayOf(item.releaseDate)} 발매
-        </p>
+      <div className="flex items-center gap-[2px]">
+        <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
+          <p className="truncate text-[12px]" title={item.title}>
+            {item.title}
+          </p>
+          <p className="truncate text-[9px] tracking-[0.4px] text-on-bright-muted" title={updateNote(item)}>
+            {item.artist} · {dayOf(item.releaseDate)} 발매
+          </p>
+        </div>
+        <AlbumMore
+          title={item.title}
+          artistId={item.artistId}
+          resolveId={() => findSpotifyAlbum({ id: item.id, title: item.title, artist: item.artist })}
+        />
       </div>
     </article>
   );
