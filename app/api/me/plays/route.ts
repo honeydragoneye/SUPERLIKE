@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { NotConnectedError, SpotifyApiError } from "@/lib/spotify/api";
 import { signedInUser, withTokens } from "@/lib/db/account";
 import { keepOwnerCopies } from "@/lib/db/owner";
+import { rememberRecent } from "@/lib/db/recent";
 import { DatabaseNotConfiguredError, query } from "@/lib/db/client";
 
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -16,19 +17,21 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
  * value would put a play in a week it was not heard in.
  */
 export async function POST(request: NextRequest) {
-  let body: { trackId?: unknown; title?: unknown; artist?: unknown; artistId?: unknown; albumId?: unknown; albumName?: unknown; albumArtwork?: unknown; day?: unknown };
+  let body: { trackId?: unknown; title?: unknown; artist?: unknown; artistId?: unknown; albumId?: unknown; albumName?: unknown; albumArtwork?: unknown; durationMs?: unknown; day?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
-  const { trackId, title, artist, artistId, albumId, albumName, albumArtwork, day } = body;
+  const { trackId, title, artist, artistId, albumId, albumName, albumArtwork, durationMs, day } = body;
   // optional: plays sent before the id was kept have none
   const artistKey = typeof artistId === "string" && /^[A-Za-z0-9]{1,40}$/.test(artistId) ? artistId : null;
   const albumKey = typeof albumId === "string" && /^[A-Za-z0-9]{1,40}$/.test(albumId) ? albumId : null;
   // optional like the ids: what the album is called and looks like, for "당신의 취향"
   const albumTitle = typeof albumName === "string" && albumName.length > 0 && albumName.length <= 300 ? albumName : null;
   const albumCover = typeof albumArtwork === "string" && albumArtwork.startsWith("https://") && albumArtwork.length <= 500 ? albumArtwork : null;
+  // optional: the length the history list shows beside the track
+  const length = typeof durationMs === "number" && Number.isFinite(durationMs) && durationMs > 0 && durationMs < 4 * 60 * 60 * 1000 ? Math.round(durationMs) : 0;
   const text = (v: unknown, max: number) => typeof v === "string" && v.length > 0 && v.length <= max;
   if (
     !text(trackId, 40) || !/^[A-Za-z0-9]+$/.test(trackId as string) ||
@@ -53,6 +56,19 @@ export async function POST(request: NextRequest) {
              last_played_at = now()`,
       [user.id, day, trackId, title, artist, artistKey, albumKey, albumTitle, albumCover],
     );
+    // the play also goes to the end of the history queue (newest 100, lib/db/recent)
+    await rememberRecent(user.id, [
+      {
+        index: "",
+        title: title as string,
+        artist: artist as string,
+        artwork: albumCover,
+        artworkLarge: albumCover,
+        playedAt: new Date().toISOString(),
+        durationMs: length,
+        uri: `spotify:track:${trackId as string}`,
+      },
+    ]);
     // the developer's pick for the week may have just changed
     const more = await keepOwnerCopies(user.id);
     const res = NextResponse.json({ ok: true }, { headers: NO_STORE });

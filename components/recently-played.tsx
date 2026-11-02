@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { usePlaysThisWeek } from "./player/use-listening";
 import { RecentList } from "./ui/recent-list";
 import { useSpotify } from "./player/spotify-provider";
 import { useChat } from "./chat/chat-provider";
 import { useHydrated } from "./ui/use-hydrated";
 
-const RANGES = ["TODAY", "THIS WEEK"] as const;
+const RANGES = ["TODAY", "ALL"] as const;
 
 /** How many rows the mypage list shows before it scrolls, and what one row takes (46px + its 1px rule). */
 const VISIBLE_ROWS = 10;
@@ -19,18 +18,6 @@ type Range = (typeof RANGES)[number];
 function startOfToday(): number {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
-/**
- * Monday 00:00 local, the week Korean calendars start on — the same boundary
- * the listening figure in the action bar counts from.
- */
-function startOfWeek(): number {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  // getDay() is Sunday-first, so Sunday counts back six days rather than none
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
   return d.getTime();
 }
 
@@ -54,42 +41,17 @@ export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
   const connected = hydrated && session;
   const recentLive = hydrated && live;
 
-  const [range, setRange] = useState<Range>("THIS WEEK");
+  const [range, setRange] = useState<Range>("ALL");
   // no stand-in rows: an invented track flashing before the real history lands
   // is worse than an empty list for a beat
   const all = recentLive ? recent : [];
   /**
-   * Spotify timestamps every play, so the range is a filter over what it
-   * already sent rather than another request. Its history ends at fifty plays,
-   * though, so THIS WEEK means "within the last fifty, this week" — the status
-   * line below says so when the two could differ.
+   * ALL is the saved queue — the newest 100 tracks, kept past Spotify's own
+   * fifty and never reset by a new week (lib/db/recent.ts) — and TODAY is the
+   * part of it played since midnight. Each track appears once, newest first.
    */
-  const since = range === "TODAY" ? startOfToday() : startOfWeek();
-  const within = all.filter((t) => new Date(t.playedAt).getTime() >= since);
-
-  const plays = usePlaysThisWeek();
-  const ranking = range === "THIS WEEK";
-
-  /**
-   * THIS WEEK is a ranking, so each track appears once.
-   *
-   * Spotify's history has a row per play, which is right for a log and wrong
-   * for a tally — five plays of one song would otherwise be five rows all
-   * claiming "5회". The newest play of each is kept, so the row still points
-   * at something real.
-   */
-  const tracks = ranking
-    ? (() => {
-        const first = new Map<string, (typeof within)[number]>();
-        for (const t of within) if (!first.has(t.uri)) first.set(t.uri, t);
-        const idOf = (uri: string) => uri.split(":").pop() ?? "";
-        // the number is the rank here: the history's own number (1 = the newest play) would
-        // come out as 01, 03, 04, 06… once the rows are re-ordered by plays
-        return [...first.values()]
-          .sort((a, b) => (plays[idOf(b.uri)] ?? 0) - (plays[idOf(a.uri)] ?? 0))
-          .map((t, i) => ({ ...t, index: String(i + 1).padStart(2, "0") }));
-      })()
-    : within;
+  const within = range === "TODAY" ? all.filter((t) => new Date(t.playedAt).getTime() >= startOfToday()) : all;
+  const tracks = within.map((t, i) => ({ ...t, index: String(i + 1).padStart(2, "0") }));
 
   /**
    * What the empty list says. A list with nothing in it reads as broken, so it
@@ -98,11 +60,9 @@ export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
    */
   const emptyNote =
     hydrated && session && loaded && !recentError && tracks.length === 0
-      ? range === "TODAY"
+      ? range === "TODAY" && all.length > 0
         ? { head: "오늘은 아직 들은 곡이 없어요", body: "지금 한 곡 들어 보세요. 재생하면 여기에 쌓여요." }
-        : all.length > 0
-          ? { head: "새로운 한 주가 시작됐어요", body: "노래를 들으면 이번 주 많이 들은 순서가 여기에 채워져요." }
-          : { head: "아직 재생 기록이 없어요", body: "노래를 들으면 여기에 쌓여요. 마음에 드는 곡부터 시작해 보세요." }
+        : { head: "아직 재생 기록이 없어요", body: "노래를 들으면 여기에 쌓여요. 마음에 드는 곡부터 시작해 보세요." }
       : null;
 
   const status = recentError
@@ -113,9 +73,7 @@ export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
         ? "불러오는 중…"
         : tracks.length
           ? `${tracks.length} TRACKS`
-          : range === "TODAY"
-            ? "오늘 재생한 곡이 없습니다"
-            : "이번 주 재생한 곡이 없습니다";
+          : "재생한 곡이 없습니다";
 
   return (
     <section
@@ -137,7 +95,7 @@ export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
                 key={option}
                 type="button"
                 aria-pressed={active}
-                title={option === "TODAY" ? "오늘 재생한 곡" : "이번 주 재생한 곡"}
+                title={option === "TODAY" ? "오늘 재생한 곡" : "최근 재생한 곡 최대 100곡"}
                 onClick={() => setRange(option)}
                 className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors rule ${
                   active ? "bg-ink text-on-ink" : "bg-soft text-ink hover:bg-accent"
@@ -154,7 +112,7 @@ export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
         <span className="w-[32px] shrink-0">#</span>
         <span className="w-[32px] shrink-0" />
         <span className="min-w-px flex-1">TRACK</span>
-        <span className="w-[72px] shrink-0 text-right">{ranking ? "PLAYS" : "PLAYED"}</span>
+        <span className="w-[72px] shrink-0 text-right">PLAYED</span>
         <span className="w-[40px] shrink-0 text-right">TIME</span>
       </div>
 
@@ -184,7 +142,7 @@ export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
             </button>
           </div>
         ) : (
-          <RecentList tracks={tracks} plays={ranking ? plays : undefined} />
+          <RecentList tracks={tracks} />
         )}
       </div>
 

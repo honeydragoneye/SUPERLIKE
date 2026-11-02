@@ -237,3 +237,24 @@ create table if not exists release_reads (
   read_at       timestamptz not null default now(),
   primary key (user_id, collection_id)
 );
+
+-- The listening history, kept as a queue of the newest 100 tracks. Spotify's own
+-- history stops at the last fifty plays and has no memory beyond that, so each
+-- time it is read the plays are saved here; once more than 100 distinct tracks
+-- are held, the one played longest ago leaves first (lib/db/recent.ts).
+create table if not exists recent_tracks (
+  user_id       text not null references users (spotify_id) on delete cascade,
+  uri           text not null,
+  title         text not null,
+  artist        text not null,
+  artwork       text,
+  artwork_large text,
+  duration_ms   integer not null default 0,
+  played_at     timestamptz not null,
+  primary key (user_id, uri)
+);
+create index if not exists recent_tracks_user_played on recent_tracks (user_id, played_at desc);
+
+-- When Spotify's own last fifty plays were copied into recent_tracks, once per user.
+-- After that the list grows only from plays made in Superlike (lib/db/recent.ts).
+alter table users add column if not exists recent_imported_at timestamptz;

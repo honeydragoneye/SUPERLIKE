@@ -36,7 +36,7 @@ const MAX_CREDIT_MS = FLUSH_MS * 4;
  * song into having listened to it.
  */
 export function useRecordListening(): void {
-  const { now } = useSpotify();
+  const { now, refreshRecent } = useSpotify();
   const uri = now?.uri ?? null;
   const playing = Boolean(uri) && now?.paused === false;
   /** the track's name for the account's copy of the tally, read when a play is counted */
@@ -47,13 +47,15 @@ export function useRecordListening(): void {
     albumId: string | null;
     albumName: string | null;
     albumArtwork: string | null;
-  }>({ title: "", artist: "", artistId: null, albumId: null, albumName: null, albumArtwork: null });
+    durationMs: number;
+  }>({ title: "", artist: "", artistId: null, albumId: null, albumName: null, albumArtwork: null, durationMs: 0 });
   useEffect(() => {
     meta.current = { title: now?.title ?? "", artist: now?.artist ?? "", artistId: now?.artistId ?? null, albumId: now?.albumId ?? null,
       albumName: now?.album || null,
       albumArtwork: now?.artwork ?? null,
+      durationMs: now?.durationMs ?? 0,
     };
-  }, [now?.title, now?.artist, now?.artistId, now?.albumId, now?.album, now?.artwork]);
+  }, [now?.title, now?.artist, now?.artistId, now?.albumId, now?.album, now?.artwork, now?.durationMs]);
 
   /**
    * The uri is a dependency, so a track change tears this down and sets it up
@@ -79,8 +81,9 @@ export function useRecordListening(): void {
       if (!counted && heard >= PLAY_THRESHOLD_MS) {
         counted = true;
         countPlay(id);
-        const { title, artist, artistId, albumId, albumName, albumArtwork } = meta.current;
-        if (title && artist) void mirrorPlay({ trackId: id, title, artist, artistId, albumId, albumName, albumArtwork });
+        const { title, artist, artistId, albumId, albumName, albumArtwork, durationMs } = meta.current;
+        // once the account has the play, the history list asks for itself again: that is when it gains a row
+        if (title && artist) void mirrorPlay({ trackId: id, title, artist, artistId, albumId, albumName, albumArtwork, durationMs }).then(refreshRecent);
       }
     };
 
@@ -103,7 +106,7 @@ export function useRecordListening(): void {
       // pause, track change or navigation away: credit what was played
       flush();
     };
-  }, [playing, uri]);
+  }, [playing, uri, refreshRecent]);
 }
 
 /**

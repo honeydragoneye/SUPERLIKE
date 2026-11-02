@@ -8,8 +8,8 @@ import { RecentList } from "./ui/recent-list";
 /**
  * The whole listening history, on its own screen.
  *
- * Home keeps the first ten so the page stays short; everything Spotify returns
- * — up to fifty, once repeats are collapsed — lives here.
+ * The mypage list shows ten rows and scrolls; everything saved — the newest
+ * 100 tracks, each once — lives here.
  */
 export function HistoryPage() {
   const { connected: session, recent, recentLive: live, recentError, play } = useSpotify();
