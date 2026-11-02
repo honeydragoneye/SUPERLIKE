@@ -17,10 +17,10 @@ import { addRecent } from "@/lib/recent-searches";
 /**
  * Sits in the action bar, where the quality pills used to be.
  *
- * Typing only suggests: a few tracks drop under the field so a familiar song
- * can be played without leaving whatever is on screen. The results page is a
- * deliberate step — Enter, or the button — because navigating on every
- * keystroke pulled the listener off the page they were reading.
+ * Typing only suggests: a few rows drop under the field, and pressing one goes
+ * straight to its page (an artist's, an album's, or a song's album). The full
+ * results page is a deliberate step — Enter, or the button — because navigating
+ * on every keystroke pulled the listener off the page they were reading.
  *
  * The committed query lives in the URL as `/search?q=…`, so a result list can
  * be shared, bookmarked and returned to with the back button.
@@ -242,7 +242,9 @@ export function SearchField() {
                     type="button"
                     onClick={() => {
                       setOpen(false);
-                      void play({ uris: [t.uri] });
+                      // a song's page is its album; one Spotify gave no album for is played where it stands
+                      if (t.albumId) router.push(`/album/${t.albumId}`);
+                      else void play({ uris: [t.uri] });
                     }}
                     className="flex h-[44px] w-full cursor-pointer items-center gap-[10px] px-[10px] text-left transition-colors hover:bg-soft"
                   >
