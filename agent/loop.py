@@ -61,12 +61,26 @@ _NO_NOW = (
 _ACTIONS = (
     "사용자가 동작을 시키면 맞는 도구를 한 번 부른다: 좋아요(like_track), 재생·멈춤·다음 곡(playback), "
     "셔플·반복(player_mode), 재생 위치 옮기기(seek), 음량(volume), 곡 하나만 들려 달라는 말(play_one), "
-    "곡 하나를 기존 플레이리스트에 담기(add_to_playlist), 다음에 나올 곡 목록(up_next), 가사 화면 열기(lyrics), 스테이션 끝내기(stop_station), 스테이션 시작(start_station), 새 플레이리스트 만들기(make_playlist). 도구는 제안만 하고 실행은 화면이 하며, "
+    "곡 하나를 기존 플레이리스트에 담기(add_to_playlist), 다음에 나올 곡 목록(up_next), 가사 화면 열기(lyrics), 스테이션 끝내기(stop_station), 스테이션 시작(start_station), 새 플레이리스트 만들기(make_playlist), 다른 페이지로 옮기기(open_page: 홈·최근 재생 기록·마이페이지·지난 호·금주의 아티스트·에디터스 픽·스테이션·검색 결과·가수·앨범 페이지), 가수 팔로우(follow_artist: ‘팔로우해줘’는 가수 이름만 있으면 곧바로 이 도구를 부른다. 도구를 부르지 않고 ‘팔로우할게요’라고만 답하지 않는다). 도구는 제안만 하고 실행은 화면이 하며, "
     "결과(좋아요에 담았는지, 만들었는지)는 화면에 카드로 따로 보인다. 그래서 글은 한두 문장으로 짧게 "
     "\"~할게요\"처럼 알리고, 이미 됐다고 단정하지 않으며 곡 목록을 되풀이하지 않는다. 플레이리스트는 사용자가 "
     "만들기를 눌러야 만들어지니 \"만들어 볼까요?\"처럼 말한다. 곡 이름을 말하며 틀어 달라거나 좋아요를 "
     "누르라고 하면 이름은 사용자가 쓴 그대로 넣는다. 곡 삭제, 플레이리스트에서 곡 빼기·지우기처럼 "
     "이 도구들로 못 하는 일은 할 수 없다고 한 문장으로 말한다.\n"
+)
+# 사용자가 공유를 켠 좋아요·최근 재생: 목록은 화면에서 오니 먼저 도구로 확인하고, 그 목록에 있는 것만 말한다
+_LIKES = (
+    "'내가 좋아요한 곡', '좋아요 목록'처럼 사용자의 좋아요를 가리키는 말에는 먼저 my_likes를 불러 목록을 확인하고, 돌려받은 곡만 말한다. "
+    "목록은 최근 일부만이라 전체 개수는 모른다고 말한다. 곡을 틀어 달라면 목록의 제목·가수로 playback이나 start_station을 부른다.\n"
+)
+_RECENT = (
+    "'방금 뭐 들었지', '어제 들은 노래', '최근에 들은 곡'처럼 들은 기록을 가리키는 말에는 먼저 recent_plays를 불러 기록을 확인하고, "
+    "돌려받은 곡과 시각(playedAt)으로만 답한다. 횟수나 총 시간을 세어 말하지 않는다.\n"
+)
+# 좋아요·최근 재생을 공유하지 않았다: 도구가 없으니, 지어내지 않고 켜는 방법을 알려 준다
+_NO_SHARE = (
+    "\n\n사용자의 좋아요 목록이나 최근 재생 기록이 이번 질문에 오지 않았다면(보이는 도구에 my_likes·recent_plays가 없다면) 알 수 없다. "
+    "그런 질문에는 챗봇 설정에서 취향 공유를 켜면 볼 수 있다고 한 문장으로 말하고 지어내지 않는다. request_source는 부르지 않는다."
 )
 # 사용자가 Spotify에 연결하지 않았다: 동작 도구가 없다
 _NO_ACT = (
@@ -251,6 +265,40 @@ def _chat_stream(
                 yield json.loads(raw.decode("utf-8"))
 
 
+_PAGE_LABEL = {
+    "home": "홈", "history": "최근 재생 기록", "mypage": "마이페이지", "issues": "지난 호",
+    "weekly_artist": "금주의 아티스트 페이지", "editors_pick": "에디터스 픽 페이지", "station": "스테이션",
+}
+
+
+def _batchim(word: str) -> bool | None:
+    """마지막 글자가 받침으로 끝나면 True, 아니면 False, 한글이 아니면 None."""
+    ch = word.rstrip()[-1:]
+    if not ch or not ("가" <= ch <= "힣"):
+        return None
+    return (ord(ch) - 0xAC00) % 28 != 0
+
+
+def _canned(name: str, action: dict) -> str | None:
+    """페이지 이동·팔로우는 화면이 바로 해 주므로, 말로 알리는 한 줄은 모델을 다시 부르지 않고 만든다."""
+    if name == "open_page":
+        page, title = action.get("page"), str(action.get("title") or "").strip()
+        label = _PAGE_LABEL.get(page) or {
+            "search": f"‘{title}’ 검색 결과", "artist": f"{title} 가수 페이지", "album": f"{title} 앨범 페이지",
+        }.get(page)
+        if not label:
+            return None
+        last = (ord(label[-1]) - 0xAC00) % 28 if _batchim(label) else 0
+        return f"{label}{'으로' if last not in (0, 8) else '로'} 이동할게요."
+    if name == "follow_artist":
+        artist = str(action.get("artist") or "").strip()
+        if not artist:
+            return "지금 듣는 곡의 가수를 팔로우할게요."
+        final = _batchim(artist)
+        return f"{artist}{'을' if final else '를' if final is False else '을(를)'} 팔로우할게요."
+    return None
+
+
 def run_agent(
     history: list[dict],
     question: str,
@@ -262,6 +310,8 @@ def run_agent(
     now_playing: dict | None = None,
     station: dict | None = None,
     can_act: bool = False,
+    likes: list[dict] | None = None,
+    recent: list[dict] | None = None,
 ) -> Iterator[dict]:
     """이벤트를 하나씩 내보낸다.
 
@@ -286,8 +336,11 @@ def run_agent(
 
     station은 화면이 보내 준 스테이션({"active", "seed", "tracks"})이다. 모델에게는 처음부터 보여 주지 않고, 스테이션을
     가리키는 질문에서 station_info 도구를 부를 때 알려 준다. can_act는 사용자가 Spotify에 연결해 화면이 좋아요·재생·
-    스테이션·플레이리스트 같은 동작을 대신 할 수 있다는 뜻이다: 그때만 동작 도구가 모델에게 보인다. 동작 도구의
+    스테이션·플레이리스트·페이지 이동·팔로우 같은 동작을 대신 할 수 있다는 뜻이다: 그때만 동작 도구가 모델에게 보인다. 동작 도구의
     {"type": "tool_result"}에는 result["action"]이 있고, 실제 실행은 화면이 한다.
+
+    likes([{"title", "artist"}], 최근순)와 recent([{"title", "artist", "playedAt"}], 최근순)는 사용자가 공유를 켰을 때만
+    오는 좋아요한 곡·최근 재생 기록이다. 모델에게는 처음부터 보여 주지 않고, my_likes·recent_plays 도구를 부를 때 알려 준다.
 
     cards=True는 곡을 화면이 카드로 보여 주는 경우다. 글이 곡 이름을 말하지 않으니 "곡을
     말했는가"로 하는 재시도 검사는 끄고, 글은 기준 설명만 쓰게 한다.
@@ -296,7 +349,7 @@ def run_agent(
     if model is None and config.PROVIDER == "ollama":
         model = config.LOCAL_GENERATION_MODEL
     # sources: 사용자가 켜 둔 출처(lastfm·wikipedia·musicbrainz). None이면 전부. 다듬기 대화는 출처와 무관하다.
-    tools = TOOLS_REFINE if refine else tools_for(sources, now_playing is not None, can_act, station is not None)
+    tools = TOOLS_REFINE if refine else tools_for(sources, now_playing is not None, can_act, station is not None, likes is not None, recent is not None)
     system = (
         refine_prompt(refine["label"], refine["definition"])
         if refine
@@ -327,12 +380,28 @@ def run_agent(
         )
     # 사용자가 출처를 골라 다시 찾는 경우: 기억으로 답하지 못하게, 첫 호출에서 그 출처의 도구를 반드시 부르게 한다
     force_first = [t for name in picked for t in SOURCES[name] if t in tools] if not refine else []
-    session = Session(now_playing, station)
+    # 작은 모델은 ‘팔로우해줘’에 도구를 부르지 않고 ‘팔로우할게요’라고만 답하곤 한다: 요청이 분명하면 첫 호출에서 도구를 강제한다
+    if not refine and "follow_artist" in tools and re.search(r"팔로우\s*(해|할|하자|좀)", question) and not re.search(r"취소|해제|언팔", question):
+        force_first = ["follow_artist"]
+    elif (
+        not refine and "open_page" in tools
+        and re.search(r"이동|열어|가줘|가자|가볼", question)
+        and re.search(r"홈|마이\s*페이지|최근\s*재생|기록|지난\s*호|이슈|금주|에디터|검색|페이지|앨범|가수", question)
+        and not re.search(r"스테이션|가사|플레이리스트", question)
+    ):
+        force_first = ["open_page"]
+    session = Session(now_playing, station, likes, recent)
     if not refine:
         system += ("\n\n" + _NOW) if now_playing is not None else _NO_NOW
         system += ("\n" + _ACTIONS) if can_act else _NO_ACT
         if station is not None:
             system += "\n" + _STATION
+        if likes is not None:
+            system += "\n" + _LIKES
+        if recent is not None:
+            system += "\n" + _RECENT
+        if likes is None or recent is None:
+            system += _NO_SHARE
     if taste and not refine:
         system += _taste_prompt(taste)
         session.seen |= {f"{t['title']}|{t['artist']}".lower() for t in taste}
@@ -460,6 +529,7 @@ def run_agent(
 
         # 모델의 도구 호출 요청을 대화에 남겨야 다음 턴에서 "내가 이걸 불렀다"를 안다
         messages.append({"role": "assistant", "content": content, "tool_calls": calls})
+        canned: list[str] = []
         for call in calls:
             fn = call["function"]
             args = fn.get("arguments") or {}
@@ -472,6 +542,10 @@ def run_agent(
             else:
                 result = call_tool(fn["name"], args, session, tools)
             yield {"type": "tool_result", "name": fn["name"], "result": result}
+            if isinstance(result, dict) and isinstance(result.get("action"), dict):
+                line = _canned(fn["name"], result["action"])
+                if line:
+                    canned.append(line)
             if isinstance(result, dict) and isinstance(result.get("tracks"), list):
                 seen_titles += [t["title"] for t in result["tracks"] if "title" in t]
                 if fn["name"] == "top_tracks":
@@ -479,6 +553,11 @@ def run_agent(
             messages.append(
                 {"role": "tool", "tool_name": fn["name"], "content": json.dumps(result, ensure_ascii=False)}
             )
+        # 이동·팔로우만 시킨 턴: 한 줄은 이미 있으니 모델을 다시 부르지 않는다 (답이 늦거나 비는 일, 호출 한도 소모가 없다)
+        if canned and len(canned) == len(calls):
+            yield {"type": "token", "data": " ".join(canned)}
+            yield from tail(step)
+            return
 
     # 단계를 다 썼는데도 도구만 부르고 있다 — 지금까지 모은 걸로 마무리하라고 요청한다
     messages.append({"role": "user", "content": "지금까지 확인한 곡으로 바로 답해줘."})

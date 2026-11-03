@@ -39,8 +39,17 @@ def _same_title(a: str, b: str) -> bool:
 class Session:
     """한 질문 동안 에이전트가 이미 본 곡. 같은 태그를 다시 불러도 같은 곡을 또 주지 않는다."""
 
-    def __init__(self, now_playing: dict | None = None, station: dict | None = None) -> None:
+    def __init__(
+        self,
+        now_playing: dict | None = None,
+        station: dict | None = None,
+        likes: list[dict] | None = None,
+        recent: list[dict] | None = None,
+    ) -> None:
         self.seen: set[str] = set()
+        # 사용자가 공유를 켰을 때만 오는 좋아요한 곡·최근 재생. 각각 my_likes, recent_plays 도구를 부를 때만 모델에게 보인다.
+        self.likes = likes
+        self.recent = recent
         # 사용자가 지금 듣는 곡 {"playing", "title", "artist", "album"}. 모델에게는 now_playing 도구를 부를 때만 보인다.
         self.now_playing = now_playing
         # 화면의 스테이션 {"active", "seed", "tracks": [{"title", "artist", "position"}]}. station_info 도구를 부를 때만 보인다.
@@ -827,6 +836,66 @@ def propose_definition(definition: str, reason: str = "", sample_tag: str = "") 
     }
 
 
+def my_likes(session: Session) -> dict:
+    """사용자가 좋아요한 곡 목록(최근순). 화면이 질문과 함께 보내 준 값이다.
+
+    "내가 좋아요한 곡", "좋아요 목록에서 ~"처럼 사용자의 좋아요를 가리키는 질문에서만 모델이 부른다.
+    """
+    likes = session.likes or []
+    if not likes:
+        return {"found": False, "note": "좋아요한 곡이 아직 없습니다. 사용자에게 그렇게 말한다."}
+    return {
+        "found": True,
+        "count": len(likes),
+        "tracks": likes,
+        "note": "최근에 좋아요한 곡부터다. 목록에 없는 곡은 말하지 않는다. 일부만 보낸 것이라 전체 개수는 모른다고 말해야 한다.",
+    }
+
+
+def recent_plays(session: Session) -> dict:
+    """사용자가 최근에 들은 곡(최근순, 들은 때 포함). 화면이 질문과 함께 보내 준 값이다.
+
+    "방금 뭐 들었지", "어제 들은 노래", "최근에 자주 들은 가수"처럼 들은 기록을 가리키는 질문에서만 모델이 부른다.
+    """
+    recent = session.recent or []
+    if not recent:
+        return {"found": False, "note": "최근 재생 기록이 아직 없습니다. 사용자에게 그렇게 말한다."}
+    return {
+        "found": True,
+        "count": len(recent),
+        "tracks": recent,
+        "note": "playedAt은 들은 시각(ISO)이고 최근 곡이 먼저다. 기록에 있는 것만 말하고, 횟수나 총 시간은 지어내지 않는다.",
+    }
+
+
+# 화면이 열 수 있는 곳. artist·album·search는 이름이나 검색어가 더 필요하다.
+_PAGES = ("home", "history", "mypage", "issues", "weekly_artist", "editors_pick", "station", "search", "artist", "album")
+_NEEDS_NAME = ("search", "artist", "album")
+
+
+def open_page(session: Session, page: str, name: str = "", artist: str = "") -> dict:
+    """화면을 옮긴다. 홈·최근 재생 기록·마이페이지·지난 호·금주의 아티스트·에디터스 픽·스테이션 화면, 검색 결과, 가수·앨범 페이지."""
+    page = _line(page, 20).lower().replace("-", "_")
+    name, artist = _line(name), _line(artist)
+    if page not in _PAGES:
+        return {"error": f"page는 {', '.join(_PAGES)} 중 하나여야 한다"}
+    if page in _NEEDS_NAME and not name:
+        what = {"search": "검색어", "artist": "가수 이름", "album": "앨범 이름"}[page]
+        return {"error": f"{what}(name)가 필요하다. 사용자가 말하지 않았으면 무엇인지 물어본다."}
+    return _action("open", "화면이 바로 그 페이지로 옮긴다. 이동한다고만 짧게 알린다.", page=page, title=name, artist=artist)
+
+
+def follow_artist(session: Session, artist: str = "") -> dict:
+    """가수를 팔로우한다. 이름을 말하지 않으면 지금 듣는 곡의 가수다."""
+    artist = _line(artist)
+    if artist:
+        return _action("follow", "화면이 그 가수를 팔로우하고 취소 버튼을 보여 준다. 짧게 알린다.", source="named", artist=artist)
+    now = session.now_playing or {}
+    if not now.get("playing") or not now.get("artist"):
+        return {"error": "지금 재생 중인 곡이 없어서 팔로우할 가수를 모른다. 가수 이름을 말해 달라고 한다."}
+    return _action("follow", "화면이 지금 듣는 곡의 가수를 팔로우하고 취소 버튼을 보여 준다. 짧게 알린다.", source="now", artist=now["artist"])
+
+
 TOOLS: dict[str, dict] = {
     "top_tracks": {
         "schema": {
@@ -1259,6 +1328,74 @@ TOOLS: dict[str, dict] = {
         },
         "run": similar_to,
     },
+    "my_likes": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "my_likes",
+                "description": (
+                    "사용자가 좋아요한 곡 목록을 가져온다. '내가 좋아요한 곡', '좋아요 목록에서 ~', '내가 좋아하는 노래 중에'처럼 "
+                    "사용자의 좋아요를 가리키는 말에서만 부른다. 분위기로 추천을 묻는 말에는 부르지 않는다."
+                ),
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        "run": my_likes,
+    },
+    "recent_plays": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "recent_plays",
+                "description": (
+                    "사용자가 최근에 들은 곡 기록을 가져온다. '방금 뭐 들었지', '어제 들은 노래', '최근에 많이 들은 가수'처럼 "
+                    "들은 기록을 가리키는 말에서만 부른다. 지금 나오는 곡을 묻는 말에는 now_playing을 부른다."
+                ),
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        "run": recent_plays,
+    },
+    "open_page": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "open_page",
+                "description": (
+                    "화면을 다른 페이지로 옮긴다. page는 home(홈), history(최근 재생 기록), mypage(마이페이지), issues(지난 호·금요일의 앨범 편지), "
+                    "weekly_artist(금주의 아티스트), editors_pick(에디터스 픽), station(스테이션), search(검색 결과: name에 검색어), "
+                    "artist(가수 페이지: name에 가수), album(앨범 페이지: name에 앨범, 알면 artist). '~ 보여줘', '~ 열어줘', '~로 가자'에 부른다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "page": {"type": "string", "enum": list(_PAGES)},
+                        "name": {"type": "string", "description": "search는 검색어, artist는 가수 이름, album은 앨범 이름. 사용자가 쓴 그대로."},
+                        "artist": {"type": "string", "description": "album일 때 가수(알면)"},
+                    },
+                    "required": ["page"],
+                },
+            },
+        },
+        "run": open_page,
+    },
+    "follow_artist": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "follow_artist",
+                "description": (
+                    "가수를 팔로우한다. '이 가수 팔로우해줘'면 인자 없이 부르고, 가수 이름을 말했으면 artist를 넣는다. "
+                    "팔로우를 해 달라는 말에만 부른다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {"artist": {"type": "string", "description": "가수 이름. 지금 듣는 곡의 가수면 비운다."}},
+                },
+            },
+        },
+        "run": follow_artist,
+    },
     "request_source": {
         "schema": {
             "type": "function",
@@ -1330,10 +1467,17 @@ DEFAULT_SOURCES = ["lastfm"]
 
 
 # 사용자의 화면이 대신 해 주는 동작. 로그인(Spotify 연결)한 사용자에게만 준다.
-ACTION_TOOLS = ("like_track", "playback", "player_mode", "seek", "volume", "play_one", "add_to_playlist", "up_next", "lyrics", "stop_station", "start_station", "make_playlist")
+ACTION_TOOLS = ("like_track", "playback", "player_mode", "seek", "volume", "play_one", "add_to_playlist", "up_next", "lyrics", "stop_station", "start_station", "make_playlist", "open_page", "follow_artist")
 
 
-def tools_for(sources: list[str] | None, now_playing_on: bool = False, can_act: bool = False, station_on: bool = False) -> tuple[str, ...]:
+def tools_for(
+    sources: list[str] | None,
+    now_playing_on: bool = False,
+    can_act: bool = False,
+    station_on: bool = False,
+    likes_on: bool = False,
+    recent_on: bool = False,
+) -> tuple[str, ...]:
     """쓸 수 있는 출처의 도구만. sources가 None이면 기본 출처(Last.fm).
 
     아직 안 쓴 출처가 남아 있으면 request_source도 준다: 답을 못 찾았을 때 모델이 지어내는 대신
@@ -1348,6 +1492,11 @@ def tools_for(sources: list[str] | None, now_playing_on: bool = False, can_act: 
     # 스테이션의 곡도 화면에서 온다. 동작은 사용자의 계정이 있어야 해서 연결한 사용자에게만 준다
     if station_on:
         names += ("station_info",)
+    # 좋아요·최근 재생도 화면에서 오며, 사용자가 공유를 켠 것만 보낸다
+    if likes_on:
+        names += ("my_likes",)
+    if recent_on:
+        names += ("recent_plays",)
     if can_act:
         names += ACTION_TOOLS
     return names + ("request_source",) if any(name not in used for name in SOURCES) else names
@@ -1361,7 +1510,7 @@ def call_tool(name: str, arguments: dict, session: Session, allowed: tuple[str, 
         return {"error": f"없는 도구: {name}"}
     try:
         run = tool["run"]
-        return run(session, **arguments) if name in ("top_tracks", "similar_to", "now_playing", "station_info", *ACTION_TOOLS) else run(**arguments)
+        return run(session, **arguments) if name in ("top_tracks", "similar_to", "now_playing", "station_info", "my_likes", "recent_plays", *ACTION_TOOLS) else run(**arguments)
     except TypeError as e:
         return {"error": f"인자가 맞지 않습니다: {e}"}
     except Exception as e:  # 네트워크 실패 등 — 모델이 사용자에게 설명할 수 있도록 문구로 전달

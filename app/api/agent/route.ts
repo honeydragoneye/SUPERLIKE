@@ -35,6 +35,8 @@ export async function POST(request: NextRequest) {
     nowPlaying?: unknown;
     station?: unknown;
     canAct?: unknown;
+    likes?: unknown;
+    recent?: unknown;
   };
   try {
     body = await request.json();
@@ -110,6 +112,23 @@ export async function POST(request: NextRequest) {
             : [],
         }
       : undefined;
+  // the listener's liked songs and recent plays, only when they chose to share them; the agent reads them when asked
+  const listed = (raw: unknown, withTime: boolean) =>
+    Array.isArray(raw)
+      ? raw.slice(0, 30).flatMap((t): { title: string; artist: string; playedAt?: string }[] => {
+          const row = t as { title?: unknown; artist?: unknown; playedAt?: unknown };
+          if (typeof row.title !== "string" || !row.title) return [];
+          return [
+            {
+              title: line(row.title, 80),
+              artist: line(row.artist, 80),
+              ...(withTime && typeof row.playedAt === "string" ? { playedAt: row.playedAt.slice(0, 32) } : {}),
+            },
+          ];
+        })
+      : undefined;
+  const likes = listed(body.likes, false);
+  const recent = listed(body.recent, true);
   // whether the browser can carry out like / playback / station / playlist actions for this listener
   const canAct = body.canAct === true;
 
@@ -118,7 +137,7 @@ export async function POST(request: NextRequest) {
     upstream = await fetch(`${AGENT_URL}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, history, refine, sources, taste, nowPlaying, station, canAct }),
+      body: JSON.stringify({ question, history, refine, sources, taste, nowPlaying, station, canAct, likes, recent }),
       // closing the chat or sending the next question cuts the agent's work short too
       signal: request.signal,
       cache: "no-store",

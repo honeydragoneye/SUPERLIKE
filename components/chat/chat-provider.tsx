@@ -10,6 +10,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { useRouter } from "next/navigation";
 import { useLyricsView } from "@/components/lyrics/lyrics-view";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useCustomTags } from "@/components/station/use-custom-tags";
@@ -539,7 +540,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     return [];
   }, []);
 
-  const actionEnv = useCallback((shown?: () => ChatTrack[]): ActionEnv => ({ spotify: spotifyRef.current, lyrics: lyricsRef.current, shown: shown ?? shownTracks }), [shownTracks]);
+  const router = useRouter();
+  const actionEnv = useCallback(
+    (shown?: () => ChatTrack[]): ActionEnv => ({ spotify: spotifyRef.current, lyrics: lyricsRef.current, shown: shown ?? shownTracks, navigate: (href) => router.push(href) }),
+    [shownTracks, router],
+  );
 
   const actOn = useCallback<Ctx["actOn"]>(
     (messageId, actionId, op) => {
@@ -608,6 +613,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               : { playing: false },
             station: stationForAgent(spotifyRef.current),
             canAct: connectedRef.current,
+            // only what the listener chose to share: absent means off, and the agent says so when asked
+            likes: readTaste() ? likedSnapshot().slice(0, TASTE_MAX).map((t) => ({ title: t.title, artist: t.artist })) : undefined,
+            recent: readHistory()
+              ? spotifyRef.current.recent.slice(0, TASTE_MAX).map((t) => ({ title: t.title, artist: t.artist, playedAt: t.playedAt }))
+              : undefined,
           }),
           signal: controller.signal,
         });

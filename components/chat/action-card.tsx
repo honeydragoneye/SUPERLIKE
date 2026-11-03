@@ -102,6 +102,39 @@ function Line({ messageId, a }: { messageId: string; a: ChatAction }) {
   );
 }
 
+/** A follow: the artist, and the way back at the end of the line. */
+function Follow({ messageId, a }: { messageId: string; a: ChatAction }) {
+  const { actOn, busy } = useChat();
+  const undone = a.state === "undone";
+  const failed = a.state === "error";
+  const name = a.person?.name ?? a.artist;
+  const sub =
+    a.state === "working"
+      ? "팔로우하는 중…"
+      : failed
+        ? (a.note ?? "하지 못했어요")
+        : a.state === "already"
+          ? "이미 팔로우하고 있어요"
+          : undone
+            ? "팔로우를 취소했어요"
+            : "팔로우했어요";
+  return (
+    <li className="flex items-center gap-[8px] rounded-[8px] bg-chart py-[6px] pl-[6px] pr-[8px]">
+      <Tile src={a.person?.image} round />
+      <span className="flex min-w-0 flex-1 flex-col gap-px">
+        <span className={`w-full truncate text-[10px] ${undone ? "text-on-bright-muted" : "text-on-bright"}`}>{name}</span>
+        <span className={`w-full truncate text-[8px] tracking-[0.5px] ${failed ? "text-alert" : "text-on-bright-muted"}`}>{sub}</span>
+      </span>
+      {a.state === "done" && (
+        <Button disabled={busy} onClick={() => actOn(messageId, a.id, { type: "undo" })}>
+          취소
+        </Button>
+      )}
+      {failed && <Button onClick={() => actOn(messageId, a.id, { type: "retry" })}>다시 시도</Button>}
+    </li>
+  );
+}
+
 /** A station: begun at once, shown while it is built, opened when it is done. */
 function Station({ messageId, a }: { messageId: string; a: ChatAction }) {
   const { actOn } = useChat();
@@ -564,6 +597,8 @@ export function ActionCard({ messageId, a, live }: { messageId: string; a: ChatA
   if (a.kind === "addTo") return <AddTo messageId={messageId} a={a} />;
   if (a.kind === "station") return <Station messageId={messageId} a={a} />;
   if (a.kind === "playlist") return <Playlist messageId={messageId} a={a} />;
+  if (a.kind === "follow") return <Follow messageId={messageId} a={a} />;
+  // open: the window has moved, which says it; only a refusal is worth a line
   // next, previous: only a refusal is worth a line
   if (a.state === "error") return <li className="text-[8px] leading-[12px] tracking-[0.4px] text-alert">{a.note ?? "하지 못했어요"}</li>;
   return null;

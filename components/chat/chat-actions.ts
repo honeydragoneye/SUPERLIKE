@@ -2,6 +2,7 @@ import type { useSpotify, NowPlaying } from "@/components/player/spotify-provide
 import { mirrorLike } from "@/components/player/account-sync";
 import { seedFrom } from "@/components/ui/station-button";
 import { lookUp, type Found } from "@/components/ui/track-card";
+import { isFollowing, lastFailure, setFollowing } from "@/components/follow/follow-store";
 import { isLiked, toggle } from "@/lib/likes";
 import { addToPlaylist, createPlaylist, listPlaylists, playlistErrorText } from "@/lib/playlists";
 import type { ChatTrack } from "./chat-provider";
@@ -43,7 +44,7 @@ export type Before = {
 
 export type ChatAction = {
   id: string;
-  kind: "like" | "playback" | "mode" | "seek" | "volume" | "choice" | "queue" | "addTo" | "lyrics" | "stopStation" | "station" | "playlist";
+  kind: "like" | "playback" | "mode" | "seek" | "volume" | "choice" | "queue" | "addTo" | "lyrics" | "stopStation" | "station" | "playlist" | "open" | "follow";
   /** where the subject came from: the song playing (now), named by the listener, an artist, the songs shown, the station */
   source: "now" | "named" | "artist" | "shown" | "station";
   command?: "play" | "pause" | "resume" | "next" | "previous";
@@ -52,6 +53,10 @@ export type ChatAction = {
   artist: string;
   /** a playlist's name */
   name?: string;
+  /** open: which page to go to; `title` carries the search words, or the artist's or album's name */
+  page?: Page;
+  /** follow: the artist as Spotify has them, for the card and for taking the follow back */
+  person?: { id: string; name: string; image: string | null };
   /** mode: what to set; an empty side is left as it is */
   shuffle?: "on" | "off" | "";
   repeat?: "off" | "all" | "one" | "";
@@ -86,7 +91,19 @@ export type ChatAction = {
   via?: "station" | "queue";
 };
 
-const KINDS = ["like", "playback", "mode", "seek", "volume", "choice", "queue", "addTo", "lyrics", "stopStation", "station", "playlist"] as const;
+const KINDS = ["like", "playback", "mode", "seek", "volume", "choice", "queue", "addTo", "lyrics", "stopStation", "station", "playlist", "open", "follow"] as const;
+/** The places the chat can take the listener; the first seven are pages with a fixed address. */
+const PAGES = ["home", "history", "mypage", "issues", "weekly_artist", "editors_pick", "station", "search", "artist", "album"] as const;
+export type Page = (typeof PAGES)[number];
+const FIXED: Partial<Record<Page, { href: string; label: string }>> = {
+  home: { href: "/", label: "홈" },
+  history: { href: "/history", label: "최근 재생 기록" },
+  mypage: { href: "/mypage", label: "마이페이지" },
+  issues: { href: "/issues", label: "지난 호" },
+  weekly_artist: { href: "/weekly-artist", label: "금주의 아티스트" },
+  editors_pick: { href: "/editors-pick", label: "에디터스 픽" },
+  station: { href: "/station", label: "스테이션" },
+};
 const SOURCES = ["now", "named", "artist", "shown", "station"] as const;
 const COMMANDS = ["play", "pause", "resume", "next", "previous"] as const;
 const line = (v: unknown, n: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, n) : "");
@@ -98,6 +115,8 @@ export function actionFrom(raw: unknown): ChatAction | null {
   const a = raw as Record<string, unknown>;
   const kind = KINDS.find((k) => k === a.kind);
   if (!kind || typeof a.id !== "string") return null;
+  const page = PAGES.find((p) => p === a.page);
+  if (kind === "open" && (!page || (!FIXED[page] && !line(a.title, 120)))) return null;
   const command = COMMANDS.find((c) => c === a.command);
   const source = SOURCES.find((s) => s === a.source) ?? (kind === "playlist" ? "shown" : kind === "playback" || kind === "choice" ? "named" : "now");
   if (kind === "playback" && !command) return null;
@@ -117,6 +136,7 @@ export function actionFrom(raw: unknown): ChatAction | null {
     ...(command ? { command } : {}),
     title: line(a.title, 120),
     artist: line(a.artist, 120),
+    ...(kind === "open" ? { page } : {}),
     ...(kind === "playlist" ? { name: line(a.name, 60) || "새 플레이리스트" } : {}),
     ...(kind === "addTo" ? { name: line(a.name, 60) } : {}),
     ...(kind === "mode" ? { shuffle, repeat } : {}),
@@ -139,6 +159,8 @@ export type ActionEnv = {
   /** the lyrics popover: opened from the chat, shut again with the lyrics button as ever */
   lyrics: { open: boolean; toggle: () => void };
   shown: () => ChatTrack[];
+  /** moves the window to another page of the site */
+  navigate: (href: string) => void;
 };
 
 const toTrack = (f: Found): ActionTrack => ({
@@ -200,6 +222,19 @@ export async function startAction(a: ChatAction, env: ActionEnv): Promise<Partia
       // the account copy follows; the local heart already holds
       void mirrorLike(track, true);
       return { state: "done", tracks: [track] };
+    }
+
+    if (a.kind === "open") return await openPage(a, env);
+
+    if (a.kind === "follow") {
+      // "this artist" is the one on the song playing; otherwise the name the agent gave
+      const name = a.artist || playing(sp.now)?.artist || "";
+      const hit = name ? (await lookUpLink({ kind: "artist", name })).found : null;
+      if (!hit) return fail("Spotify에서 그 가수를 찾지 못했어요");
+      const person = { id: hit.id, name: hit.name, image: hit.image };
+      if (isFollowing(person.id)) return { state: "already", person };
+      if (!(await setFollowing(person, true))) return fail(lastFailure() ?? "팔로우하지 못했어요");
+      return { state: "done", person, summary: `${person.name}을(를) 팔로우했어요` };
     }
 
     if (a.kind === "playback") {
@@ -339,6 +374,26 @@ export async function startAction(a: ChatAction, env: ActionEnv): Promise<Partia
   }
 }
 
+/** Goes to the page asked for. An artist or an album is found by name first: a wrong page opened is worse than none. */
+async function openPage(a: ChatAction, env: ActionEnv): Promise<Partial<ChatAction>> {
+  const page = a.page;
+  if (!page) return fail("열 페이지를 모르겠어요");
+  const fixed = FIXED[page];
+  if (fixed) {
+    env.navigate(fixed.href);
+    return { state: "done", summary: `${fixed.label}(으)로 이동했어요` };
+  }
+  if (page === "search") {
+    env.navigate(`/search?q=${encodeURIComponent(a.title)}`);
+    return { state: "done", summary: `‘${a.title}’ 검색 결과로 이동했어요` };
+  }
+  const kind = page === "artist" ? "artist" : "album";
+  const hit = (await lookUpLink({ kind, name: a.title, ...(kind === "album" && a.artist ? { artist: a.artist } : {}) })).found;
+  if (!hit) return fail(kind === "artist" ? "Spotify에서 그 가수를 찾지 못했어요" : "Spotify에서 그 앨범을 찾지 못했어요");
+  env.navigate(`/${kind}/${hit.id}`);
+  return { state: "done", summary: `${hit.name} 페이지로 이동했어요` };
+}
+
 /** The level after the change. The store answers on the next render, so what was asked for is what counts. */
 function volumeNow(sp: Spotify, a: ChatAction, was: number): number {
   if (a.level !== undefined) return a.level / 100;
@@ -403,6 +458,10 @@ export async function undoAction(a: ChatAction, env: ActionEnv): Promise<Partial
     if (isLiked(track.id)) toggle(track);
     void mirrorLike(track, false);
     return { state: "undone", summary: "좋아요를 취소했어요" };
+  }
+  if (a.kind === "follow" && a.person) {
+    await setFollowing(a.person, false);
+    return { state: "undone", summary: `${a.person.name} 팔로우를 취소했어요` };
   }
   if (a.kind === "playback" && a.command === "play") {
     // what a play can be taken back to: silence

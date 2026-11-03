@@ -7,6 +7,7 @@
 POST /chat  {"question": str, "history": [{"role": "user"|"assistant", "content": str}, ...],
              "refine": {"label": str, "definition": str},   ← 선택. 있으면 그 태그의 기준을 정하는 대화
              "nowPlaying", "station", "canAct"}              ← 선택. 화면이 대신 알려 주는 지금 듣는 곡·스테이션, 동작 가능 여부
+             "likes", "recent"}                              ← 선택. 사용자가 공유를 켰을 때만 오는 좋아요한 곡·최근 재생
   → text/event-stream. 줄마다 `data: {이벤트 JSON}` — loop.run_agent의 이벤트에
     {"type": "error", "code", "message"}가 더해진다.
 GET /health → {"status": "ok", "model": ...}
@@ -114,6 +115,30 @@ def _clean_taste(raw: object) -> list[dict] | None:
     return out or None
 
 
+MAX_LISTED = 30
+
+
+def _clean_listed(raw: object, with_time: bool = False) -> list[dict] | None:
+    """화면이 보낸 곡 목록(좋아요·최근 재생). 없으면 None(공유를 끈 것), 빈 목록은 켰지만 기록이 없는 것.
+    모델에게 도구로 보이므로 개수와 길이를 자르고 한 줄로 만든다."""
+    if not isinstance(raw, list):
+        return None
+    out = []
+    for t in raw[:MAX_LISTED]:
+        if not isinstance(t, dict):
+            continue
+        title, artist = " ".join(str(t.get("title") or "").split())[:80], " ".join(str(t.get("artist") or "").split())[:80]
+        if not title:
+            continue
+        row = {"title": title, "artist": artist}
+        if with_time:
+            played = str(t.get("playedAt") or "")[:32]
+            if played:
+                row["playedAt"] = played
+        out.append(row)
+    return out
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "SuperlikeAgent"
 
@@ -154,6 +179,8 @@ class Handler(BaseHTTPRequestHandler):
         now_playing = _clean_now(body.get("nowPlaying"))
         station = _clean_station(body.get("station"))
         can_act = body.get("canAct") is True
+        likes = _clean_listed(body.get("likes"))
+        recent = _clean_listed(body.get("recent"), with_time=True)
 
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -166,7 +193,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         try:
-            for event in run_agent(history, question, cards=True, refine=refine, sources=sources, taste=taste, now_playing=now_playing, station=station, can_act=can_act):
+            for event in run_agent(history, question, cards=True, refine=refine, sources=sources, taste=taste, now_playing=now_playing, station=station, can_act=can_act, likes=likes, recent=recent):
                 send(event)
         except (BrokenPipeError, ConnectionResetError):
             pass  # 브라우저가 창을 닫거나 대화를 끊었다
