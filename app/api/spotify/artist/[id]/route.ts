@@ -150,10 +150,13 @@ export async function GET(
     if (!topTracks.length) {
       const names = await artistTopTracks(artist.name, 8).catch(() => []);
       const resolvedTracks = [];
+      const taken = new Set<string>();
       for (const n of names) {
         try {
           const { track } = await findTrack(n.name, artist.name);
-          if (track) {
+          // two Last.fm names (a remix, a live cut) can land on the same Spotify track
+          if (track && !taken.has(track.id)) {
+            taken.add(track.id);
             resolvedTracks.push({
               id: track.id,
               uri: track.uri,
