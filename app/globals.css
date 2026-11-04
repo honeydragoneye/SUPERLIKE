@@ -140,6 +140,13 @@
   .rule-b {
     border-bottom: 1px solid var(--color-rule);
   }
+  /* a song row: square, and a shade darker while the pointer is over it */
+  .track-row {
+    transition: background-color 0.12s;
+  }
+  .track-row:hover {
+    background-color: var(--color-soft);
+  }
   /* blocks that separate with horizontal rules instead of a full border */
   .rule-y {
     border-top: 1px solid var(--color-rule);

@@ -130,7 +130,7 @@ export function AlbumView({
               <li
                 key={t.id}
                 title={locked ? EXPLICIT_NOTE : undefined}
-                className={`group relative rule-b ${locked ? LOCKED_LOOK : ""}`}
+                className={`group relative rule-b track-row ${locked ? LOCKED_LOOK : ""}`}
               >
                 <button
                   type="button"

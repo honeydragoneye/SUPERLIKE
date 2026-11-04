@@ -63,6 +63,29 @@ async function findArtistId(userId: string, name: string, resolutions: Resolved[
   return hit.id;
 }
 
+type Details = {
+  artist: RawArtist;
+  image: string | null;
+  tags: string[];
+  tracks: { name: string }[];
+  palette: Palette | null;
+};
+
+/** What the screen shows about an artist: Spotify's name and picture, Last.fm's genres and songs, the picture's colours. */
+async function artistDetails(artistId: string, resolutions: Resolved[]): Promise<Details> {
+  const { data: artist, resolved } = await spotifyGet<RawArtist>(`/artists/${artistId}`);
+  resolutions.push(resolved);
+  const image = pickImage(artist.images, 320);
+
+  // Spotify no longer gives this app genres or top tracks, so Last.fm fills both (same as the artist screen)
+  const [tags, tracks, palette] = await Promise.all([
+    artist.genres?.length ? Promise.resolve(artist.genres.slice(0, 4)) : artistTopTags(artist.name, 4).catch(() => []),
+    artistTopTracks(artist.name, 8).catch(() => []),
+    image ? paletteFromImage(image).catch(() => null) : Promise.resolve(null),
+  ]);
+  return { artist, image, tags, tracks, palette };
+}
+
 /**
  * Keeps this week's row up to date. Cheap when nothing changed: one query
  * for the week's top artist and one for the saved row, and Spotify is only
@@ -88,16 +111,7 @@ export async function keepWeeklyArtist(userId: string): Promise<Resolved[]> {
   const artistId = top.artist_id ?? (await findArtistId(userId, top.name, resolutions));
   if (!artistId) return resolutions;
 
-  const { data: artist, resolved } = await spotifyGet<RawArtist>(`/artists/${artistId}`);
-  resolutions.push(resolved);
-  const image = pickImage(artist.images, 320);
-
-  // Spotify no longer gives this app genres or top tracks, so Last.fm fills both (same as the artist screen)
-  const [tags, tracks, palette] = await Promise.all([
-    artist.genres?.length ? Promise.resolve(artist.genres.slice(0, 4)) : artistTopTags(artist.name, 4).catch(() => []),
-    artistTopTracks(artist.name, 8).catch(() => []),
-    image ? paletteFromImage(image).catch(() => null) : Promise.resolve(null),
-  ]);
+  const { artist, image, tags, tracks, palette } = await artistDetails(artistId, resolutions);
 
   await query(
     `insert into weekly_picks (week_start, artist_id, name, image, genres, top_tracks, palette, plays)
@@ -120,12 +134,14 @@ export async function keepWeeklyArtist(userId: string): Promise<Resolved[]> {
   return resolutions;
 }
 
+export type Heard = { trackId: string; title: string; count: number; artwork: string | null };
+
 export type WeeklyArtist = {
   artist: { id: string; name: string; image: string | null; genres: string[]; topTracks: { title: string }[]; palette: Palette | null };
   plays: number;
   /** true when this is last week's pick because nothing has been saved for this week yet */
   previous: boolean;
-  heard: { title: string; count: number }[];
+  heard: Heard[];
 };
 
 /** The saved pick for this week, or the latest earlier one; null when there never was one. */
@@ -139,18 +155,62 @@ export async function weeklyArtist(ownerId: string): Promise<WeeklyArtist | null
        from weekly_picks order by week_start desc limit 1`,
   );
   if (!row) return null;
-  const heard = await query<{ title: string; count: number }>(
-    `select title, sum(count)::int as count
-       from plays_daily
-      where user_id = $1 and day >= $2::date and day < $2::date + 7
-        and (artist_id = $3 or artist = $4 or artist like $4 || ', %')
-      group by title order by count desc, title limit 10`,
-    [ownerId, row.week_start, row.artist_id, row.name],
-  );
+  const heard = await heardOf(ownerId, row.week_start, row.artist_id, row.name);
   return {
     artist: { id: row.artist_id, name: row.name, image: row.image, genres: row.genres, topTracks: row.top_tracks, palette: row.palette },
     plays: row.plays,
     previous: !row.is_current,
     heard,
+  };
+}
+
+/** The songs of one artist a listener played in the week starting `weekStart`, most played first. */
+async function heardOf(userId: string, weekStart: string, artistId: string, name: string): Promise<Heard[]> {
+  return query<Heard>(
+    `select min(track_id) as "trackId", title, sum(count)::int as count, max(album_artwork) as artwork
+       from plays_daily
+      where user_id = $1 and day >= $2::date and day < $2::date + 7
+        and (artist_id = $3 or artist = $4 or artist like $4 || ', %')
+      group by title order by count desc, title limit 10`,
+    [userId, weekStart, artistId, name],
+  );
+}
+
+/** Colours are worked out from the picture once per picture, not on every visit. */
+const palettes = new Map<string, Palette | null>();
+
+/**
+ * One listener's own Artist of the Week: the artist they played most this week
+ * (last week's when this week has no plays yet), with the songs they played.
+ * `null` when they have no plays in either week.
+ *
+ * Spotify is asked with the listener's own token, so this needs them signed in.
+ * Nothing is saved: the plays are in the database already, and the rest is one
+ * Spotify call and two Last.fm ones.
+ */
+export async function myWeeklyArtist(userId: string, resolutions: Resolved[]): Promise<WeeklyArtist | null> {
+  const [{ week_start, last_week }] = await query<{ week_start: string; last_week: string }>(
+    `select ${THIS_WEEK}::text as week_start, (${THIS_WEEK} - 7)::text as last_week`,
+  );
+  let weekStart = week_start;
+  let top = await topOfWeek(userId, weekStart);
+  if (!top) {
+    weekStart = last_week;
+    top = await topOfWeek(userId, weekStart);
+  }
+  if (!top) return null;
+
+  const artistId = top.artist_id ?? (await findArtistId(userId, top.name, resolutions));
+  if (!artistId) return null;
+
+  const { artist, image, tags, tracks, palette: fresh } = await artistDetails(artistId, resolutions);
+  if (image && !palettes.has(image)) palettes.set(image, fresh);
+  const palette = image ? (palettes.get(image) ?? null) : null;
+
+  return {
+    artist: { id: artist.id, name: artist.name, image, genres: tags, topTracks: tracks.map((t) => ({ title: t.name })), palette },
+    plays: top.plays,
+    previous: weekStart !== week_start,
+    heard: await heardOf(userId, weekStart, artist.id, artist.name),
   };
 }

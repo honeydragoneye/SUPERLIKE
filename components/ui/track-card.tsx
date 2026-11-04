@@ -181,7 +181,7 @@ export function TrackCard({ track, rank }: { track: TrackCardTrack; rank?: numbe
   return (
     <li
       title={locked ? EXPLICIT_NOTE : undefined}
-      className={`flex items-center gap-[8px] rounded-[8px] bg-chart py-[6px] pl-[6px] pr-[8px] ${locked ? LOCKED_LOOK : ""}`}
+      className={`flex items-center gap-[8px] rounded-[8px] bg-chart py-[6px] pl-[6px] pr-[8px] transition-colors hover:bg-soft ${locked ? LOCKED_LOOK : ""}`}
     >
       {rank !== undefined && (
         <span className="tnum w-[18px] shrink-0 text-right text-[11px] font-black text-on-bright">{rank}</span>

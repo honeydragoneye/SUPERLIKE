@@ -134,7 +134,7 @@ export function PlaylistPage({ id }: { id: string }) {
               <li
                 key={`${t.id}-${t.index}`}
                 title={locked ? EXPLICIT_NOTE : undefined}
-                className={`group relative shrink-0 rule-b ${locked ? LOCKED_LOOK : ""}`}
+                className={`group relative shrink-0 rule-b track-row ${locked ? LOCKED_LOOK : ""}`}
               >
                 <button
                   type="button"

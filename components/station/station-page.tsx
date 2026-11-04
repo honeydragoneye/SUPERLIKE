@@ -35,7 +35,7 @@ function StationRow({
     // on ··· must not also start the track
     <li
       title={locked ? EXPLICIT_NOTE : undefined}
-      className={`flex shrink-0 items-center gap-[12px] rule-b ${locked ? LOCKED_LOOK : ""}`}
+      className={`flex shrink-0 items-center gap-[12px] rule-b track-row ${locked ? LOCKED_LOOK : ""}`}
     >
       <button
         type="button"

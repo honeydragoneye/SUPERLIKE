@@ -144,7 +144,7 @@ export function SearchResults() {
                 <li
                   key={t.id}
                   title={locked ? EXPLICIT_NOTE : undefined}
-                  className={`group relative flex h-[52px] items-center gap-[12px] rule-b ${locked ? LOCKED_LOOK : ""}`}
+                  className={`group relative flex h-[52px] items-center gap-[12px] rule-b track-row ${locked ? LOCKED_LOOK : ""}`}
                 >
                   <span className="tnum w-[32px] shrink-0 text-[16px] font-black tracking-[-0.4px] text-on-bright">
                     {String(i + 1).padStart(2, "0")}

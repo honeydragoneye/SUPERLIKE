@@ -148,7 +148,7 @@ export function PlaylistPanel({ id, onClose }: { id: string; onClose: () => void
 
           <ul className="flex w-full shrink-0 flex-col border-t-[1.5px] border-rule">
             {tracks.map((t, i) => (
-              <li key={t.id} className="group relative shrink-0 rule-b">
+              <li key={t.id} className="group relative shrink-0 rule-b track-row">
                 <button
                   type="button"
                   onClick={() => playFrom(i)}

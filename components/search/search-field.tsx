@@ -237,7 +237,7 @@ export function SearchField() {
                 </li>
               ))}
               {songs.map((t) => (
-                <li key={t.id} className="rule-b">
+                <li key={t.id} className="rule-b track-row">
                   <button
                     type="button"
                     onClick={() => {

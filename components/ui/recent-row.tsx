@@ -33,7 +33,7 @@ export function RecentRow({
     /* shrink-0 is load-bearing: the scroll container is itself the flex column,
        so without it flex squeezes fifty rows into the container's height and
        there is no overflow left to scroll */
-    <li className="group relative shrink-0 rule-b">
+    <li className="group relative shrink-0 rule-b track-row">
       <button
         type="button"
         disabled={!playable}
