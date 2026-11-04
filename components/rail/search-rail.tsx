@@ -159,7 +159,6 @@ export function SearchRail() {
             </button>
           </>
         )}
-        <p className="text-[8px] font-medium text-on-bright-muted">이 기기에만 저장돼요</p>
       </div>
     </RailShell>
   );
