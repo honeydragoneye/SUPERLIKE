@@ -9,6 +9,12 @@ on:
   schedule:
     - cron: "0 9 * * 5"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = only test the secrets (sends nothing); auto = really send this week's issue"
+        type: choice
+        options: [check, auto]
+        default: check
 
 concurrency:
   group: weekly-issue
@@ -25,7 +31,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --omit=dev
-      - run: node scripts/issue.mjs auto
+      # a scheduled run has no input and sends; a manual run defaults to check, which sends nothing
+      - run: node scripts/issue.mjs ${{ inputs.mode || 'auto' }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OWNER_SPOTIFY_ID: ${{ secrets.OWNER_SPOTIFY_ID }}

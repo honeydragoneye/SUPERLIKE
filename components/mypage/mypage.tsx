@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AccountBanner } from "./account-banner";
 import { FollowedAlbums } from "./followed-albums";
 import { FollowingPanel } from "./following-panel";
+import { MailCheckPanel } from "./mail-check";
 import { PlaylistManager } from "./playlist-manager";
 import { PlaylistPanel } from "./playlist-panel";
 import { RadioManager } from "./radio-manager";
@@ -51,6 +52,7 @@ export function Mypage() {
           <FollowedAlbums onManage={() => showPanel("following")} />
           <PlaylistManager openId={openId} onOpen={open} />
           <RadioManager />
+          <MailCheckPanel />
         </div>
 
         <aside className="flex w-[341px] shrink-0 flex-col">

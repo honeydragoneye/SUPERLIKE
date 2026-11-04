@@ -10,7 +10,8 @@
     "agent": "agent/.venv/bin/python -m agent.server",
     "db:migrate": "node --env-file=.env.local scripts/db-migrate.mjs",
     "issue:draft": "node --env-file=.env.local scripts/issue.mjs draft",
-    "issue:send": "node --env-file=.env.local scripts/issue.mjs send"
+    "issue:send": "node --env-file=.env.local scripts/issue.mjs send",
+    "issue:check": "node --env-file=.env.local scripts/issue.mjs check"
   },
   "dependencies": {
     "hls.js": "^1.5.20",

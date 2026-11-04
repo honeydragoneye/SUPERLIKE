@@ -6,6 +6,7 @@
 //   npm run issue:send                     list who would receive it (nothing is sent)
 //   npm run issue:send -- --confirm        send it to every active subscriber and mark the issue sent
 //   npm run issue:draft -- --write         also let Gemini write the cover story and album lines (into the file, for you to edit)
+//   node scripts/issue.mjs check           tries every connection the weekly job needs (database, Gmail login, Last.fm, Gemini, site) and sends nothing
 //   node scripts/issue.mjs auto            what the Friday 18:00 KST job runs (.github/workflows/weekly-issue.yml):
 //                                          draft with Gemini's words, then send to every subscriber; nothing happens if the week was already sent
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -14,6 +15,7 @@ import { join } from "node:path";
 import nodemailer from "nodemailer";
 import pg from "pg";
 import sharp from "sharp";
+import { runChecks } from "../lib/mail-check.mjs";
 import { albumLabel, FACE_CID, FACE_PX, faceSvg, hydrate, monthLabel, render } from "../lib/issue-mail.mjs";
 
 const [command, ...flags] = process.argv.slice(2);
@@ -25,12 +27,26 @@ const option = (name) => {
 
 const { DATABASE_URL, OWNER_SPOTIFY_ID, GMAIL_USER, LASTFM_API_KEY } = process.env;
 const SITE = (process.env.SITE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
+
+/**
+ * `check`: knocks on every door the weekly job uses, and sends nothing (lib/mail-check.mjs).
+ * Values are never printed, only ok / the reason it failed, so the log is safe to read anywhere.
+ */
+async function check() {
+  const results = await runChecks();
+  for (const r of results) console.log(`${r.ok ? "ok  " : "FAIL"}  ${r.label}${r.detail ? ` — ${r.detail}` : ""}`);
+  const bad = results.filter((r) => !r.ok).length;
+  console.log(bad ? `\n${bad} problem${bad > 1 ? "s" : ""} — fix the values above before Friday.` : "\nall good — the Friday job has what it needs.");
+  process.exit(bad ? 1 : 0);
+}
+if (command === "check") await check();
+
 if (!DATABASE_URL || !OWNER_SPOTIFY_ID) {
   console.error("DATABASE_URL and OWNER_SPOTIFY_ID are needed (put them in .env.local).");
   process.exit(1);
 }
 if (command !== "draft" && command !== "send" && command !== "auto") {
-  console.error("usage: issue.mjs draft [--theme name] [--write] | send [--to address] [--confirm] | auto");
+  console.error("usage: issue.mjs draft [--theme name] [--write] | send [--to address] [--confirm] | auto | check");
   process.exit(1);
 }
 
