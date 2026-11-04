@@ -7,6 +7,8 @@ import { NextResponse, type NextRequest } from "next/server";
  * there and the event stream back.
  */
 const AGENT_URL = process.env.AGENT_URL ?? "http://127.0.0.1:8765";
+/** When the agent is put on the internet it only answers a caller that knows this key (AGENT_TOKEN on both sides). */
+const AGENT_TOKEN = process.env.AGENT_TOKEN;
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
 
@@ -136,7 +138,7 @@ export async function POST(request: NextRequest) {
   try {
     upstream = await fetch(`${AGENT_URL}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(AGENT_TOKEN ? { Authorization: `Bearer ${AGENT_TOKEN}` } : {}) },
       body: JSON.stringify({ question, history, refine, sources, taste, nowPlaying, station, canAct, likes, recent }),
       // closing the chat or sending the next question cuts the agent's work short too
       signal: request.signal,

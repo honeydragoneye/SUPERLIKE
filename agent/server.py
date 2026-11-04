@@ -2,7 +2,8 @@
 
     python -m agent.server          (또는 npm run agent)
 
-표준 라이브러리만 쓰고, 이 컴퓨터 안에서만 열린다 (127.0.0.1). 인증이 없으므로 밖으로 열지 않는다.
+표준 라이브러리만 쓰고, 기본은 이 컴퓨터 안에서만 열린다 (127.0.0.1). 밖으로 열 때(AGENT_HOST=0.0.0.0)는
+AGENT_TOKEN을 꼭 정하고, 사이트(Vercel)에도 같은 값을 넣는다. 포트는 AGENT_PORT 또는 PORT.
 
 POST /chat  {"question": str, "history": [{"role": "user"|"assistant", "content": str}, ...],
              "refine": {"label": str, "definition": str},   ← 선택. 있으면 그 태그의 기준을 정하는 대화
@@ -15,6 +16,7 @@ GET /health → {"status": "ok", "model": ...}
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -27,7 +29,10 @@ from agent.loop import run_agent
 from agent.tools import SOURCES
 
 HOST = os.environ.get("AGENT_HOST", "127.0.0.1")
-PORT = int(os.environ.get("AGENT_PORT", "8765"))
+# 호스팅 서비스(Render 등)는 포트를 PORT로 알려 준다
+PORT = int(os.environ.get("AGENT_PORT") or os.environ.get("PORT") or "8765")
+# 인터넷에 열 때만 정한다: 있으면 /chat은 "Authorization: Bearer <값>"을 보낸 호출만 받는다 (없으면 인증 없음 — 내 컴퓨터 안에서만 쓸 때)
+TOKEN = os.environ.get("AGENT_TOKEN", "")
 
 MAX_QUESTION = 2000
 MAX_HISTORY = 10          # 모델에게 보여 줄 이전 메시지 수 (사용자+어시스턴트 합산)
@@ -159,9 +164,17 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._json(404, {"error": "not_found"})
 
+    def _authorized(self) -> bool:
+        if not TOKEN:
+            return True
+        sent = self.headers.get("Authorization", "")
+        return hmac.compare_digest(sent.encode(), f"Bearer {TOKEN}".encode())
+
     def do_POST(self) -> None:
         if self.path != "/chat":
             return self._json(404, {"error": "not_found"})
+        if not self._authorized():
+            return self._json(401, {"error": "unauthorized"})
         try:
             length = int(self.headers.get("Content-Length", "0"))
             body = json.loads(self.rfile.read(length) or b"{}")
