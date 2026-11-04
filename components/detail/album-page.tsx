@@ -120,11 +120,6 @@ export function AlbumView({
               {data.label && (
                 <span className="text-[9px] text-on-bright-muted">{data.label}</span>
               )}
-              {data.upc && (
-                <span className="tnum text-[8px] tracking-[0.5px] text-on-bright-muted">
-                  UPC {data.upc}
-                </span>
-              )}
             </span>
           </div>
 

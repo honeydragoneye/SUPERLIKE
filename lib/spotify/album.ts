@@ -74,7 +74,6 @@ export async function fetchAlbumPage(id: string): Promise<{ page: AlbumPage; res
     label: album.label ?? null,
     artists: album.artists.map((a) => ({ id: a.id, name: a.name })),
     copyrights: (album.copyrights ?? []).map((c) => `${c.type === "P" ? "℗" : "©"} ${c.text}`),
-    upc: album.external_ids?.upc ?? null,
     tracks: items
       .slice()
       .sort((a, b) => a.disc_number - b.disc_number || a.track_number - b.track_number)

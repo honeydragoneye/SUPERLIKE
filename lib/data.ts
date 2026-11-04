@@ -180,7 +180,6 @@ export type AlbumPage = {
   label: string | null;
   artists: { id: string; name: string }[];
   copyrights: string[];
-  upc: string | null;
   tracks: AlbumTrack[];
 };
 
