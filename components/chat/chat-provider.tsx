@@ -313,7 +313,7 @@ async function* eventsOf(res: Response): AsyncGenerator<Record<string, unknown>>
   }
 }
 
-const OFFLINE = "에이전트가 꺼져 있어요. 터미널에서 npm run agent 를 실행해 주세요.";
+const OFFLINE = "에이전트에 연결하지 못했어요. 오래 쓰지 않았다면 서버가 깨어나는 데 1분쯤 걸려요. 잠시 뒤에 다시 시도해 주세요.";
 
 /** What the model is shown of the earlier turns: the cards' songs are not in the text, so they are added. */
 function historyOf(messages: ChatMessage[]): { role: "user" | "assistant"; content: string }[] {
