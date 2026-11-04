@@ -661,7 +661,7 @@ export function NowPlayingPanel() {
             </p>
           </div>
 
-          <ul className="scroll-y flex max-h-[min(340px,50vh)] w-full flex-col">
+          <ul className="scroll-y flex max-h-[min(340px,calc(50vh/var(--z)))] w-full flex-col">
             {upNext.map(({ uri, track }) => (
               <QueueItem
                 key={`${track.index}-${track.title}`}

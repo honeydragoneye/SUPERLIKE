@@ -12,6 +12,7 @@ import { LyricsViewProvider } from "@/components/lyrics/lyrics-view";
 import { SearchFocusProvider } from "@/components/search/search-focus";
 import { InlineScript } from "@/components/theme/inline-script";
 import { THEME_SCRIPT } from "@/components/theme/use-theme";
+import { PAGE_ZOOM_SCRIPT } from "@/lib/page-zoom";
 import "./globals.css";
 
 /**
@@ -46,6 +47,7 @@ export default function RootLayout({
     <html lang="ko" className={`${hankenGrotesk.variable} ${notoSansKR.variable}`} suppressHydrationWarning>
       <head>
         <InlineScript html={THEME_SCRIPT} />
+        <InlineScript html={PAGE_ZOOM_SCRIPT} />
       </head>
       <body className="font-[family-name:var(--font-hanken-grotesk),var(--font-noto-sans-kr)] font-bold">
         <SpotifyProvider>

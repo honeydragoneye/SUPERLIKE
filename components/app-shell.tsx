@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef } from "react";
+import { applyPageZoom, pageZoom } from "@/lib/page-zoom";
 import { usePathname } from "next/navigation";
 import { ActionBar } from "./action-bar";
 import { NowPlayingPanel } from "./now-playing-panel";
@@ -47,7 +48,9 @@ function useVisibleHeight(ref: React.RefObject<HTMLDivElement | null>, on: boole
     let frame = 0;
     const fit = () => {
       frame = 0;
-      el.style.height = `${Math.max(240, window.innerHeight - PLAYER - el.getBoundingClientRect().top)}px`;
+      // the page is zoomed (lib/page-zoom): the window and the rect are in screen px, the height is in the page's
+      const z = pageZoom();
+      el.style.height = `${Math.max(240, (window.innerHeight - PLAYER * z - el.getBoundingClientRect().top) / z)}px`;
     };
     const queue = () => {
       if (!frame) frame = requestAnimationFrame(fit);
@@ -136,10 +139,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const asideTop = home && !chat ? 0 : BAR;
   const sideShown = chat || rail;
   const chatColumn = useRef<HTMLDivElement>(null);
+
+  // a wider window scales the whole page; re-measured once mounted (the scrollbar is there by now) and on resize
+  useLayoutEffect(() => {
+    applyPageZoom();
+    window.addEventListener("resize", applyPageZoom);
+    return () => window.removeEventListener("resize", applyPageZoom);
+  }, []);
   useVisibleHeight(chatColumn, chat, pathname);
 
   return (
-    <main className="min-w-[1512px] bg-shell pb-[72px]">
+    <main className="page-zoom min-w-[1512px] bg-shell pb-[72px]">
       <Ticker />
       <SiteHeader />
 
@@ -173,7 +183,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           screen still fills it.
         */}
         <div
-          className="flex min-h-[calc(100vh-270px)] min-w-0 flex-col"
+          className="flex min-h-[calc(100vh/var(--z)-270px)] min-w-0 flex-col"
           style={{ gridColumn: "1 / 2", gridRow: "2 / 3" }}
         >
           {children}
@@ -199,7 +209,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               style={{
                 top: asideTop,
                 // the chat is measured (see useVisibleHeight); this is its height at the top of the page, for the first paint
-                height: `calc(100vh - ${chat ? BAR + 114 + PLAYER : asideTop + PLAYER}px)`,
+                height: `calc(100vh / var(--z) - ${chat ? BAR + 114 + PLAYER : asideTop + PLAYER}px)`,
               }}
             >
               {chat ? (

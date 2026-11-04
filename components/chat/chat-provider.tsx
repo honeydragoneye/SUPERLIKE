@@ -17,6 +17,7 @@ import { useCustomTags } from "@/components/station/use-custom-tags";
 import { loadChat, saveChat } from "@/lib/chat/history";
 import { actionFrom, cancelAction, chooseOption, makePlaylist, putInPlaylist, startAction, undoAction, type ActionEnv, type ChatAction } from "./chat-actions";
 import { snapshot as likedSnapshot } from "@/lib/likes";
+import { pageZoom } from "@/lib/page-zoom";
 import { updateCustomDefinition } from "@/lib/station/custom-tags";
 import type { CustomMoodKey } from "@/lib/station/filter";
 
@@ -143,7 +144,8 @@ const ChatContext = createContext<Ctx | null>(null);
 /** Half of the window, and never under the minimum: the chat may not take more than that. */
 function maxChatWidth(): number {
   if (typeof window === "undefined") return CHAT_MIN_WIDTH;
-  return Math.max(CHAT_MIN_WIDTH, Math.floor(window.innerWidth / 2));
+  // the column is laid out in the zoomed page's px (lib/page-zoom), the window is in screen px
+  return Math.max(CHAT_MIN_WIDTH, Math.floor(window.innerWidth / 2 / pageZoom()));
 }
 
 function clamp(px: number, max: number): number {

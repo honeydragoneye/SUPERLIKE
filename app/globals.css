@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* wider than the design's 1512px: the whole page scales together (see lib/page-zoom.ts) */
+:root {
+  --z: 1;
+}
+.page-zoom {
+  zoom: var(--z);
+}
+
 /* ---------------------------------------------------------------
    Superlike design tokens — mirrored from the Figma collection
    "superlike/tokens". Alpha is baked into each colour on purpose:

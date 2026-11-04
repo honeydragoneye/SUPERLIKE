@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { pageZoom } from "@/lib/page-zoom";
 import { CHAT_MIN_WIDTH, useChat } from "./chat-provider";
 
 /** One arrow-key press moves the edge this far. */
@@ -50,7 +51,8 @@ export function ChatResizer() {
       onPointerMove={(e) => {
         const d = drag.current;
         // the column grows leftwards: moving the pointer left is a wider chat
-        if (d) setWidth(d.startWidth + (d.startX - e.clientX));
+        // the pointer moves in screen px, the width is in the zoomed page's
+        if (d) setWidth(d.startWidth + (d.startX - e.clientX) / pageZoom());
       }}
       onPointerUp={() => {
         drag.current = null;

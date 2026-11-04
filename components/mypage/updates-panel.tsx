@@ -36,7 +36,7 @@ export function UpdatesPanel({ onClose }: { onClose: () => void }) {
   return (
     <section
       aria-label="소식"
-      className="sticky top-0 flex max-h-[calc(100dvh-290px)] min-h-[355px] w-full flex-col gap-[10px] overflow-y-auto px-[24px] pb-[24px] pt-[20px]"
+      className="sticky top-0 flex max-h-[calc(100dvh/var(--z)-290px)] min-h-[355px] w-full flex-col gap-[10px] overflow-y-auto px-[24px] pb-[24px] pt-[20px]"
     >
       <div className="flex w-full shrink-0 items-start justify-between gap-[12px]">
         <div className="flex min-w-0 flex-col gap-px">
