@@ -105,6 +105,7 @@ function MoreButton({
           <PlayerMenu
             ref={menu}
             items={items}
+            large
             onClose={() => setPos(null)}
             className="fixed z-50 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
             style={pos}

@@ -301,7 +301,9 @@ function PlayerCard({ messageId, a, live }: { messageId: string; a: ChatAction; 
   const { actOn } = useChat();
   const sp = useSpotify();
   const position = usePlaybackPosition();
-  if (!live) return <Record glyph="PLAYER" a={a} />;
+  // the card is about the song it was made for: once another one plays it is a record of what was done to that one
+  const moved = a.song !== undefined && sp.now?.uri !== a.song.uri;
+  if (!live || moved) return <Record glyph="PLAYER" a={{ ...a, summary: a.song && a.summary ? `${a.song.title} · ${a.summary}` : a.summary }} />;
   const now = sp.now;
   const ratio = now && now.durationMs ? Math.min(1, position / now.durationMs) : 0;
   return (

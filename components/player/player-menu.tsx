@@ -31,9 +31,9 @@ const ABOVE_BAR = "absolute bottom-[calc(100%+8px)] right-[16px] z-30 shadow-[0_
  */
 export const PlayerMenu = forwardRef<
   HTMLDivElement,
-  { items: PlayerMenuItem[]; onClose: () => void; className?: string; style?: CSSProperties }
+  { items: PlayerMenuItem[]; onClose: () => void; className?: string; style?: CSSProperties; large?: boolean }
 >(
-  function PlayerMenu({ items, onClose, className = ABOVE_BAR, style }, ref) {
+  function PlayerMenu({ items, onClose, className = ABOVE_BAR, style, large = false }, ref) {
     const [said, setSaid] = useState<string | null>(null);
 
     return (
@@ -42,11 +42,11 @@ export const PlayerMenu = forwardRef<
         role="menu"
         aria-label="세부 기능"
         style={style}
-        className={`flex w-[300px] flex-col rounded-[10px] bg-[#1f1f1f] p-[10px] text-on-dark ${className}`}
+        className={`flex flex-col bg-[#1f1f1f] ${large ? "w-[300px] rounded-[10px] p-[10px]" : "w-[248px] rounded-[8px] p-[8px]"} text-on-dark ${className}`}
       >
         {items.map((item) => (
           <div key={item.key} className="contents">
-            {item.dividerBefore && <div className="my-[5px] h-px bg-on-dark/15" aria-hidden />}
+            {item.dividerBefore && <div className={`${large ? "my-[5px]" : "my-[4px]"} h-px bg-on-dark/15`} aria-hidden />}
             <button
               type="button"
               role="menuitem"
@@ -58,9 +58,9 @@ export const PlayerMenu = forwardRef<
                   setTimeout(onClose, 900);
                 } else onClose();
               }}
-              className="flex w-full cursor-pointer items-center gap-[12px] rounded-[6px] px-[12px] py-[12px] text-left text-[15px] outline-none transition-colors hover:bg-white/10 focus-visible:bg-white/10 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+              className={`flex w-full cursor-pointer items-center rounded-[6px] text-left ${large ? "gap-[12px] px-[12px] py-[12px] text-[15px]" : "gap-[10px] px-[10px] py-[9px] text-[12px]"} outline-none transition-colors hover:bg-white/10 focus-visible:bg-white/10 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent`}
             >
-              <span className="w-[18px] shrink-0 text-center text-[14px] text-accent-bright" aria-hidden>
+              <span className={`shrink-0 text-center ${large ? "w-[18px] text-[14px]" : "w-[14px] text-[11px]"} text-accent-bright`} aria-hidden>
                 {said === item.key ? "✓" : item.mark}
               </span>
               {said === item.key ? item.confirm : item.label}

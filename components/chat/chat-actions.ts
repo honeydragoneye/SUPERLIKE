@@ -67,6 +67,8 @@ export type ChatAction = {
   level?: number;
   change?: number;
   mute?: "on" | "off" | "";
+  /** player cards: the song that was playing when this was done, so the card is not read as being about a later one */
+  song?: { uri: string; title: string };
   /** the songs found: the one liked or played, or those a playlist would hold */
   tracks?: ActionTrack[];
   /**
@@ -179,6 +181,11 @@ function playing(now: NowPlaying | null): ActionTrack | null {
   return { id: now.uri.slice(14), uri: now.uri, title: now.title, artist: now.artist, artwork: now.artwork, durationMs: now.durationMs, albumId: now.albumId };
 }
 
+/** The song a player card is about, kept as it was when the card was made. */
+function songOf(now: NowPlaying | null): ChatAction["song"] {
+  return now ? { uri: now.uri, title: now.title } : undefined;
+}
+
 const fail = (note: string): Partial<ChatAction> => ({ state: "error", note });
 const NOT_FOUND = "Spotify에서 그 곡을 찾지 못했어요";
 const NOTHING_PLAYING = "지금 재생 중인 곡이 없어요";
@@ -242,11 +249,11 @@ export async function startAction(a: ChatAction, env: ActionEnv): Promise<Partia
         case "pause":
           if (!sp.isPlaying) return { state: "already" };
           await sp.toggle();
-          return { state: "done", summary: "일시정지했어요", before: { paused: false } };
+          return { state: "done", summary: "일시정지했어요", before: { paused: false }, song: songOf(sp.now) };
         case "resume":
           if (sp.isPlaying) return { state: "already" };
           await sp.toggle();
-          return { state: "done", summary: "다시 재생했어요", before: { paused: true } };
+          return { state: "done", summary: "다시 재생했어요", before: { paused: true }, song: songOf(sp.now) };
         case "next":
           await sp.next();
           return { state: "done" };
@@ -275,7 +282,7 @@ export async function startAction(a: ChatAction, env: ActionEnv): Promise<Partia
         await sp.setRepeatTo(REPEAT_MODE[a.repeat]);
         said.push(REPEAT_SAYS[a.repeat]);
       }
-      return { state: "done", before, summary: said.join(" · ") };
+      return { state: "done", before, summary: said.join(" · "), song: songOf(sp.now) };
     }
 
     if (a.kind === "seek") {
@@ -292,6 +299,7 @@ export async function startAction(a: ChatAction, env: ActionEnv): Promise<Partia
       return {
         state: "done",
         before: { positionMs: at },
+        song: songOf(now),
         summary: target === 0 ? "처음으로 돌아갔어요" : `${clock(target)}으로 이동했어요`,
       };
     }
