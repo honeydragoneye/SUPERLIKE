@@ -7,14 +7,15 @@ import { PlayerMenu, type PlayerMenuItem } from "@/components/player/player-menu
 import { useSpotify } from "@/components/player/spotify-provider";
 import { AddToPlaylistModal } from "@/components/playlists/add-to-playlist-modal";
 import { seedFrom } from "./station-button";
+import { lookUp } from "./track-card";
 
 /** The menu's own height with five items, to decide whether it still fits below the button. */
-const MENU_H = 222;
+const MENU_H = 272;
 
 type Pos = { top: number; left: number };
 
 /** The menu's width, so it can be kept inside the window from either side. */
-const MENU_W = 248;
+const MENU_W = 300;
 const EDGE = 8;
 
 /**
@@ -203,6 +204,88 @@ export function TrackMore({ track, className }: { track: MoreTrack; className?: 
             albumId: track.albumId ?? null,
           }}
           onClose={() => setAdding(false)}
+        />
+      )}
+    </MoreButton>
+  );
+}
+
+/**
+ * ··· for a song a list names by title and artist only (Last.fm's 대표곡), with no Spotify id.
+ *
+ * Nothing is looked up until an item is pressed, so a list of these costs no
+ * searches. The song is found once, then every item works from what Spotify said.
+ */
+export function NamedTrackMore({ title, artist, className }: { title: string; artist: string; className?: string }) {
+  const router = useRouter();
+  const { startStation } = useSpotify();
+  const [adding, setAdding] = useState<MoreTrack | null>(null);
+
+  async function found(): Promise<MoreTrack | null> {
+    try {
+      const f = await lookUp({ title, artist });
+      if (!f) return null;
+      return {
+        id: f.id,
+        uri: f.uri,
+        title: f.name,
+        artist: f.artist,
+        artwork: f.artwork,
+        durationMs: f.durationMs,
+        albumId: f.albumId,
+        artistId: f.artistId,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  const items: PlayerMenuItem[] = [
+    {
+      key: "station",
+      mark: "▶",
+      label: "이 곡으로 스테이션 시작",
+      onSelect: () =>
+        void found().then((t) => t && startStation({ id: t.id, uri: t.uri, name: t.title, artist: t.artist, artwork: t.artwork, durationMs: t.durationMs })),
+    },
+    { key: "add", mark: "+", label: "플레이리스트에 담기", onSelect: () => void found().then((t) => t && setAdding(t)) },
+    {
+      key: "artist",
+      mark: "↗",
+      label: "아티스트 페이지로 이동",
+      dividerBefore: true,
+      onSelect: () => void found().then((t) => t?.artistId && router.push(`/artist/${t.artistId}`)),
+    },
+    {
+      key: "album",
+      mark: "↗",
+      label: "앨범 페이지로 이동",
+      onSelect: () => void found().then((t) => t?.albumId && router.push(`/album/${t.albumId}`)),
+    },
+    {
+      key: "link",
+      mark: "⧉",
+      label: "링크 복사",
+      confirm: "복사했어요",
+      dividerBefore: true,
+      onSelect: () => void found().then((t) => t && navigator.clipboard?.writeText(`https://open.spotify.com/track/${t.id}`)),
+    },
+  ];
+
+  return (
+    <MoreButton items={items} label={`${title} 세부 기능`} className={className}>
+      {adding && (
+        <AddToPlaylistModal
+          track={{
+            id: adding.id,
+            uri: adding.uri,
+            title: adding.title,
+            artist: adding.artist,
+            artwork: adding.artwork,
+            durationMs: adding.durationMs,
+            albumId: adding.albumId ?? null,
+          }}
+          onClose={() => setAdding(null)}
         />
       )}
     </MoreButton>

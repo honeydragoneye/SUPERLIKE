@@ -6,6 +6,7 @@ import { useSpotify, type QueueTrack } from "@/components/player/spotify-provide
 import { Icon } from "@/components/ui/icon";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { StationButton } from "@/components/ui/station-button";
+import { TrackMore } from "@/components/ui/more-menu";
 import {
   loadPlaylist,
   onPlaylistsChanged,
@@ -166,11 +167,11 @@ export function PlaylistPanel({ id, onClose }: { id: string; onClose: () => void
                     <span className="truncate text-[12px]">{t.title}</span>
                     <span className="truncate text-[9px] text-on-bright-muted">{t.artist}</span>
                   </span>
-                  <span className="tnum mr-[28px] w-[34px] shrink-0 text-right text-[10px]">{clock(t.durationMs)}</span>
+                  <span className="tnum mr-[58px] w-[34px] shrink-0 text-right text-[10px]">{clock(t.durationMs)}</span>
                 </button>
                 <StationButton
                   label={t.title}
-                  className="right-[100px]"
+                  className="right-[130px]"
                   seed={async () => ({
                     id: t.id,
                     uri: t.uri,
@@ -180,12 +181,16 @@ export function PlaylistPanel({ id, onClose }: { id: string; onClose: () => void
                     durationMs: t.durationMs,
                   })}
                 />
+                <TrackMore
+                  className="absolute right-[26px] top-1/2 -translate-y-1/2"
+                  track={{ id: t.id, uri: t.uri, title: t.title, artist: t.artist, artwork: t.artwork, durationMs: t.durationMs }}
+                />
                 <button
                   type="button"
                   aria-label={`${t.title} 목록에서 빼기`}
                   title="목록에서 빼기"
                   onClick={() => void removeFromPlaylist(id, t.id).catch((e) => setError(playlistErrorText(e)))}
-                  className="absolute right-[0px] top-1/2 -translate-y-1/2 cursor-pointer p-[6px] text-[11px] text-on-bright-muted opacity-0 transition-opacity hover:text-on-bright focus-visible:opacity-100 group-hover:opacity-100"
+                  className="absolute right-[0px] top-1/2 -translate-y-1/2 cursor-pointer p-[6px] text-[13px] text-on-bright-muted opacity-0 transition-opacity hover:text-on-bright focus-visible:opacity-100 group-hover:opacity-100"
                 >
                   ✕
                 </button>

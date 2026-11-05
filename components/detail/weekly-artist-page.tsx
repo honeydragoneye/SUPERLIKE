@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSpotify } from "@/components/player/spotify-provider";
+import { NamedTrackMore, TrackMore } from "@/components/ui/more-menu";
 import { lookUp } from "@/components/ui/track-card";
 import type { WeeklyArtist } from "@/lib/db/weekly";
 import { DetailStatus } from "./detail-shell";
@@ -55,17 +56,18 @@ function TopSong({ rank, title, artist }: { rank: number; title: string; artist:
     state === "busy" ? "찾는 중…" : state === "missing" ? "Spotify에서 찾지 못했어요" : state === "failed" ? "잠시 뒤 다시 눌러 주세요" : null;
 
   return (
-    <li className="rule-b track-row">
+    <li className="group relative rule-b track-row">
       <button
         type="button"
         onClick={() => void press()}
         title={connected ? `${title} 재생` : "Spotify를 연결하면 재생할 수 있어요"}
-        className={`flex h-[40px] w-full items-center gap-[10px] text-left ${connected ? "cursor-pointer" : "cursor-default"}`}
+        className={`flex h-[40px] w-full items-center gap-[10px] pr-[40px] text-left ${connected ? "cursor-pointer" : "cursor-default"}`}
       >
         <span className="tnum w-[18px] shrink-0 text-[10px] font-black text-on-bright-muted">{rank}</span>
         <span className="min-w-0 flex-1 truncate text-[12px]">{title}</span>
         {note && <span className="shrink-0 text-[9px] text-on-bright-muted">{note}</span>}
       </button>
+      {connected && <NamedTrackMore className="absolute right-[8px] top-1/2 -translate-y-1/2" title={title} artist={artist} />}
     </li>
   );
 }
@@ -193,11 +195,11 @@ export function WeeklyArtistPage() {
             <Section title={`${when} 들은 곡`}>
               <ul className="flex flex-col">
                 {heard.map((t, i) => (
-                  <li key={t.trackId} className="rule-b track-row">
+                  <li key={t.trackId} className="group relative rule-b track-row">
                     <button
                       type="button"
                       onClick={() => void play({ uris: rows.map((r) => r.uri).slice(i), tracks: rows.slice(i) })}
-                      className="flex h-[52px] w-full cursor-pointer items-center gap-[12px] text-left"
+                      className="flex h-[52px] w-full cursor-pointer items-center gap-[12px] pr-[40px] text-left"
                     >
                       <span className="tnum w-[24px] shrink-0 text-[12px] font-black text-on-bright-muted">{String(i + 1).padStart(2, "0")}</span>
                       <span className="relative size-[40px] shrink-0 overflow-hidden rounded-[4px] bg-artwork">
@@ -208,6 +210,18 @@ export function WeeklyArtistPage() {
                         <span className="truncate text-[13px]">{t.title}</span>
                       </span>
                     </button>
+                    <TrackMore
+                      className="absolute right-[8px] top-1/2 -translate-y-1/2"
+                      track={{
+                        id: t.trackId,
+                        uri: `spotify:track:${t.trackId}`,
+                        title: t.title,
+                        artist: artist.name,
+                        artwork: t.artwork,
+                        durationMs: 0,
+                        artistId: artist.id,
+                      }}
+                    />
                   </li>
                 ))}
               </ul>

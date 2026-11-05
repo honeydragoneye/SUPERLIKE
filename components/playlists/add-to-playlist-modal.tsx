@@ -195,7 +195,7 @@ export function AddToPlaylistModal({ track, onClose }: { track: PlaylistTrack; o
         role="dialog"
         aria-modal="true"
         aria-label={creating ? "새 플레이리스트" : "플레이리스트에 담기"}
-        className="flex max-h-[76vh] w-[440px] max-w-full flex-col gap-[16px] rounded-[10px] bg-[#1f1f1f] p-[24px] text-on-dark shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
+        className="page-zoom flex max-h-[calc(76vh/var(--z))] w-[440px] max-w-[calc(100%/var(--z))] flex-col gap-[16px] rounded-[10px] bg-[#1f1f1f] p-[24px] text-on-dark shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-on-dark/25 pb-[14px]">
           <h2 className="text-[17px] font-black">{creating ? "새 플레이리스트" : "플레이리스트에 담기"}</h2>

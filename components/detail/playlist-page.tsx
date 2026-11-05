@@ -6,6 +6,7 @@ import { EXPLICIT_NOTE, LOCKED_LOOK, useExplicitLock } from "@/components/ui/exp
 import { Icon } from "@/components/ui/icon";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { StationButton } from "@/components/ui/station-button";
+import { TrackMore } from "@/components/ui/more-menu";
 import { clock } from "@/lib/time";
 import type { PlaylistPage as Playlist } from "@/lib/data";
 import { DetailShell, DetailStatus } from "./detail-shell";
@@ -142,7 +143,7 @@ export function PlaylistPage({ id }: { id: string }) {
                   onClick={() =>
                     void play({ contextUri: data.uri, offsetUri: t.uri, tracks: rows })
                   }
-                  className="flex h-[46px] w-full cursor-pointer items-center gap-[12px] text-left disabled:cursor-default"
+                  className="flex h-[46px] w-full cursor-pointer items-center gap-[12px] pr-[40px] text-left disabled:cursor-default"
                 >
                   <span className="tnum w-[32px] shrink-0 text-[14px] font-black">
                     {t.index}
@@ -179,7 +180,7 @@ export function PlaylistPage({ id }: { id: string }) {
                 </button>
                 <StationButton
                   label={t.name}
-                  className="right-[64px]"
+                  className="right-[104px]"
                   locked={locked}
                   seed={async () => ({
                     id: t.id,
@@ -190,6 +191,12 @@ export function PlaylistPage({ id }: { id: string }) {
                     durationMs: t.durationMs,
                   })}
                 />
+                {!locked && (
+                  <TrackMore
+                    className="absolute right-[8px] top-1/2 -translate-y-1/2"
+                    track={{ id: t.id, uri: t.uri, title: t.name, artist: t.artist, artwork: t.artwork, durationMs: t.durationMs }}
+                  />
+                )}
               </li>
               );
             })}

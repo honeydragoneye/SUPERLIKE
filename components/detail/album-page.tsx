@@ -5,6 +5,7 @@ import { useSpotify } from "@/components/player/spotify-provider";
 import { EXPLICIT_NOTE, LOCKED_LOOK, useExplicitLock } from "@/components/ui/explicit";
 import { useRouter } from "next/navigation";
 import { StationButton } from "@/components/ui/station-button";
+import { TrackMore } from "@/components/ui/more-menu";
 import { clock, releaseLabel } from "@/lib/time";
 import type { AlbumPage as Album } from "@/lib/data";
 import { DetailShell, DetailStatus } from "./detail-shell";
@@ -138,7 +139,7 @@ export function AlbumView({
                   onClick={() =>
                     void play({ contextUri: data.uri, offsetUri: t.uri, tracks: rows })
                   }
-                  className="flex h-[44px] w-full cursor-pointer items-center gap-[12px] text-left disabled:cursor-default"
+                  className="flex h-[44px] w-full cursor-pointer items-center gap-[12px] pr-[40px] text-left disabled:cursor-default"
                 >
                   <span className="tnum w-[32px] shrink-0 text-right text-[11px] text-on-bright-muted">
                     {multiDisc ? `${t.discNumber}-${t.trackNumber}` : t.trackNumber}
@@ -156,7 +157,7 @@ export function AlbumView({
                 </button>
                 <StationButton
                   label={t.name}
-                  className="right-[64px]"
+                  className="right-[104px]"
                   locked={locked}
                   seed={async () => ({
                     id: t.id,
@@ -167,6 +168,20 @@ export function AlbumView({
                     durationMs: t.durationMs,
                   })}
                 />
+                {!locked && (
+                  <TrackMore
+                    className="absolute right-[8px] top-1/2 -translate-y-1/2"
+                    track={{
+                      id: t.id,
+                      uri: t.uri,
+                      title: t.name,
+                      artist: t.artist,
+                      artwork: data.artwork,
+                      durationMs: t.durationMs,
+                      albumId: data.id,
+                    }}
+                  />
+                )}
               </li>
               );
             })}

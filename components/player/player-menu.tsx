@@ -42,11 +42,11 @@ export const PlayerMenu = forwardRef<
         role="menu"
         aria-label="세부 기능"
         style={style}
-        className={`flex w-[248px] flex-col rounded-[8px] bg-[#1f1f1f] p-[8px] text-on-dark ${className}`}
+        className={`flex w-[300px] flex-col rounded-[10px] bg-[#1f1f1f] p-[10px] text-on-dark ${className}`}
       >
         {items.map((item) => (
           <div key={item.key} className="contents">
-            {item.dividerBefore && <div className="my-[4px] h-px bg-on-dark/15" aria-hidden />}
+            {item.dividerBefore && <div className="my-[5px] h-px bg-on-dark/15" aria-hidden />}
             <button
               type="button"
               role="menuitem"
@@ -58,9 +58,9 @@ export const PlayerMenu = forwardRef<
                   setTimeout(onClose, 900);
                 } else onClose();
               }}
-              className="flex w-full cursor-pointer items-center gap-[10px] rounded-[6px] px-[10px] py-[9px] text-left text-[12px] outline-none transition-colors hover:bg-white/10 focus-visible:bg-white/10 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+              className="flex w-full cursor-pointer items-center gap-[12px] rounded-[6px] px-[12px] py-[12px] text-left text-[15px] outline-none transition-colors hover:bg-white/10 focus-visible:bg-white/10 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
             >
-              <span className="w-[14px] shrink-0 text-center text-[11px] text-accent-bright" aria-hidden>
+              <span className="w-[18px] shrink-0 text-center text-[14px] text-accent-bright" aria-hidden>
                 {said === item.key ? "✓" : item.mark}
               </span>
               {said === item.key ? item.confirm : item.label}

@@ -215,6 +215,9 @@ function RecCard({ rec, index }: { rec: Rec; index: number }) {
   const { connected, play } = useSpotify();
   const [seed, setSeed] = useState<Found | null>(null);
   const [looked, setLooked] = useState(false);
+  /** Spotify did not answer (rate limited, offline): not the same as the song not being there, and worth pressing again */
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const locked = useExplicitLock()(seed?.explicit);
   const tone = SLEEVE_TONES[index % SLEEVE_TONES.length];
 
@@ -236,22 +239,49 @@ function RecCard({ rec, index }: { rec: Rec; index: number }) {
     if (!connected || !near) return;
     let live = true;
     lookUp({ title: rec.title, artist: rec.artist })
-      .then((s) => live && (setSeed(s), setLooked(true)))
-      .catch(() => live && setLooked(true));
+      .then((s) => live && (setSeed(s), setLooked(true), setFailed(false)))
+      .catch(() => live && (setLooked(true), setFailed(true)));
     return () => {
       live = false;
     };
-  }, [connected, near, rec.title, rec.artist]);
+  }, [connected, near, rec.title, rec.artist, attempt]);
+
+  /**
+   * What a press says when there is nothing to play yet, for two seconds and then gone.
+   * Silence read as a broken button; a line that stays under every card read as clutter.
+   */
+  const [flash, setFlash] = useState<{ text: string; shown: boolean } | null>(null);
+  const timers = useRef<number[]>([]);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  function say(text: string) {
+    timers.current.forEach(clearTimeout);
+    setFlash({ text, shown: true });
+    timers.current = [
+      window.setTimeout(() => setFlash((f) => f && { ...f, shown: false }), 1700),
+      window.setTimeout(() => setFlash(null), 2000),
+    ];
+  }
+  function press() {
+    if (seed) return void play({ uris: [seed.uri] });
+    if (failed) {
+      // Spotify did not answer: ask again, and say so
+      setFailed(false);
+      setLooked(false);
+      setAttempt((n) => n + 1);
+      return say("Spotify가 답하지 않아요 · 다시 찾는 중이에요");
+    }
+    say(looked ? "Spotify에서 찾지 못했어요" : "곡을 찾는 중이에요");
+  }
 
   return (
     <article ref={card} className="group flex w-[150px] shrink-0 snap-start flex-col gap-[8px]">
       <button
         type="button"
-        disabled={!seed || locked}
-        onClick={() => seed && void play({ uris: [seed.uri] })}
+        disabled={locked}
+        onClick={press}
         aria-label={`${rec.title} 재생`}
-        title={locked ? EXPLICIT_NOTE : looked && !seed ? "Spotify에서 이 곡을 찾지 못했어요" : "재생"}
-        className={`group relative aspect-square w-full shrink-0 overflow-hidden rounded-[4px] enabled:cursor-pointer disabled:cursor-default ${sleeve[tone]} ${locked ? LOCKED_LOOK : ""}`}
+        title={locked ? EXPLICIT_NOTE : "재생"}
+        className={`group relative aspect-square w-full shrink-0 overflow-hidden rounded-[4px] ${connected ? "enabled:cursor-pointer" : ""} disabled:cursor-default ${sleeve[tone]} ${locked ? LOCKED_LOOK : ""}`}
       >
         {seed?.artworkLarge ? (
           <Image src={seed.artworkLarge} alt="" fill sizes="150px" className="object-cover" unoptimized />
@@ -260,6 +290,14 @@ function RecCard({ rec, index }: { rec: Rec; index: number }) {
             <Icon name="release-disc" size={77} />
             <Icon name="release-ring" size={32} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
             <Icon name="release-hole" size={9} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
+          </span>
+        )}
+        {flash && (
+          <span
+            role="status"
+            className={`absolute inset-x-[8px] bottom-[8px] rounded-[4px] bg-black/75 px-[8px] py-[5px] text-center text-[9px] leading-[12px] text-paper-solid transition-opacity duration-300 ${flash.shown ? "opacity-100" : "opacity-0"}`}
+          >
+            {flash.text}
           </span>
         )}
         {seed && !locked && (

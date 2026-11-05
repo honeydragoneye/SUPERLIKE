@@ -12,7 +12,7 @@ import { MANUAL, type ManualBlock, type ManualSection } from "./content";
 export function ManualPage() {
   return (
     <DetailShell eyebrow="ABOUT" title="이용 안내">
-      <div className="flex max-w-[1080px] flex-col pt-[4px]">
+      <div className="mx-auto flex w-full max-w-[1080px] flex-col pt-[4px]">
         {MANUAL.map((section, i) => (
           <Section key={section.id} index={i + 1} section={section} />
         ))}

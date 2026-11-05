@@ -7,6 +7,7 @@ import { EXPLICIT_NOTE, LOCKED_LOOK, useExplicitLock } from "@/components/ui/exp
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { StationButton } from "@/components/ui/station-button";
+import { TrackMore } from "@/components/ui/more-menu";
 import { clock } from "@/lib/time";
 import type { ArtistPage as Artist, SearchArtist } from "@/lib/data";
 import { pickEntities } from "@/lib/suggest";
@@ -138,7 +139,7 @@ export function ArtistPage({ id }: { id: string }) {
                     type="button"
                     disabled={locked}
                     onClick={() => void play({ uris: [t.uri] })}
-                    className="flex h-[46px] w-full cursor-pointer items-center gap-[12px] text-left disabled:cursor-default"
+                    className="flex h-[46px] w-full cursor-pointer items-center gap-[12px] pr-[40px] text-left disabled:cursor-default"
                   >
                     <span className="tnum w-[24px] shrink-0 text-[14px] font-black">
                       {String(i + 1).padStart(2, "0")}
@@ -163,7 +164,7 @@ export function ArtistPage({ id }: { id: string }) {
                   </button>
                   <StationButton
                     label={t.name}
-                    className="right-[64px]"
+                    className="right-[104px]"
                     locked={locked}
                     seed={async () => ({
                       id: t.id,
@@ -174,6 +175,21 @@ export function ArtistPage({ id }: { id: string }) {
                       durationMs: t.durationMs,
                     })}
                   />
+                  {!locked && (
+                    <TrackMore
+                      className="absolute right-[8px] top-1/2 -translate-y-1/2"
+                      track={{
+                        id: t.id,
+                        uri: t.uri,
+                        title: t.name,
+                        artist: data.name,
+                        artwork: t.artwork,
+                        durationMs: t.durationMs,
+                        albumId: t.albumId || null,
+                        artistId: data.id,
+                      }}
+                    />
+                  )}
                 </li>
                 );
               })}
