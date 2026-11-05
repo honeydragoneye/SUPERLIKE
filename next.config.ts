@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   // the OAuth redirect URI is registered on 127.0.0.1, so dev traffic
   // arrives from that host rather than localhost
   allowedDevOrigins: ["127.0.0.1"],
+  // the dev-only "N" badge sat on the player bar's cover; error overlays still appear without it
+  devIndicators: false,
   images: {
     remotePatterns: [
       // Spotify album artwork

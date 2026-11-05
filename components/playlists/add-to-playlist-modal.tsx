@@ -188,7 +188,7 @@ export function AddToPlaylistModal({ track, onClose }: { track: PlaylistTrack; o
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-[16px] pt-[12vh]"
+      className="fixed inset-0 z-[80] flex items-start justify-center bg-black/60 px-[16px] pt-[12vh]"
       onPointerDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div

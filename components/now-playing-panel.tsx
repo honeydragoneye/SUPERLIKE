@@ -17,6 +17,7 @@ import type { Track } from "@/lib/data";
 import { moodLabel } from "@/lib/station/custom-tags";
 import { PlayerMenu, type PlayerMenuItem } from "./player/player-menu";
 import { AddToPlaylistModal } from "./playlists/add-to-playlist-modal";
+import { PlayerMode } from "./player/player-mode";
 
 /** One empty array for every list the panel holds back during hydration. */
 const NOTHING: never[] = [];
@@ -143,6 +144,8 @@ export function NowPlayingPanel() {
   const nowId = now?.uri?.startsWith("spotify:track:") ? now.uri.slice(14) : null;
   const rejectable = stationActive && mood !== null && nowId !== null && now !== null;
   const [moreOpen, setMoreOpen] = useState(false);
+  /** 플레이어 모드: the song full-window, opened from the cover */
+  const [modeOpen, setModeOpen] = useState(false);
   /** the playlist picker, opened from the + and from the ··· menu */
   const [adding, setAdding] = useState(false);
   const closeAdding = () => setAdding(false);
@@ -352,7 +355,14 @@ export function NowPlayingPanel() {
   return (
     <section className="relative flex h-full w-full items-center gap-[24px] bg-panel px-[16px] text-on-dark">
       <div className="flex w-[340px] shrink-0 items-center gap-[12px]">
-        <div className="relative size-[48px] shrink-0 overflow-hidden rounded-[3px] bg-artwork">
+        <button
+          type="button"
+          disabled={!now}
+          aria-label="플레이어 모드 열기"
+          title={now ? "크게 보기 (플레이어 모드)" : undefined}
+          onClick={() => setModeOpen(true)}
+          className="relative size-[48px] shrink-0 cursor-pointer overflow-hidden rounded-[3px] bg-artwork transition-opacity enabled:hover:opacity-80 disabled:cursor-default"
+        >
           {artwork && (
             <Image
               src={artwork}
@@ -363,7 +373,7 @@ export function NowPlayingPanel() {
               unoptimized
             />
           )}
-        </div>
+        </button>
         <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
           <p className="w-full truncate text-[15px] tracking-[-0.2px]" title={title}>
             {title}
@@ -672,6 +682,8 @@ export function NowPlayingPanel() {
           </ul>
         </div>
       )}
+
+      {modeOpen && now && <PlayerMode upNext={upNextSource} onPlay={playRow} onClose={() => setModeOpen(false)} />}
 
       {lyricsOpen && <LyricsPopover ref={popoverRef} />}
 

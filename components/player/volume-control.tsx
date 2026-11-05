@@ -4,7 +4,7 @@ import { useHydrated } from "@/components/ui/use-hydrated";
 import { useSpotify } from "./spotify-provider";
 
 /** The speaker, with as many waves as the level has; muted wears a cross instead. */
-function Speaker({ waves, muted, size = 14 }: { waves: 0 | 1 | 2; muted: boolean; size?: number }) {
+export function Speaker({ waves, muted, size = 14 }: { waves: 0 | 1 | 2; muted: boolean; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>
       <path d="M1.5 6h2.8L8 3v10L4.3 10H1.5z" fill="currentColor" />
@@ -15,7 +15,7 @@ function Speaker({ waves, muted, size = 14 }: { waves: 0 | 1 | 2; muted: boolean
   );
 }
 
-const wavesOf = (volume: number): 0 | 1 | 2 => (volume === 0 ? 0 : volume < 0.5 ? 1 : 2);
+export const wavesOf = (volume: number): 0 | 1 | 2 => (volume === 0 ? 0 : volume < 0.5 ? 1 : 2);
 
 /**
  * The volume button of the player bar, and the slider that opens above it.

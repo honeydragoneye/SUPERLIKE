@@ -6,16 +6,17 @@ import { useRouter } from "next/navigation";
 import { PlayerMenu, type PlayerMenuItem } from "@/components/player/player-menu";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { AddToPlaylistModal } from "@/components/playlists/add-to-playlist-modal";
+import { pageZoom } from "@/lib/page-zoom";
 import { seedFrom } from "./station-button";
 import { lookUp } from "./track-card";
 
 /** The menu's own height with five items, to decide whether it still fits below the button. */
-const MENU_H = 272;
+const MENU_H = 222;
 
 type Pos = { top: number; left: number };
 
 /** The menu's width, so it can be kept inside the window from either side. */
-const MENU_W = 300;
+const MENU_W = 248;
 const EDGE = 8;
 
 /**
@@ -26,15 +27,20 @@ const EDGE = 8;
  * The menu lines its right edge up with the button, then is pulled back inside
  * the window, so a button in the first column or the last one never cuts it off;
  * it opens upward when there is no room below, and is held inside the window
- * when there is no room either way.
+ * when there is no room either way. It lives outside the zoomed page, so it is
+ * zoomed by the same factor and its size and position are worked out with it.
  */
 function anchorOf(button: HTMLElement): Pos {
+  const z = pageZoom();
+  const w = MENU_W * z;
+  const h = MENU_H * z;
   const r = button.getBoundingClientRect();
-  const left = Math.min(Math.max(EDGE, r.right - MENU_W), window.innerWidth - MENU_W - EDGE);
+  const left = Math.min(Math.max(EDGE, r.right - w), window.innerWidth - w - EDGE);
   const below = r.bottom + 6;
-  const above = r.top - 6 - MENU_H;
-  const top = below + MENU_H + EDGE <= window.innerHeight ? below : above >= EDGE ? above : Math.max(EDGE, window.innerHeight - MENU_H - EDGE);
-  return { top, left };
+  const above = r.top - 6 - h;
+  const top = below + h + EDGE <= window.innerHeight ? below : above >= EDGE ? above : Math.max(EDGE, window.innerHeight - h - EDGE);
+  // the menu is drawn at the page's zoom, and `zoom` scales a fixed box's offsets too
+  return { top: top / z, left: left / z };
 }
 
 /**
@@ -105,9 +111,8 @@ function MoreButton({
           <PlayerMenu
             ref={menu}
             items={items}
-            large
             onClose={() => setPos(null)}
-            className="fixed z-50 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+            className="page-zoom fixed z-[80] shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
             style={pos}
           />,
           document.body,
