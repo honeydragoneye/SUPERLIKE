@@ -258,3 +258,16 @@ create index if not exists recent_tracks_user_played on recent_tracks (user_id, 
 -- When Spotify's own last fifty plays were copied into recent_tracks, once per user.
 -- After that the list grows only from plays made in Superlike (lib/db/recent.ts).
 alter table users add column if not exists recent_imported_at timestamptz;
+
+-- People following people, among the accounts that have signed in to Superlike.
+-- Whether a follower may see what someone listens to is the followed person's
+-- choice: share_activity is off until they turn it on (lib/db/people.ts).
+alter table users add column if not exists share_activity boolean not null default false;
+create table if not exists user_follows (
+  follower_id text not null references users (spotify_id) on delete cascade,
+  target_id   text not null references users (spotify_id) on delete cascade,
+  followed_at timestamptz not null default now(),
+  primary key (follower_id, target_id),
+  check (follower_id <> target_id)
+);
+create index if not exists user_follows_target on user_follows (target_id);

@@ -11,7 +11,8 @@ import { PlaylistPanel } from "./playlist-panel";
 import { RadioManager } from "./radio-manager";
 import { UpdatesPanel } from "./updates-panel";
 import { RecentlyPlayed } from "@/components/recently-played";
-import { FollowCounts, Listeners } from "./side-panels";
+import { PeoplePanel } from "./people-panel";
+import { FollowCounts, Listeners, PeopleSync, type SidePanel } from "./side-panels";
 
 /**
  * 마이페이지: the account across the top, the listening history on the left,
@@ -33,17 +34,19 @@ export function Mypage() {
   const params = useSearchParams();
   const openId = params.get("playlist");
   const panelParam = params.get("panel");
-  const panel = panelParam === "following" || panelParam === "updates" ? panelParam : null;
+  const panel: SidePanel | null =
+    panelParam === "following" || panelParam === "updates" || panelParam === "followers" || panelParam === "people" ? panelParam : null;
 
   const go = useCallback(
     (query: string) => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }),
     [router, pathname],
   );
   const open = useCallback((id: string | null) => go(id ? `playlist=${id}` : ""), [go]);
-  const showPanel = useCallback((name: "following" | "updates" | null) => go(name ? `panel=${name}` : ""), [go]);
+  const showPanel = useCallback((name: SidePanel | null) => go(name ? `panel=${name}` : ""), [go]);
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-card text-on-bright">
+      <PeopleSync />
       <AccountBanner />
 
       <div className="flex min-h-0 flex-1">
@@ -57,13 +60,15 @@ export function Mypage() {
 
         <aside className="flex w-[341px] shrink-0 flex-col">
           <FollowCounts
-            followingOpen={!openId && panel === "following"}
-            onFollowing={() => showPanel(!openId && panel === "following" ? null : "following")}
+            open={openId ? null : panel}
+            onOpen={(name) => showPanel(!openId && panel === name ? null : name)}
           />
           {openId ? (
             <PlaylistPanel key={openId} id={openId} onClose={() => open(null)} />
           ) : panel === "following" ? (
             <FollowingPanel onClose={() => showPanel(null)} />
+          ) : panel === "followers" || panel === "people" ? (
+            <PeoplePanel tab={panel} onTab={(tab) => showPanel(tab)} onClose={() => showPanel(null)} />
           ) : panel === "updates" ? (
             <UpdatesPanel onClose={() => showPanel(null)} />
           ) : (

@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useDetail } from "@/components/detail/use-detail";
+import { usePeopleState } from "@/components/people/people-store";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useTheme } from "@/components/theme/use-theme";
@@ -30,6 +32,9 @@ export function AccountBanner() {
   // a profile fetched before disconnecting must not outlive the session
   const profile = connected ? data : null;
   const premium = profile?.product === "premium";
+  // the link to the own page needs only the id, which the people list has even when Spotify's profile could not be read
+  const { me } = usePeopleState();
+  const myId = connected ? (me?.id ?? profile?.id ?? null) : null;
   const { theme, setTheme } = useTheme();
 
   return (
@@ -90,27 +95,42 @@ export function AccountBanner() {
       </div>
 
       {/* the system decides until a press: the pressed one is what the page shows now, chosen or not */}
-      <div role="group" aria-label="화면 모드" className="mt-[2px] flex shrink-0 items-center gap-[6px]">
-        {(
-          [
-            ["light", "라이트"],
-            ["dark", "다크"],
-          ] as const
-        ).map(([mode, label]) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => setTheme(mode)}
-            aria-pressed={theme === mode}
-            className={`flex h-[28px] shrink-0 cursor-pointer items-center whitespace-nowrap rounded-pill px-[16px] text-[9px] tracking-[0.6px] ${
-              theme === mode
-                ? "bg-paper-solid text-black"
-                : "border-[1.5px] border-on-dark-muted text-on-dark-muted transition-colors hover:text-on-dark"
-            }`}
+      <div className="mt-[2px] flex shrink-0 items-center gap-[12px]">
+        {myId && (
+          <Link
+            href={`/user/${encodeURIComponent(myId)}`}
+            title="다른 사람에게 보이는 내 프로필"
+            className="flex h-[28px] shrink-0 items-center whitespace-nowrap rounded-pill border-[1.5px] border-on-dark-muted px-[16px] text-[9px] tracking-[0.6px] text-on-dark-muted transition-colors hover:text-on-dark"
           >
-            {label}
-          </button>
-        ))}
+            내 프로필
+          </Link>
+        )}
+        <div
+          role="group"
+          aria-label="화면 모드"
+          className="flex shrink-0 items-center gap-[6px]"
+        >
+          {(
+            [
+              ["light", "라이트"],
+              ["dark", "다크"],
+            ] as const
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setTheme(mode)}
+              aria-pressed={theme === mode}
+              className={`flex h-[28px] shrink-0 cursor-pointer items-center whitespace-nowrap rounded-pill px-[16px] text-[9px] tracking-[0.6px] ${
+                theme === mode
+                  ? "bg-paper-solid text-black"
+                  : "border-[1.5px] border-on-dark-muted text-on-dark-muted transition-colors hover:text-on-dark"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
     </section>
   );
