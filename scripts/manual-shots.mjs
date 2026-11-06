@@ -57,6 +57,13 @@ const FIX = {
   playlists: [
     ["밤에 듣는 노래", 12, "#8b2f1d", "#3a0f08", "#d9b45a"], ["드라이브", 34, "#1f4e79", "#0b2036", "#7fb7e6"], ["가사 없는 집중용", 8, "#2f5d3a", "#10281a", "#a9d18e"], ["운동할 때", 21, "#6b2d6e", "#2a0f2c", "#e6a0e8"], ["새벽 감성", 15, "#3b3f58", "#14162a", "#9aa3e0"], ["출근길", 9, "#7a5a1f", "#2f220a", "#f0cf7a"], ["주말 오후", 17, "#7a2f3c", "#2e0f16", "#f0a0b0"],
   ].map(([name, n, bg, bgDeep, disc], i) => ({ id: "p" + i, name, isPublic: false, updatedAt: new Date(Date.now() - i * 86400000).toISOString(), palette: { bg, bgDeep, disc }, count: n, has: false })),
+  // made-up listeners: one follows both ways, one only the listener follows, one only follows the listener, one is unrelated
+  people: [
+    { id: "minji", name: "minji", following: true, followsMe: true, shared: true, recent: C[1].name },
+    { id: "jun", name: "jun", following: true, followsMe: false, shared: false, recent: null },
+    { id: "sora", name: "sora", following: false, followsMe: true, shared: true, recent: null },
+    { id: "hana", name: "hana", following: false, followsMe: false, shared: false, recent: null },
+  ],
   follows: C.slice(0, 3).map((c, i) => ({ id: "ar" + i, name: c.artist, image: c.art, followedAt: new Date(Date.now() - (i + 5) * 86400000).toISOString(), lastRelease: "2026-10-" + (24 - i * 3) })),
   updates: C.slice(0, 6).map((c, i) => ({ id: String(900 + i), title: c.name, kind: i % 3 === 2 ? "single" : i % 3 === 1 ? "ep" : "album", releaseDate: "2026-10-" + String(24 - i * 3).padStart(2, "0"), artwork: c.art, artist: c.artist, artistId: "ar" + (i % 3), unread: i < 2 })),
   search: (q) => ({
@@ -108,6 +115,7 @@ window.fetch = (u, o) => {
   if (url.includes("/api/me/likes")) return json({ tracks: FIX.likes });
   { const id = url.includes("/api/me/playlists/") ? url.split("/api/me/playlists/")[1].split(/[/?]/)[0] : null; if (id) { const p = FIX.playlists.find((x) => x.id === id); return p ? json({ id: p.id, name: p.name, isPublic: p.isPublic, tracks: C.slice(0, 8).map((c, i) => ({ id: "t" + i, uri: "spotify:track:t" + i, title: c.name, artist: c.artist, artwork: c.art, durationMs: 190000 + i * 7000, albumId: null })) }) : json({ error: "not_found" }, 404); } }
   if (url.includes("/api/me/playlists")) return json({ playlists: FIX.playlists });
+  if (url.includes("/api/me/people")) return json(o && o.method === "POST" ? { ok: true } : { people: FIX.people, share: true, me: { id: "myseo", name: "myseo" } });
   if (url.includes("/api/me/artist-follows")) return json(o && o.method === "POST" ? { ok: true } : { artists: FIX.follows });
   if (url.includes("/api/me/updates")) return json(o && o.method === "POST" ? { ok: true } : { items: FIX.updates, unread: 2, following: 3, checkedAt: new Date().toISOString(), checkError: false });
   if (url.includes("/api/me/plays")) return json({ ok: true });
@@ -174,6 +182,7 @@ if (want("bell")) {
 if (want("search")) { await open("/search?q=" + encodeURIComponent(C[0].artist)); await shot("search", { x: 0, y: 114, width: 1512, height: 796 }); }
 if (want("player")) { await open("/"); await shot("player", { x: 0, y: 910, width: 1512, height: 72 }); }
 if (want("mypage")) { await open("/mypage?playlist=p0", { h: 2000 }); await shot("mypage", { x: 0, y: 114, width: 1512, height: 1814 }); }
+if (want("people")) { await open("/mypage", { h: 982 }); await shot("people", { x: 1171, y: 321, width: 341, height: 570 }); }
 if (want("dark")) { await open("/", { theme: "dark" }); await shot("dark", { x: 0, y: 0, width: 1512, height: 982 }); }
 if (want("radio")) {
   await open("/");
