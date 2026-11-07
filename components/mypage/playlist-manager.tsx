@@ -21,7 +21,7 @@ const LIMIT = 50;
 
 /** A text-only action: no outline, blue under the cursor. */
 const ACTION =
-  "shrink-0 cursor-pointer whitespace-nowrap px-[8px] py-[6px] text-[8px] tracking-[0.7px] transition-colors hover:text-accent-bright";
+  "shrink-0 cursor-pointer whitespace-nowrap px-[8px] py-[6px] text-[10px] tracking-[0.7px] transition-colors hover:text-accent-bright";
 
 /**
  * 플레이리스트: the playlists this account keeps in Superlike, one per line,
@@ -92,7 +92,7 @@ export function PlaylistManager({
             <button
               type="button"
               onClick={() => setNaming(true)}
-              className="cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[8px] tracking-[0.7px] text-on-ink transition-colors hover:bg-accent-bright hover:text-paper-solid"
+              className="cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[12px] py-[6px] text-[10px] tracking-[0.7px] text-on-ink transition-colors hover:bg-accent-bright hover:text-paper-solid"
             >
               새 플레이리스트
             </button>
@@ -124,7 +124,7 @@ export function PlaylistManager({
                 maxLength={60}
                 placeholder="새 플레이리스트 이름"
                 aria-label="새 플레이리스트 이름"
-                className="h-[30px] w-[300px] rounded-[4px] border-[1.5px] border-rule bg-card px-[10px] text-[13px] outline-none"
+                className="h-[30px] w-[300px] rounded-[4px] border-[1.5px] border-transparent bg-transparent px-[10px] text-[13px] outline-none"
               />
               <button
                 type="submit"
@@ -136,7 +136,7 @@ export function PlaylistManager({
               <button
                 type="button"
                 onClick={() => setNaming(false)}
-                className="cursor-pointer rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] rule"
+                className="cursor-pointer rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] border-[1.5px] border-transparent"
               >
                 취소
               </button>
@@ -219,7 +219,7 @@ function Row({
             }}
             maxLength={60}
             aria-label="플레이리스트 이름"
-            className="h-[30px] w-full max-w-[300px] rounded-[4px] border-[1.5px] border-rule bg-card px-[10px] text-[13px] outline-none"
+            className="h-[30px] w-full max-w-[300px] rounded-[4px] border-[1.5px] border-transparent bg-transparent px-[10px] text-[13px] outline-none"
           />
         ) : (
           <button
@@ -241,7 +241,7 @@ function Row({
           aria-pressed={p.isPublic}
           title={p.isPublic ? "공개 중 — 누르면 비공개로" : "비공개 — 누르면 공개로"}
           onClick={() => void renamePlaylist(p.id, { isPublic: !p.isPublic }).catch(fail)}
-          className={`cursor-pointer whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.7px] rule ${
+          className={`cursor-pointer whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.7px] border-[1.5px] border-transparent ${
             p.isPublic ? "bg-accent-bright text-paper-solid" : "bg-paper"
           }`}
         >
@@ -262,7 +262,7 @@ function Row({
             <button
               type="button"
               onClick={() => setEditing(false)}
-              className="ml-[6px] cursor-pointer whitespace-nowrap rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] rule"
+              className="ml-[6px] cursor-pointer whitespace-nowrap rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] border-[1.5px] border-transparent"
             >
               취소
             </button>

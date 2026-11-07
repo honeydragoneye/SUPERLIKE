@@ -46,7 +46,7 @@ function Pill({
       title={title}
       disabled={disabled}
       onClick={onClick}
-      className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.6px] transition-colors rule disabled:cursor-default ${
+      className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.6px] transition-colors border-[1.5px] border-transparent disabled:cursor-default ${
         dark
           ? "bg-ink text-on-ink enabled:hover:bg-accent-bright enabled:hover:text-paper-solid"
           : "bg-card text-on-bright enabled:hover:bg-soft"
@@ -311,7 +311,7 @@ export function ChatPanel() {
               aria-expanded={historyOpen}
               title="대화 이력"
               onClick={() => setHistoryOpen((v) => !v)}
-              className={`flex size-[25px] shrink-0 cursor-pointer items-center justify-center rounded-pill transition-colors rule ${
+              className={`flex size-[25px] shrink-0 cursor-pointer items-center justify-center rounded-pill transition-colors border-[1.5px] border-transparent ${
                 historyOpen ? "bg-ink text-on-ink" : "bg-card text-on-bright hover:bg-soft"
               }`}
             >
@@ -340,7 +340,7 @@ export function ChatPanel() {
             const noHistory = hydrated && !session;
             const historyOn = hydrated && shareHistory && !noHistory;
             const pill = (on: boolean, none: boolean) =>
-              `shrink-0 whitespace-nowrap rounded-pill px-[10px] py-[4px] text-[8px] tracking-[0.6px] transition-colors rule ${
+              `shrink-0 whitespace-nowrap rounded-pill px-[10px] py-[4px] text-[8px] tracking-[0.6px] transition-colors border-[1.5px] border-transparent ${
                 none
                   ? "cursor-default bg-card text-on-bright-muted opacity-60"
                   : on

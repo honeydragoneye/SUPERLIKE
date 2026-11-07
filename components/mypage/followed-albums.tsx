@@ -106,7 +106,7 @@ export function FollowedAlbums({ onManage }: { onManage: () => void }) {
           <button
             type="button"
             onClick={() => void loadFollows(true)}
-            className="cursor-pointer whitespace-nowrap rounded-pill bg-paper px-[10px] py-[4px] text-[8px] tracking-[0.7px] rule"
+            className="cursor-pointer whitespace-nowrap rounded-pill bg-paper px-[10px] py-[4px] text-[8px] tracking-[0.7px] border-[1.5px] border-transparent"
           >
             다시 확인
           </button>

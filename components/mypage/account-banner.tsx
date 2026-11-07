@@ -100,7 +100,7 @@ export function AccountBanner() {
           <Link
             href={`/user/${encodeURIComponent(myId)}`}
             title="다른 사람에게 보이는 내 프로필"
-            className="flex h-[28px] shrink-0 items-center whitespace-nowrap rounded-pill border-[1.5px] border-on-dark-muted px-[16px] text-[9px] tracking-[0.6px] text-on-dark-muted transition-colors hover:text-on-dark"
+            className="flex h-[28px] shrink-0 items-center whitespace-nowrap rounded-pill bg-white/10 px-[16px] text-[9px] tracking-[0.6px] text-on-dark-muted transition-colors hover:bg-white/20 hover:text-on-dark"
           >
             내 프로필
           </Link>
@@ -124,7 +124,7 @@ export function AccountBanner() {
               className={`flex h-[28px] shrink-0 cursor-pointer items-center whitespace-nowrap rounded-pill px-[16px] text-[9px] tracking-[0.6px] ${
                 theme === mode
                   ? "bg-paper-solid text-black"
-                  : "border-[1.5px] border-on-dark-muted text-on-dark-muted transition-colors hover:text-on-dark"
+                  : "bg-white/10 text-on-dark-muted transition-colors hover:bg-white/20 hover:text-on-dark"
               }`}
             >
               {label}

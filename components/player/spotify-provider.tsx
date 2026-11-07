@@ -427,6 +427,18 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
     setRecentNonce((n) => n + 1);
   }, []);
 
+  // wake the chat agent as soon as the listener is connected, once per browser session: it sleeps when idle, and the first question would otherwise fail
+  useEffect(() => {
+    if (!connected) return;
+    try {
+      if (sessionStorage.getItem("superlike-agent-warm")) return;
+      sessionStorage.setItem("superlike-agent-warm", "1");
+    } catch {
+      // storage can be blocked: warm anyway, the call is harmless
+    }
+    void fetch("/api/agent/warm", { method: "POST", cache: "no-store" }).catch(() => {});
+  }, [connected]);
+
   useEffect(() => {
     if (!connected) return;
     let cancelled = false;

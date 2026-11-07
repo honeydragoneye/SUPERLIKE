@@ -44,7 +44,7 @@ function Button({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.6px] transition-colors rule disabled:cursor-default disabled:opacity-40 ${
+      className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.6px] transition-colors border-[1.5px] border-transparent disabled:cursor-default disabled:opacity-40 ${
         dark ? "bg-ink text-on-ink enabled:hover:bg-accent-bright enabled:hover:text-paper-solid" : "bg-card text-on-bright enabled:hover:bg-soft"
       }`}
     >
@@ -547,7 +547,7 @@ function AddTo({ messageId, a }: { messageId: string; a: ChatAction }) {
           type="button"
           disabled={sent.includes("new") && !a.note}
           onClick={() => setNaming(true)}
-          className="rule cursor-pointer rounded-pill border-[1.5px] border-rule px-[12px] py-[7px] text-left text-[9px] font-bold transition-colors hover:bg-soft disabled:cursor-default disabled:opacity-40"
+          className="cursor-pointer rounded-pill border-[1.5px] border-transparent px-[12px] py-[7px] text-left text-[9px] font-bold transition-colors hover:bg-soft disabled:cursor-default disabled:opacity-40"
         >
           + 새 플레이리스트에 담기
         </button>

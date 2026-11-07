@@ -29,7 +29,7 @@ export function PeoplePanel({ tab, onTab, onClose }: { tab: "followers" | "peopl
               role="tab"
               aria-selected={tab === key}
               onClick={() => onTab(key)}
-              className={`cursor-pointer whitespace-nowrap rounded-pill px-[14px] py-[7px] text-[9px] font-black tracking-[0.5px] transition-colors rule ${
+              className={`cursor-pointer whitespace-nowrap rounded-pill px-[14px] py-[7px] text-[9px] font-black tracking-[0.5px] transition-colors border-[1.5px] border-transparent ${
                 tab === key ? "bg-ink text-on-ink" : "bg-paper hover:bg-soft"
               }`}
             >

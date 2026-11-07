@@ -57,7 +57,7 @@ export function PersonFollowButton({
           e.stopPropagation();
           void press();
         }}
-        className={`group/follow shrink-0 cursor-pointer whitespace-nowrap rounded-pill tracking-[0.7px] transition-colors rule ${
+        className={`group/follow shrink-0 cursor-pointer whitespace-nowrap rounded-pill tracking-[0.7px] transition-colors border-[1.5px] border-transparent ${
           big ? "px-[18px] py-[9px] text-[10px]" : "px-[12px] py-[6px] text-[8px]"
         } ${on ? "bg-ink text-on-ink hover:bg-paper hover:text-ink" : "bg-paper hover:bg-soft"} ${className}`}
       >

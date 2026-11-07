@@ -96,12 +96,6 @@ function ShareSwitch() {
           <span className={`absolute top-[2px] size-[20px] rounded-pill bg-white shadow transition-[left] ${share ? "left-[22px]" : "left-[2px]"}`} />
         </button>
       </div>
-      <p className="text-[9px] leading-[15px] tracking-[0.3px] text-on-bright-muted">
-        켜면 나를 팔로우한 사람에게 내가 최근 들은 앨범, 공개로 바꾼 플레이리스트, 이번 주 아티스트가 보여요. 이메일과 챗봇 대화, 들은 시각은 보이지 않아요.
-      </p>
-      <p className={`text-[8.5px] leading-[14px] tracking-[0.3px] ${share ? "text-accent-bright" : "text-on-bright-muted"}`}>
-        {share ? "지금은 켜짐 — 언제든 끌 수 있어요." : "지금은 꺼짐 — 나를 팔로우해도 내 곡은 보이지 않아요."}
-      </p>
     </div>
   );
 }

@@ -236,7 +236,7 @@ export function TrackCard({ track, rank }: { track: TrackCardTrack; rank?: numbe
               setStarting(false);
             }
           }}
-          className={`flex shrink-0 items-center gap-[5px] whitespace-nowrap rounded-pill bg-accent px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid transition-colors rule disabled:opacity-100 ${
+          className={`flex shrink-0 items-center gap-[5px] whitespace-nowrap rounded-pill bg-accent px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-paper-solid transition-colors border-[1.5px] border-transparent disabled:opacity-100 ${
             blocked ? "cursor-default" : "cursor-pointer enabled:hover:bg-ink"
           }`}
         >

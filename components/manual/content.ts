@@ -527,7 +527,7 @@ export const MANUAL: ManualSection[] = [
         ],
       },
       { kind: "h", text: "사람 팔로우와 내 활동 공개" },
-      { kind: "shot", src: "/manual/people.png", alt: "함께 듣는 사람과 내 활동 공개 스위치", caption: "마이페이지 오른쪽 열: 팔로워·팔로잉·가수 숫자, 함께 듣는 사람, 내 활동 공개 스위치", ratio: 0.5982 },
+      { kind: "shot", src: "/manual/people.png", alt: "함께 듣는 사람과 내 활동 공개 스위치", caption: "마이페이지 오른쪽 열: 팔로워·팔로잉·가수 숫자, 함께 듣는 사람, 내 활동 공개 스위치", ratio: 0.7104 },
       {
         kind: "list",
         items: [

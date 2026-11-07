@@ -174,7 +174,7 @@ function Card({
         aria-label={search ? `${title} 검색에서 열기` : `${title} ${kind === "artist" ? "아티스트" : "앨범"} 페이지 열기`}
         className={
           search
-            ? "rule shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-card px-[10px] py-[5px] text-[8px] tracking-[0.6px] text-on-bright transition-colors hover:bg-soft"
+            ? "border-[1.5px] border-transparent shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-card px-[10px] py-[5px] text-[8px] tracking-[0.6px] text-on-bright transition-colors hover:bg-soft"
             : "shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[10px] py-[5px] text-[8px] tracking-[0.6px] text-on-ink transition-colors enabled:hover:bg-accent-bright enabled:hover:text-paper-solid disabled:cursor-default disabled:opacity-35"
         }
       >

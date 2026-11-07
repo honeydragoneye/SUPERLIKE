@@ -12,7 +12,8 @@ import type { Profile, ProfileAlbum, ProfilePlaylist, ProfileSong } from "@/lib/
 import { DetailStatus } from "./detail-shell";
 import { useDetail } from "./use-detail";
 
-const PILL = "shrink-0 whitespace-nowrap rounded-pill px-[14px] py-[8px] text-[9px] tracking-[0.7px]";
+/** Same size as the follow button beside it (`big`); the light ones keep a transparent border so no outline shows and the sizes still match. */
+const PILL = "shrink-0 whitespace-nowrap rounded-pill border-[1.5px] border-transparent px-[18px] py-[9px] text-[10px] tracking-[0.7px]";
 const BANNERS = ["#4a5a7a", "#5b4a6e", "#3f5f5a", "#6a4f4b", "#4d5568", "#58605a"];
 const bannerOf = (name: string) => BANNERS[[...name].reduce((n, c) => n + c.charCodeAt(0), 0) % BANNERS.length];
 
@@ -147,7 +148,7 @@ export function UserPage({ id }: { id: string }) {
       <section className="flex min-h-full flex-1 flex-col gap-[16px] bg-chart p-[16px]">
         <div className="flex w-full shrink-0 items-center justify-between gap-[12px]">
           <h2 className="text-[26px] font-black tracking-[-1px]">함께 듣는 사람</h2>
-          <button type="button" onClick={() => router.back()} className={`${PILL} bg-paper transition-colors hover:bg-soft rule`}>
+          <button type="button" onClick={() => router.back()} className={`${PILL} bg-paper transition-colors hover:bg-soft`}>
             <span aria-hidden>←</span> 뒤로
           </button>
         </div>
@@ -176,13 +177,13 @@ export function UserPage({ id }: { id: string }) {
           </p>
           <div className="mt-[8px] flex items-center gap-[8px]">
             {data.self ? (
-              <Link href="/mypage" className={`${PILL} bg-paper transition-colors hover:bg-soft rule`}>
+              <Link href="/mypage" className={`${PILL} bg-paper transition-colors hover:bg-soft`}>
                 내 마이페이지
               </Link>
             ) : (
               <PersonFollowButton id={data.id} name={data.name} following={data.iFollow} big onChange={refresh} />
             )}
-            <button type="button" onClick={() => router.back()} className={`${PILL} bg-paper transition-colors hover:bg-soft rule`}>
+            <button type="button" onClick={() => router.back()} className={`${PILL} bg-paper transition-colors hover:bg-soft`}>
               <span aria-hidden>←</span> 뒤로
             </button>
           </div>

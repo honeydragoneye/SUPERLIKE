@@ -89,14 +89,14 @@ export function RadioManager() {
                           href={s.homepage}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="whitespace-nowrap rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors hover:bg-soft rule"
+                          className="whitespace-nowrap rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors hover:bg-soft border-[1.5px] border-transparent"
                         >
                           공식 사이트 ↗
                         </a>
                       ) : (
                         <span
                           title="이 방송국은 공식 사이트 주소가 없어요"
-                          className="whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.7px] opacity-40 rule"
+                          className="whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.7px] opacity-40 border-[1.5px] border-transparent"
                         >
                           공식 사이트 ↗
                         </span>
@@ -104,7 +104,7 @@ export function RadioManager() {
                       <button
                         type="button"
                         onClick={() => void toggleFavorite(s)}
-                        className="cursor-pointer whitespace-nowrap rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors hover:bg-soft rule"
+                        className="cursor-pointer whitespace-nowrap rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors hover:bg-soft border-[1.5px] border-transparent"
                       >
                         즐겨찾기 해제
                       </button>

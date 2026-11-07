@@ -83,7 +83,7 @@ export function LikedTracks() {
           <button
             type="button"
             onClick={() => playFrom(liked[0].uri)}
-            className="flex h-[26px] cursor-pointer items-center whitespace-nowrap rounded-pill bg-ink px-[12px] text-[9px] tracking-[0.6px] text-on-ink transition-colors hover:bg-accent hover:text-on-bright rule"
+            className="flex h-[26px] cursor-pointer items-center whitespace-nowrap rounded-pill bg-ink px-[12px] text-[9px] tracking-[0.6px] text-on-ink transition-colors hover:bg-accent hover:text-on-bright border-[1.5px] border-transparent"
           >
             전체 재생
           </button>

@@ -182,7 +182,7 @@ if (want("bell")) {
 if (want("search")) { await open("/search?q=" + encodeURIComponent(C[0].artist)); await shot("search", { x: 0, y: 114, width: 1512, height: 796 }); }
 if (want("player")) { await open("/"); await shot("player", { x: 0, y: 910, width: 1512, height: 72 }); }
 if (want("mypage")) { await open("/mypage?playlist=p0", { h: 2000 }); await shot("mypage", { x: 0, y: 114, width: 1512, height: 1814 }); }
-if (want("people")) { await open("/mypage", { h: 982 }); await shot("people", { x: 1171, y: 321, width: 341, height: 570 }); }
+if (want("people")) { await open("/mypage", { h: 982 }); await shot("people", { x: 1171, y: 321, width: 341, height: 480 }); }
 if (want("dark")) { await open("/", { theme: "dark" }); await shot("dark", { x: 0, y: 0, width: 1512, height: 982 }); }
 if (want("radio")) {
   await open("/");

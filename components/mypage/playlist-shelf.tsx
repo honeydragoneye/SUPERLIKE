@@ -134,7 +134,7 @@ export function PlaylistShelf() {
                     <button
                       type="button"
                       onClick={() => setNaming(false)}
-                      className="cursor-pointer rounded-pill px-[10px] py-[6px] text-[9px] rule"
+                      className="cursor-pointer rounded-pill px-[10px] py-[6px] text-[9px] border-[1.5px] border-transparent"
                     >
                       취소
                     </button>
