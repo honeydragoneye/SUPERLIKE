@@ -6,6 +6,7 @@ import { useLikedTracks } from "@/components/player/use-likes";
 import { usePlaysTotal } from "@/components/player/use-listening";
 import { useSpotify, type QueueTrack } from "@/components/player/spotify-provider";
 import { Icon } from "@/components/ui/icon";
+import { TrackMore } from "@/components/ui/more-menu";
 import { RecentList } from "@/components/ui/recent-list";
 import { SLEEVE_TONES, type RecentTrack } from "@/lib/data";
 import type { LikedTrack } from "@/lib/likes";
@@ -142,7 +143,7 @@ function LikedCard({
   const tone = SLEEVE_TONES[index % SLEEVE_TONES.length];
 
   return (
-    <article className="flex w-[140px] shrink-0 snap-start flex-col gap-[8px]">
+    <article className="group flex w-[140px] shrink-0 snap-start flex-col gap-[8px]">
       <button
         type="button"
         onClick={() => onPlay(track.uri)}
@@ -181,16 +182,29 @@ function LikedCard({
         </span>
       </button>
 
-      <div className="flex flex-col gap-[2px]">
-        <p className="truncate text-[12px]" title={track.title}>
-          {track.title}
-        </p>
-        <p
-          className="truncate text-[9px] tracking-[0.4px] text-on-bright-muted"
-          title={track.artist}
-        >
-          {track.artist}
-        </p>
+      <div className="flex items-center gap-[2px]">
+        <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
+          <p className="truncate text-[12px]" title={track.title}>
+            {track.title}
+          </p>
+          <p
+            className="truncate text-[9px] tracking-[0.4px] text-on-bright-muted"
+            title={track.artist}
+          >
+            {track.artist}
+          </p>
+        </div>
+        <TrackMore
+          track={{
+            id: track.id,
+            uri: track.uri,
+            title: track.title,
+            artist: track.artist,
+            artwork: track.artwork,
+            durationMs: track.durationMs,
+            albumId: track.albumId,
+          }}
+        />
       </div>
     </article>
   );

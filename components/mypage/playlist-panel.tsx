@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useSpotify, type QueueTrack } from "@/components/player/spotify-provider";
 import { Icon } from "@/components/ui/icon";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import { StationButton } from "@/components/ui/station-button";
 import { TrackMore } from "@/components/ui/more-menu";
 import {
   loadPlaylist,
@@ -169,18 +168,6 @@ export function PlaylistPanel({ id, onClose }: { id: string; onClose: () => void
                   </span>
                   <span className="tnum mr-[58px] w-[34px] shrink-0 text-right text-[10px]">{clock(t.durationMs)}</span>
                 </button>
-                <StationButton
-                  label={t.title}
-                  className="right-[130px]"
-                  seed={async () => ({
-                    id: t.id,
-                    uri: t.uri,
-                    name: t.title,
-                    artist: t.artist,
-                    artwork: t.artwork,
-                    durationMs: t.durationMs,
-                  })}
-                />
                 <TrackMore
                   className="absolute right-[26px] top-1/2 -translate-y-1/2"
                   track={{ id: t.id, uri: t.uri, title: t.title, artist: t.artist, artwork: t.artwork, durationMs: t.durationMs }}
@@ -197,12 +184,6 @@ export function PlaylistPanel({ id, onClose }: { id: string; onClose: () => void
               </li>
             ))}
           </ul>
-
-          {tracks.length > 0 && (
-            <p className="shrink-0 text-[9px] tracking-[0.5px] text-on-bright-muted">
-              곡을 누르면 그 곡부터 이 목록 순서대로 재생합니다.
-            </p>
-          )}
         </>
       )}
     </section>
