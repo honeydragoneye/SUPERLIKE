@@ -7,7 +7,8 @@ import { useLikedTracks } from "@/components/player/use-likes";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useCustomTags } from "@/components/station/use-custom-tags";
 import { boldSpans } from "@/lib/chat/inline";
-import { TrackCard } from "@/components/ui/track-card";
+import { showToast } from "@/components/ui/toast";
+import { TrackCard, lookUp, type Found } from "@/components/ui/track-card";
 import { ChatHistory, ClockIcon } from "./chat-history";
 import { ActionCard } from "./action-card";
 import { showsPlayer } from "./chat-actions";
@@ -87,6 +88,62 @@ function PreviewRow({ track, passed }: { track: ChatTrack; passed: boolean }) {
 }
 
 /**
+ * Plays the songs the new criterion let through, as the queue.
+ *
+ * They are named by title and artist only, so each is looked up on Spotify first, a few at a time to stay
+ * clear of its rate limit; one that is not found is left out and the listener is told how many.
+ */
+function PlayPassed({ songs }: { songs: ChatTrack[] }) {
+  const { play, connected, stationActive, stopStation } = useSpotify();
+  const hydrated = useHydrated();
+  const [busy, setBusy] = useState(false);
+  const on = hydrated && connected;
+
+  const press = async () => {
+    if (busy || !on) return;
+    setBusy(true);
+    try {
+      const found: Found[] = [];
+      for (let i = 0; i < songs.length; i += 3) {
+        const batch = await Promise.all(songs.slice(i, i + 3).map((t) => lookUp(t).catch(() => null)));
+        for (const f of batch) if (f && !found.some((g) => g.uri === f.uri)) found.push(f);
+      }
+      if (!found.length) return showToast("Spotify에서 이 곡들을 찾지 못했어요");
+      const tracks = found.map((f) => ({ uri: f.uri, title: f.name, artist: f.artist, artwork: f.artwork, durationMs: f.durationMs }));
+      // a running station keeps the queue for itself and moves on to its own songs when this one ends: it has to stop for this list to be the queue
+      if (stationActive) stopStation();
+      const outcome = await play({ uris: tracks.map((t) => t.uri), tracks });
+      if (outcome !== "played") showToast("재생하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      else if (found.length < songs.length) showToast(`${songs.length - found.length}곡은 Spotify에서 찾지 못해 뺐어요`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      disabled={!on || busy}
+      title={on ? "통과한 곡을 재생 목록으로 듣기" : "Spotify를 연결하면 들을 수 있어요"}
+      onClick={() => void press()}
+      className="flex shrink-0 cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-pill border-[1.5px] border-transparent bg-ink px-[10px] py-[4px] text-[8px] tracking-[0.6px] text-on-ink transition-colors enabled:hover:bg-accent-bright enabled:hover:text-paper-solid disabled:cursor-default disabled:opacity-60"
+    >
+      <svg width="8" height="8" viewBox="0 0 10 10" aria-hidden>
+        <path d="M2 1 9 5 2 9Z" fill="currentColor" />
+      </svg>
+      {busy ? (
+        <>
+          찾는 중
+          <LoadingDots size={3} label="곡을 찾는 중" />
+        </>
+      ) : (
+        "통과한 곡 듣기"
+      )}
+    </button>
+  );
+}
+
+/**
  * A new definition for the tag being worked on, and what it does to real songs.
  *
  * The preview is the point: a sentence of English means little to the listener,
@@ -103,9 +160,12 @@ function ProposalCard({ id, p }: { id: string; p: ChatProposal }) {
       {p.warning && <p className="text-[8px] leading-[12px] text-alert">{p.warning}</p>}
 
       <div className="flex flex-col gap-[4px]">
-        <p className="text-[8px] tracking-[0.6px] text-on-bright-muted">
-          미리보기 · 곡 {checked}개 중 {passedCount}개 통과
-        </p>
+        <div className="flex items-center justify-between gap-[8px]">
+          <p className="text-[8px] tracking-[0.6px] text-on-bright-muted">
+            미리보기 · 곡 {checked}개 중 {passedCount}개 통과
+          </p>
+          {passed.length > 0 && <PlayPassed songs={passed} />}
+        </div>
         {passed.length + failed.length > 0 && (
           <ul className="flex flex-col gap-[3px]">
             {passed.slice(0, 4).map((t) => (

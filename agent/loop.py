@@ -207,7 +207,11 @@ def refine_prompt(label: str, definition: str) -> str:
         "4. 도구가 돌려준 미리보기는 화면에 따로 보여 준다. 글에서는 어떻게 정리했는지 한두 문장만 "
         "말하고, 곡 목록을 나열하지 않는다. 마크다운 기호는 쓰지 않는다.\n"
         "5. 사용자가 고치고 싶다고 하면 기준을 고쳐 propose_definition을 다시 부른다. 정의를 실제로 "
-        "바꾸는 건 사용자가 화면에서 적용을 눌렀을 때뿐이다."
+        "바꾸는 건 사용자가 화면에서 적용을 눌렀을 때뿐이다.\n"
+        "6. '지금 듣는 노래', '이 곡'처럼 재생 중인 곡을 가리키며 그걸 기준으로 삼고 싶다고 하면 먼저 "
+        "now_playing을 불러 곡 제목과 가수를 확인한다. 이 대화에서는 track_info나 artist_info를 쓸 수 "
+        "없으니, 확인한 제목과 가수만으로 기준을 정리해 propose_definition을 부른다. 재생 중인 곡이 "
+        "없다고 나오면 그렇게 말한다."
     )
 
 
@@ -350,7 +354,8 @@ def run_agent(
     if model is None and config.PROVIDER == "ollama":
         model = config.LOCAL_GENERATION_MODEL
     # sources: 사용자가 켜 둔 출처(lastfm·wikipedia·musicbrainz). None이면 전부. 다듬기 대화는 출처와 무관하다.
-    tools = TOOLS_REFINE if refine else tools_for(sources, now_playing is not None, can_act, station is not None, likes is not None, recent is not None)
+    # 다듬기 대화에서도 화면이 지금 듣는 곡을 보내 줬다면 now_playing을 쓸 수 있다("지금 듣는 노래랑 비슷하게")
+    tools = (TOOLS_REFINE + (("now_playing",) if now_playing is not None else ())) if refine else tools_for(sources, now_playing is not None, can_act, station is not None, likes is not None, recent is not None)
     system = (
         refine_prompt(refine["label"], refine["definition"])
         if refine

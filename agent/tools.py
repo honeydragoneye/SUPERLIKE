@@ -830,7 +830,8 @@ def propose_definition(definition: str, reason: str = "", sample_tag: str = "") 
             "checked": len(pool),
             # 보여 주는 곡은 일부지만, 몇 곡이 통과했는지는 전체로 알려 준다
             "passed_count": len(passed),
-            "passed": passed[:_PREVIEW_SHOWN],
+            # 통과한 곡은 전부 보낸다(최대 20곡): 화면이 이 곡들을 재생 목록으로 들려 준다. 목록에 보이는 건 일부만이다
+            "passed": passed,
             "failed": failed[:_PREVIEW_SHOWN],
         },
     }
