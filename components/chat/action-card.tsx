@@ -54,6 +54,18 @@ function Button({
   );
 }
 
+/** An in-progress line: the words, then dots that move for as long as it lasts. */
+function Working({ text, label = "진행 중" }: { text: string; label?: string }) {
+  return (
+    <span className="inline-flex items-center gap-[5px]">
+      {text}
+      <span className="inline-flex -translate-y-px">
+        <LoadingDots size={3} label={label} />
+      </span>
+    </span>
+  );
+}
+
 /** A heart or a song played: one line, with the way back at its end. */
 function Line({ messageId, a }: { messageId: string; a: ChatAction }) {
   const { actOn, busy } = useChat();
@@ -63,8 +75,8 @@ function Line({ messageId, a }: { messageId: string; a: ChatAction }) {
   const sub =
     a.state === "working"
       ? liking
-        ? "좋아요 누르는 중…"
-        : "곡을 찾는 중…"
+        ? <Working text="좋아요 누르는 중" />
+        : <Working text="곡을 찾는 중" />
       : a.state === "error"
         ? (a.note ?? "하지 못했어요")
         : a.state === "already"
@@ -111,7 +123,7 @@ function Follow({ messageId, a }: { messageId: string; a: ChatAction }) {
   const name = a.person?.name ?? a.artist;
   const sub =
     a.state === "working"
-      ? "팔로우하는 중…"
+      ? <Working text="팔로우하는 중" />
       : failed
         ? (a.note ?? "하지 못했어요")
         : a.state === "already"
@@ -241,7 +253,11 @@ function Playlist({ messageId, a }: { messageId: string; a: ChatAction }) {
         aria-label="플레이리스트 이름"
         className={`rounded-pill bg-card px-[12px] py-[8px] text-[11px] font-bold outline-none disabled:opacity-70 ${a.state === "error" && !tracks.length ? "border-[1.5px] border-alert" : "rule"}`}
       />
-      {gathering && <p className="text-[8px] leading-[12px] tracking-[0.4px] text-on-bright-muted">담을 곡을 찾는 중…</p>}
+      {gathering && (
+        <p className="text-[8px] leading-[12px] tracking-[0.4px] text-on-bright-muted">
+          <Working text="담을 곡을 찾는 중" />
+        </p>
+      )}
       {tracks.length > 0 && (
         <ul className="flex flex-col gap-[6px]">
           {tracks.slice(0, 3).map((t) => (
@@ -268,7 +284,9 @@ function Playlist({ messageId, a }: { messageId: string; a: ChatAction }) {
             <Button onClick={() => actOn(messageId, a.id, { type: "cancel" })}>취소</Button>
           </>
         )}
-        {a.state === "working" && tracks.length > 0 && <Button disabled>만드는 중…</Button>}
+        {a.state === "working" && tracks.length > 0 && <Button disabled>
+            <Working text="만드는 중" />
+          </Button>}
         {a.state === "error" && (
           <Button dark onClick={() => (tracks.length ? actOn(messageId, a.id, { type: "confirm", name }) : actOn(messageId, a.id, { type: "retry" }))}>
             다시 시도
@@ -474,7 +492,11 @@ function Choice({ messageId, a }: { messageId: string; a: ChatAction }) {
           </div>
         </>
       )}
-      {a.state === "working" && <p className="text-[8px] tracking-[0.4px] text-on-bright-muted">재생하는 중…</p>}
+      {a.state === "working" && (
+        <p className="text-[8px] tracking-[0.4px] text-on-bright-muted">
+          <Working text="재생하는 중" />
+        </p>
+      )}
       {a.state === "done" && (
         <div className="flex items-center gap-[8px]">
           <span className="min-w-0 flex-1 text-[9px] font-bold">{a.chosen === "loop" ? "↻" : "▶"} {a.summary}</span>

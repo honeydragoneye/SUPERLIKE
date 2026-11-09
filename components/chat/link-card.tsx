@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useSpotify } from "@/components/player/spotify-provider";
+import { LoadingDots } from "@/components/ui/loading-dots";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import type { SearchAlbum, SearchArtist } from "@/lib/data";
 import { nameMatch, squash } from "@/lib/names";
@@ -178,7 +179,18 @@ function Card({
             : "shrink-0 cursor-pointer whitespace-nowrap rounded-pill bg-ink px-[10px] py-[5px] text-[8px] tracking-[0.6px] text-on-ink transition-colors enabled:hover:bg-accent-bright enabled:hover:text-paper-solid disabled:cursor-default disabled:opacity-35"
         }
       >
-        {loading ? "찾는 중…" : search ? "검색에서 열기 →" : "페이지 열기 →"}
+        {loading ? (
+          <span className="inline-flex items-center gap-[5px]">
+            찾는 중
+            <span className="inline-flex -translate-y-px">
+              <LoadingDots size={3} label="찾는 중" />
+            </span>
+          </span>
+        ) : search ? (
+          "검색에서 열기 →"
+        ) : (
+          "페이지 열기 →"
+        )}
       </button>
     </li>
   );
