@@ -62,7 +62,7 @@ function IconButton({
  * and to the left of centre on purpose, looking where the pupils look.
  */
 function ChatButton() {
-  const { open, toggle } = useChat();
+  const { open, toggle, busy } = useChat();
   // the open state is the session's to know, so it stays off until React has matched the server HTML
   const hydrated = useHydrated();
   const on = hydrated && open;
@@ -77,13 +77,27 @@ function ChatButton() {
         on ? "ring-2 ring-accent-bright ring-offset-2 ring-offset-header" : ""
       }`}
     >
-      {/* white eyes on the dark button, black ones when the button turns light; a press turns it blue, which wants white again */}
-      <span className="absolute left-[4.1px] top-[12.8px] block size-[20px] dark:hidden dark:group-hover:block">
+      {/* white eyes on the dark button, black ones when the button turns light; pointing at it closes them (white, on the blue it turns).
+          While an answer is being written they blink: the open eyes and the shut ones swap by opacity */}
+      <span className={`absolute left-[4.1px] top-[12.8px] block size-[20px] group-hover:hidden dark:hidden${busy ? " eye-blink-open" : ""}`}>
         <Icon name="eyes-white" size={20} />
       </span>
-      <span className="absolute left-[4.1px] top-[12.8px] hidden size-[20px] dark:block dark:group-hover:hidden">
+      <span className={`absolute left-[4.1px] top-[12.8px] hidden size-[20px] dark:block dark:group-hover:hidden${busy ? " eye-blink-open" : ""}`}>
         <Icon name="eyes-ink" size={20} />
       </span>
+      {/* the shut eyes: white on the dark button; on the light one (dark mode) black while blinking, white once pointed at */}
+      <span
+        className={`absolute left-[4.1px] top-[12.8px] size-[20px] ${
+          busy ? "block eye-blink-shut group-hover:[animation:none] dark:hidden dark:group-hover:block" : "hidden group-hover:block"
+        }`}
+      >
+        <Icon name="eyes-closed-white" size={20} />
+      </span>
+      {busy && (
+        <span className="eye-blink-shut absolute left-[4.1px] top-[12.8px] hidden size-[20px] dark:block dark:group-hover:hidden">
+          <Icon name="eyes-closed-ink" size={20} />
+        </span>
+      )}
     </button>
   );
 }
@@ -106,7 +120,7 @@ export function SiteHeader() {
 
       <div className="min-w-px flex-1" />
 
-      <Link href="/mypage" className="shrink-0 rounded-pill">
+      <Link href="/mypage" className="shrink-0 rounded-pill transition-colors hover:text-accent-bright">
         <span className="whitespace-nowrap text-[24px] tracking-[-0.3px]">
           MYPAGE
         </span>

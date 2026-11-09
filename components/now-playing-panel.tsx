@@ -443,7 +443,7 @@ export function NowPlayingPanel() {
             onClick={() =>
               void (live ? toggle() : play(last?.uri ? { uris: [last.uri] } : {}))
             }
-            className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-accent rule disabled:opacity-60"
+            className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-accent disabled:opacity-60"
           >
             <Icon name={isPlaying ? "pause-lg" : "play-lg"} size={16} />
           </button>

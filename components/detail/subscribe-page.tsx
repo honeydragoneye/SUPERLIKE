@@ -5,7 +5,7 @@ import { DetailShell } from "./detail-shell";
 
 /** What the mail is, in three lines: shown under the signup form here, and in the rail beside the mail archive. */
 export const MAIL_STEPS = [
-  "매주 금요일 저녁 6시, 그 달 주제에 맞춘 앨범·노래·라디오가 메일로 와요",
+  "매주 금요일 저녁 6시\n그 달 주제에 맞춘 앨범·노래·라디오가 메일로 와요",
   "달마다 주제와 메일 색이 바뀌어요 (12월은 크리스마스)",
   "이 페이지에서 지난 호를 언제든 다시 볼 수 있어요",
 ];
@@ -13,12 +13,12 @@ export const MAIL_STEPS = [
 function HowItWorks() {
   return (
     <section className="flex w-full flex-col gap-[18px] pt-[12px]">
-      <h3 className="text-[11px] tracking-[0.8px] text-accent-bright">이렇게 와요</h3>
+      <h3 className="text-[13px] tracking-[0.8px] text-accent-bright">이렇게 와요</h3>
       <ol className="flex max-w-[600px] flex-col gap-[14px]">
         {MAIL_STEPS.map((step, i) => (
           <li key={step} className="flex items-start gap-[14px]">
-            <span className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-ink text-[12px] font-bold text-on-ink">{i + 1}</span>
-            <span className="text-[14px] leading-[22px]">{step}</span>
+            <span className="flex size-[28px] shrink-0 items-center justify-center rounded-full bg-ink text-[14px] font-bold text-on-ink">{i + 1}</span>
+            <span className="whitespace-pre-line text-[16px] leading-[24px]">{step}</span>
           </li>
         ))}
       </ol>

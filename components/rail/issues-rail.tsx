@@ -94,7 +94,7 @@ export function IssuesRail() {
             {MAIL_STEPS.map((s, i) => (
               <li key={s} className="flex items-start gap-[10px]">
                 <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-ink text-[8px] font-bold text-on-ink">{i + 1}</span>
-                <span className="text-[9px] leading-[14px]">{s}</span>
+                <span className="whitespace-pre-line text-[9px] leading-[14px]">{s}</span>
               </li>
             ))}
           </ol>

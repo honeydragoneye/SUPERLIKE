@@ -517,6 +517,12 @@ function AssistantBubble({ m }: { m: Extract<ChatMessage, { role: "assistant" }>
           <p className="flex items-center gap-[6px] text-[8px] tracking-[0.5px] text-on-bright-muted">
             <span className={`size-[6px] shrink-0 rounded-full bg-mint ${m.streaming ? "animate-pulse" : ""}`} />
             {m.status}
+            {/* still being written: the dots move after whatever the status says (they stop with the answer) */}
+            {m.streaming && (
+              <span className="inline-flex -translate-y-px">
+                <LoadingDots size={3} label="답변 생성 중" />
+              </span>
+            )}
           </p>
         )}
         {m.memoryNote && <MemoryNote ids={m.memoryNote.ids} texts={m.memoryNote.texts} />}

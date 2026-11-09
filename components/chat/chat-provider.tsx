@@ -719,22 +719,22 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               patch(reply, (m) => {
                 m.status =
                   event.name === "now_playing"
-                    ? "지금 듣는 곡을 확인하는 중…"
+                    ? "지금 듣는 곡을 확인하는 중"
                     : event.name === "station_info"
-                      ? "스테이션을 확인하는 중…"
+                      ? "스테이션을 확인하는 중"
                     : ["like_track", "playback", "player_mode", "seek", "volume", "play_one", "add_to_playlist", "up_next", "lyrics", "stop_station", "start_station", "make_playlist"].includes(String(event.name))
-                      ? "준비하는 중…"
+                      ? "준비하는 중"
                     : event.name === "top_tracks"
-                    ? "곡을 찾는 중…"
+                    ? "곡을 찾는 중"
                     : event.name === "propose_definition"
-                      ? "기준을 정리하는 중…"
+                      ? "기준을 정리하는 중"
                       : event.name === "request_source"
-                        ? "찾을 곳을 정리하는 중…"
+                        ? "찾을 곳을 정리하는 중"
                       : event.name === "similar_to"
-                        ? "비슷한 곡을 찾는 중…"
+                        ? "비슷한 곡을 찾는 중"
                       : String(event.name) in NOTE_OF
-                        ? `${NOTE_OF[String(event.name)]}에서 찾는 중…`
-                        : "곡을 확인하는 중…";
+                        ? `${NOTE_OF[String(event.name)]}에서 찾는 중`
+                        : "곡을 확인하는 중";
               });
               break;
             }
@@ -895,7 +895,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             case "waiting":
               // the model is at its per-minute limit and the agent is sitting it out: not stuck
               patch(reply, (m) => {
-                m.status = `요청이 몰려서 ${Math.max(1, Math.round(Number(event.seconds) || 0))}초 기다리는 중…`;
+                m.status = `요청이 몰려서 ${Math.max(1, Math.round(Number(event.seconds) || 0))}초 기다리는 중`;
               });
               break;
             case "error":
@@ -916,9 +916,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         setBusy(false);
         patch(reply, (m) => {
           m.streaming = false;
-          // "…중…" is what a tool is doing; once the reply is over, a tool that never
+          // "…하는 중" is what a tool is doing (the dots beside it move); once the reply is over, a tool that never
           // reported back leaves nothing true to say, so the line goes rather than lingering
-          if (m.status?.endsWith("…")) m.status = null;
+          if (m.status?.endsWith("중")) m.status = null;
         });
         afterReply(reply);
       }
