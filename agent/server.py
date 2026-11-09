@@ -137,6 +137,36 @@ def _clean_taste(raw: object) -> list[dict] | None:
     return out or None
 
 
+def _clean_stats(raw: object) -> dict | None:
+    """서버가 계정 기록으로 센 최근 취향 요약. 없으면 None. 모델이 도구로 읽으니 개수와 길이를 자른다."""
+    if not isinstance(raw, dict):
+        return None
+
+    def rows(v: object, keys: tuple[str, ...]) -> list[dict]:
+        out = []
+        for r in (v if isinstance(v, list) else [])[:8]:
+            if not isinstance(r, dict):
+                continue
+            row = {k: " ".join(str(r.get(k) or "").split())[:80] for k in keys if k != "plays"}
+            if "plays" in keys:
+                row["plays"] = int(r["plays"]) if isinstance(r.get("plays"), (int, float)) else 0
+            if row.get(keys[0]):
+                out.append(row)
+        return out
+
+    artists = rows(raw.get("artists"), ("name", "plays"))
+    if not artists:
+        return None
+    total = raw.get("totalPlays")
+    days = raw.get("days")
+    return {
+        "artists": artists,
+        "tracks": rows(raw.get("tracks"), ("title", "artist")),
+        "totalPlays": int(total) if isinstance(total, (int, float)) else 0,
+        "days": int(days) if isinstance(days, (int, float)) else 28,
+    }
+
+
 MAX_LISTED = 30
 
 
@@ -211,6 +241,7 @@ class Handler(BaseHTTPRequestHandler):
         can_act = body.get("canAct") is True
         likes = _clean_listed(body.get("likes"))
         recent = _clean_listed(body.get("recent"), with_time=True)
+        stats = _clean_stats(body.get("stats"))
         memory = _clean_memory(body.get("memory"))
         avoid = _clean_avoid(body.get("avoid"))
 
@@ -225,7 +256,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         try:
-            for event in run_agent(history, question, cards=True, refine=refine, sources=sources, taste=taste, now_playing=now_playing, station=station, can_act=can_act, likes=likes, recent=recent, memory=memory, avoid=avoid):
+            for event in run_agent(history, question, cards=True, refine=refine, sources=sources, taste=taste, now_playing=now_playing, station=station, can_act=can_act, likes=likes, recent=recent, memory=memory, avoid=avoid, stats=stats):
                 send(event)
         except (BrokenPipeError, ConnectionResetError):
             pass  # 브라우저가 창을 닫거나 대화를 끊었다

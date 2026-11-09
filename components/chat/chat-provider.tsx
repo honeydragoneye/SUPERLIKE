@@ -15,7 +15,7 @@ import { useLyricsView } from "@/components/lyrics/lyrics-view";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useCustomTags } from "@/components/station/use-custom-tags";
 import { loadChat, saveChat } from "@/lib/chat/history";
-import { actionFrom, cancelAction, chooseOption, makePlaylist, putInPlaylist, startAction, undoAction, type ActionEnv, type ChatAction } from "./chat-actions";
+import { actionFrom, cancelAction, chooseOption, makePlaylist, playStation, putInPlaylist, startAction, undoAction, type ActionEnv, type ChatAction } from "./chat-actions";
 import { snapshot as likedSnapshot } from "@/lib/likes";
 import { pageZoom } from "@/lib/page-zoom";
 import { addCustomTag, CUSTOM_LABEL_MAX, snapshot as tagSnapshot, updateCustomDefinition } from "@/lib/station/custom-tags";
@@ -153,7 +153,7 @@ type Ctx = {
   actOn: (
     messageId: string,
     actionId: string,
-    op: { type: "undo" | "cancel" | "retry" } | { type: "confirm"; name: string } | { type: "choose"; value: "loop" | "once" } | { type: "addTo"; target: string; name?: string; ids?: string[] },
+    op: { type: "undo" | "cancel" | "retry" | "play" } | { type: "confirm"; name: string } | { type: "choose"; value: "loop" | "once" } | { type: "addTo"; target: string; name?: string; ids?: string[] },
   ) => void;
   /** the listener picked where to look next, for the question this answer was about */
   searchWith: (messageId: string, source: ChatSource) => void;
@@ -604,6 +604,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         else if (op.type === "retry") {
           patchAction(messageId, actionId, { state: "working", note: undefined });
           patchAction(messageId, actionId, await startAction({ ...action, state: "working" }, actionEnv()));
+        } else if (op.type === "play") {
+          // a prepared station: the listener's press is what starts it
+          patchAction(messageId, actionId, await playStation(action, actionEnv()));
         } else if (op.type === "choose") {
           patchAction(messageId, actionId, { state: "working" });
           patchAction(messageId, actionId, await chooseOption(action, op.value, actionEnv()));
@@ -838,6 +841,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                       : found.length
                         ? "곡을 찾았어요"
                         : "곡을 찾지 못했어요";
+                  } else if (event.name === "identify_song") {
+                    m.status = found.length ? "이 곡일 수 있어요" : "곡을 확인하지 못했어요";
                   } else if (event.name === "similar_to") {
                     m.status = found.length
                       ? `비슷한 곡 · ${String(result.based_on ?? "")}`

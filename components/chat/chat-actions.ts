@@ -53,6 +53,10 @@ export type ChatAction = {
   artist: string;
   /** a playlist's name */
   name?: string;
+  /** station: it was started from the card's play button, not only prepared */
+  started?: boolean;
+  /** station: how long it runs before it ends by itself; none means until it is stopped */
+  minutes?: number;
   /** open: which page to go to; `title` carries the search words, or the artist's or album's name */
   page?: Page;
   /** follow: the artist as Spotify has them, for the card and for taking the follow back */
@@ -144,6 +148,7 @@ export function actionFrom(raw: unknown): ChatAction | null {
     ...(kind === "mode" ? { shuffle, repeat } : {}),
     ...(kind === "seek" ? { seconds, relative: a.relative === true } : {}),
     ...(kind === "volume" ? { level, change, mute } : {}),
+    ...(kind === "station" && num(a.minutes, 5, 180) ? { minutes: num(a.minutes, 5, 180) } : {}),
     state: "working",
   };
 }
@@ -378,9 +383,10 @@ export async function startAction(a: ChatAction, env: ActionEnv): Promise<Partia
         if (!track) return fail(a.source === "now" ? NOTHING_PLAYING : NOT_FOUND);
         seed = { id: track.id, uri: track.uri, name: track.title, artist: track.artist, artwork: track.artwork, durationMs: track.durationMs };
       }
+      // the station is only prepared here: the queue is built, and nothing plays until the listener presses play on the card
       const tracks: ActionTrack[] = [{ id: seed.id, uri: seed.uri, title: seed.name, artist: seed.artist, artwork: seed.artwork, durationMs: seed.durationMs, albumId: null }];
-      await sp.startStation(seed);
-      return { state: "done", tracks, title: seed.name, artist: seed.artist };
+      await sp.startStation(seed, a.minutes, { play: false });
+      return { state: "done", started: false, tracks, title: seed.name, artist: seed.artist };
     }
 
     // a playlist is only gathered here: the listener sees the name and the songs, and makes it with a press
@@ -514,7 +520,17 @@ export async function undoAction(a: ChatAction, env: ActionEnv): Promise<Partial
   return {};
 }
 
-/** Stops a station that is still being built. */
+/** The listener pressed play on a station card: the prepared station plays from its first song. */
+export async function playStation(a: ChatAction, env: ActionEnv): Promise<Partial<ChatAction>> {
+  const sp = env.spotify;
+  const t = a.tracks?.[0];
+  // another station may have taken its place since the card was made
+  if (!t || !sp.stationActive || sp.stationSeedTrack?.uri !== t.uri) return fail("이 스테이션은 더 이상 준비돼 있지 않아요. 다시 만들어 주세요");
+  const ok = await sp.playStationSeed().catch(() => false);
+  return ok ? { state: "done", started: true } : fail("재생할 기기가 없어요. 플레이어를 켠 뒤 다시 눌러 주세요");
+}
+
+/** Stops a station that is still being built, or one the listener has not started yet. */
 export function cancelAction(a: ChatAction, env: ActionEnv): Partial<ChatAction> {
   if (a.kind === "station" && a.state === "working") {
     env.spotify.stopStation();

@@ -45,8 +45,11 @@ class Session:
         station: dict | None = None,
         likes: list[dict] | None = None,
         recent: list[dict] | None = None,
+        stats: dict | None = None,
     ) -> None:
         self.seen: set[str] = set()
+        # 사용자가 최근 재생 공유를 켰을 때만 오는, 계정 기록으로 센 최근 4주 취향 요약. my_taste 도구를 부를 때만 모델에게 보인다.
+        self.stats = stats
         # 사용자가 공유를 켰을 때만 오는 좋아요한 곡·최근 재생. 각각 my_likes, recent_plays 도구를 부를 때만 모델에게 보인다.
         self.likes = likes
         self.recent = recent
@@ -444,17 +447,33 @@ def playback(session: Session, command: str, title: str = "", artist: str = "") 
     return _action("playback", "화면이 바로 실행한다. 짧게 알린다.", command=command, title=title, artist=artist)
 
 
-def start_station(session: Session, title: str = "", artist: str = "") -> dict:
-    """곡이나 가수를 기준으로 스테이션을 시작한다. 아무것도 말하지 않으면 지금 듣는 곡이 기준이다."""
+_STATION_MIN, _STATION_MAX = 5, 180
+
+
+def _minutes(value: object) -> int:
+    """스테이션을 몇 분 동안 틀지. 없거나 숫자가 아니면 0(끝없이), 아니면 5~180분으로 맞춘다."""
+    try:
+        n = int(float(value))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
+    return 0 if n <= 0 else max(_STATION_MIN, min(_STATION_MAX, n))
+
+
+def start_station(session: Session, title: str = "", artist: str = "", minutes: int = 0) -> dict:
+    """곡이나 가수를 기준으로 스테이션을 시작한다. 아무것도 말하지 않으면 지금 듣는 곡이 기준이다.
+    minutes가 있으면 그 시간(분)만큼 틀고 스스로 끝난다."""
     title, artist = _line(title), _line(artist)
+    mins = _minutes(minutes)
+    extra = {"minutes": mins} if mins else {}
+    timed = f" 재생하면 {mins}분 동안 틀고 끝난다고 함께 알린다." if mins else ""
     if title:
-        return _action("station", "화면이 스테이션을 만들기 시작한다(10~20초). 시작한다고만 짧게 알린다.", source="named", title=title, artist=artist)
+        return _action("station", "화면이 스테이션 카드를 보여 주고, 사용자가 재생을 눌러야 시작된다. 준비했다고 짧게 알리고 이미 시작했다고 말하지 않는다." + timed, source="named", title=title, artist=artist, **extra)
     if artist:
-        return _action("station", "화면이 그 가수의 대표곡으로 스테이션을 만들기 시작한다(10~20초). 시작한다고만 짧게 알린다.", source="artist", title="", artist=artist)
+        return _action("station", "화면이 그 가수의 대표곡으로 스테이션 카드를 보여 주고, 사용자가 재생을 눌러야 시작된다. 준비했다고 짧게 알리고 이미 시작했다고 말하지 않는다." + timed, source="artist", title="", artist=artist, **extra)
     now = session.now_playing or {}
     if not now.get("playing"):
         return {"error": "지금 재생 중인 곡이 없어서 기준을 모른다. 곡이나 가수를 말해 달라고 한다."}
-    return _action("station", "화면이 지금 듣는 곡으로 스테이션을 만들기 시작한다(10~20초). 시작한다고만 짧게 알린다.", source="now", title=now["title"], artist=now.get("artist", ""))
+    return _action("station", "화면이 지금 듣는 곡으로 스테이션 카드를 보여 주고, 사용자가 재생을 눌러야 시작된다. 준비했다고 짧게 알리고 이미 시작했다고 말하지 않는다." + timed, source="now", title=now["title"], artist=now.get("artist", ""), **extra)
 
 
 _PLAYLIST_SOURCES = ("shown", "station", "now")
@@ -631,7 +650,7 @@ def track_info(title: str, artist: str = "") -> dict:
 
 # 사용자가 출처를 끄고 켤 수 있다. 출처 하나가 도구 여러 개를 거느리고, 꺼진 출처의 도구는 모델에게 보이지 않는다.
 SOURCES: dict[str, tuple[str, ...]] = {
-    "lastfm": ("top_tracks", "find_track", "artist_info", "artist_top_tracks", "track_info", "similar_to"),
+    "lastfm": ("top_tracks", "find_track", "identify_song", "artist_info", "artist_top_tracks", "track_info", "similar_to"),
     "wikipedia": ("wiki_summary",),
     "musicbrainz": ("albums",),
 }
@@ -1011,6 +1030,115 @@ def recent_plays(session: Session) -> dict:
     }
 
 
+def my_taste(session: Session) -> dict:
+    """사용자의 최근 취향 요약: 최근 4주에 많이 들은 가수·곡과 총 재생 수. 화면(서버)이 계정 기록으로 센 값이다.
+
+    "내 취향이 뭐야", "요즘 내가 뭘 많이 들었지", "내가 자주 듣는 가수"처럼 사용자 자신의 취향을 묻는 질문에서만 모델이 부른다.
+    """
+    stats = session.stats or {}
+    artists = stats.get("artists") or []
+    if not artists:
+        return {"found": False, "note": "아직 취향을 말할 만큼 들은 기록이 없습니다. 사용자에게 그렇게 말하고 지어내지 않는다."}
+    liked: dict[str, int] = {}
+    for t in session.likes or []:
+        who = str(t.get("artist") or "").split(", ")[0].strip()
+        if who:
+            liked[who] = liked.get(who, 0) + 1
+    likes_by_artist = sorted(liked.items(), key=lambda kv: -kv[1])[:5]
+    return {
+        "found": True,
+        "days": stats.get("days"),
+        "total_plays": stats.get("totalPlays"),
+        "top_artists": artists,
+        "top_tracks": stats.get("tracks") or [],
+        **({"liked_artists_recent": [{"artist": a, "liked_tracks": n} for a, n in likes_by_artist]} if likes_by_artist else {}),
+        "note": "plays는 그 기간에 들은 횟수다. 돌려받은 가수·곡만 말하고, 여기 없는 장르나 성향을 지어내지 않는다. 취향을 한두 문장으로 묶어 말한 뒤 이어서 들을 만한 것을 제안할 수 있다.",
+    }
+
+
+_LRCLIB = "https://lrclib.net/api/get"
+_LYRICS_MAX = 2500
+
+
+def lyrics_text(session: Session, title: str = "", artist: str = "") -> dict:
+    """곡의 가사를 LRCLIB에서 가져와 모델이 뜻을 풀이하거나 번역할 수 있게 준다. 제목을 말하지 않으면 지금 듣는 곡이다.
+    가사는 사용자에게 길게 옮겨 쓰지 않는다: 질문한 줄이나 짧은 인용만 쓰고 나머지는 뜻으로 풀이한다."""
+    title, artist = _line(title), _line(artist)
+    if not title:
+        now = session.now_playing or {}
+        if not now.get("playing"):
+            return {"error": "곡 제목을 모른다. 곡 이름을 말해 달라고 하거나, 곡을 재생한 뒤에 다시 묻게 한다."}
+        title, artist = now["title"], now.get("artist", "")
+    if not artist:
+        return {"error": "가수 이름을 모르면 가사를 찾을 수 없다. 가수를 말해 달라고 한다."}
+    try:
+        response = requests.get(_LRCLIB, params={"track_name": title, "artist_name": artist}, headers={"User-Agent": _WIKI_UA}, timeout=15)
+    except requests.RequestException:
+        return {"error": "가사 서비스에 연결하지 못했다. 잠시 후 다시 해 보자고 한다."}
+    if response.status_code == 404:
+        return {"found": False, "title": title, "artist": artist, "note": "가사 서비스(LRCLIB)에 이 곡의 가사가 없다. 가사를 기억으로 지어내지 않고 없다고 말한다."}
+    if not response.ok:
+        return {"error": "가사를 가져오지 못했다. 잠시 후 다시 해 보자고 한다."}
+    data = response.json()
+    if data.get("instrumental"):
+        return {"found": True, "title": data.get("trackName", title), "artist": data.get("artistName", artist), "instrumental": True, "note": "가사가 없는 연주곡이다."}
+    plain = str(data.get("plainLyrics") or "").strip()
+    if not plain:
+        return {"found": False, "title": title, "artist": artist, "note": "가사 서비스에 이 곡의 가사가 없다. 지어내지 않고 없다고 말한다."}
+    clipped = len(plain) > _LYRICS_MAX
+    return {
+        "found": True,
+        "title": data.get("trackName", title),
+        "artist": data.get("artistName", artist),
+        "lyrics": plain[:_LYRICS_MAX],
+        "truncated": clipped,
+        "note": "가사는 사용자에게 전부 옮겨 쓰지 않는다. 사용자가 물은 부분의 뜻이나 번역만 짧게 풀이하고, 인용은 한두 줄까지만 한다. 곡 전체의 해석은 주제와 분위기를 요약한다. 가사에 없는 배경(만든 이유, 사연)은 지어내지 않는다.",
+    }
+
+
+_IDENTIFY_MAX = 5
+
+
+def identify_song(clues: str = "", guesses: list | None = None) -> dict:
+    """가사 조각이나 분위기 설명만 아는 곡을 찾는다. 모델이 짐작한 후보("제목 - 가수")를 Last.fm에서 하나씩 확인해,
+    실제로 있는 곡만 카드로 돌려준다. 확인되지 않은 후보는 말하지 않는다."""
+    found: list[dict] = []
+    checked: list[str] = []
+    seen: set[str] = set()
+    for raw in (guesses or [])[:_IDENTIFY_MAX]:
+        text = " ".join(str(raw).split())
+        if not text:
+            continue
+        title, _, artist = text.rpartition(" - ") if " - " in text else (text, "", "")
+        checked.append(text)
+        try:
+            r = find_track(title.strip(), artist.strip())
+        except Exception:  # noqa: BLE001 — 한 후보가 실패해도 다음 후보를 확인한다
+            continue
+        if not r.get("found") or r.get("substitute"):
+            continue
+        key = f"{r['title']}|{r['artist']}".lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append({"title": r["title"], "artist": r["artist"]})
+    if not found:
+        return {
+            "found": False,
+            "clues": _line(clues, 200),
+            "checked": checked,
+            "tracks": [],
+            "note": "후보를 확인하지 못했다. 곡을 단정하지 말고, 기억나는 가사 한 줄이나 가수·시기·언어를 더 알려 달라고 한 문장으로 말한다.",
+        }
+    return {
+        "found": True,
+        "clues": _line(clues, 200),
+        "checked": checked,
+        "tracks": found,
+        "note": "단서로 짐작해 확인된 후보다. 확실하다고 단정하지 말고 '이 곡일 수 있어요'라고 말하고, 카드를 눌러 들어 보고 맞는지 알려 달라고 한다. 가사를 길게 옮기지 않는다.",
+    }
+
+
 # 화면이 열 수 있는 곳. artist·album·search는 이름이나 검색어가 더 필요하다.
 _PAGES = ("home", "history", "mypage", "issues", "weekly_artist", "editors_pick", "station", "search", "artist", "album")
 _NEEDS_NAME = ("search", "artist", "album")
@@ -1239,6 +1367,7 @@ TOOLS: dict[str, dict] = {
                     "properties": {
                         "title": {"type": "string", "description": "기준이 될 곡 제목. 가수나 지금 듣는 곡이면 비운다."},
                         "artist": {"type": "string", "description": "기준이 될 가수"},
+                        "minutes": {"type": "integer", "description": "몇 분 동안 틀지(5~180). '청소하는 동안 40분'처럼 시간을 말했을 때만 넣고, 말하지 않았으면 비운다."},
                     },
                 },
             },
@@ -1520,6 +1649,62 @@ TOOLS: dict[str, dict] = {
         },
         "run": recent_plays,
     },
+    "my_taste": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "my_taste",
+                "description": (
+                    "사용자 자신의 취향을 가져온다: 최근 4주에 많이 들은 가수·곡. '내 취향이 뭐야', '요즘 내가 뭘 많이 들었지', "
+                    "'내가 자주 듣는 가수'처럼 사용자의 취향을 묻는 말에서만 부른다. 분위기로 추천을 묻는 말에는 부르지 않는다."
+                ),
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        "run": my_taste,
+    },
+    "identify_song": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "identify_song",
+                "description": (
+                    "제목을 모르는 곡을 찾는다. 사용자가 가사 한 줄이나 '이런 분위기의 곡이었는데'처럼 곡 이름 없이 단서만 줄 때 부른다. "
+                    "단서로 짐작한 후보를 '제목 - 가수' 형식으로 최대 5개 guesses에 넣으면, 실제로 있는 곡만 확인해 돌려준다. "
+                    "사용자가 곡 이름을 말했으면 find_track을 쓴다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "clues": {"type": "string", "description": "사용자가 준 단서(가사 조각, 분위기, 시기 등)를 그대로"},
+                        "guesses": {"type": "array", "items": {"type": "string"}, "description": "짐작한 후보. 각각 '제목 - 가수' (예: 'Dynamite - BTS'). 확신이 없는 것도 넣되 최대 5개"},
+                    },
+                    "required": ["clues", "guesses"],
+                },
+            },
+        },
+        "run": identify_song,
+    },
+    "lyrics_text": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "lyrics_text",
+                "description": (
+                    "곡의 가사를 가져와 뜻을 풀이하거나 번역한다. '이 노래 가사 무슨 뜻이야', '가사 번역해줘', '이 부분 해석해줘'처럼 "
+                    "가사의 의미를 묻는 말에서 부른다. 제목을 말하지 않았으면 지금 듣는 곡이다. 가사 화면을 열어 달라는 말은 lyrics를 쓴다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "곡 제목. 지금 듣는 곡이면 비운다."},
+                        "artist": {"type": "string", "description": "가수 이름. 지금 듣는 곡이면 비운다."},
+                    },
+                },
+            },
+        },
+        "run": lyrics_text,
+    },
     "open_page": {
         "schema": {
             "type": "function",
@@ -1652,7 +1837,7 @@ TOOLS: dict[str, dict] = {
 
 # 모드마다 모델에게 보여 주는 도구가 다르다. 작은 모델은 도구가 많을수록 고르기 어려워한다.
 TOOLS_CHAT = (
-    "top_tracks", "find_track", "artist_info", "artist_top_tracks", "track_info", "similar_to", "wiki_summary", "albums",
+    "top_tracks", "find_track", "identify_song", "artist_info", "artist_top_tracks", "track_info", "similar_to", "wiki_summary", "albums",
 )
 TOOLS_REFINE = ("propose_definition",)
 
@@ -1672,6 +1857,7 @@ def tools_for(
     station_on: bool = False,
     likes_on: bool = False,
     recent_on: bool = False,
+    stats_on: bool = False,
 ) -> tuple[str, ...]:
     """쓸 수 있는 출처의 도구만. sources가 None이면 기본 출처(Last.fm).
 
@@ -1684,6 +1870,9 @@ def tools_for(
     # 지금 듣는 곡은 출처가 아니라 사용자의 화면에서 온다: 화면이 보내 준 때에만 모델에게 보인다
     if now_playing_on:
         names += ("now_playing",)
+    # 가사 풀이는 LRCLIB에서 가져오는 것이라 출처 버튼과 무관하지만, 출처를 모두 껐다면(조회 불가) 함께 뺀다
+    if on:
+        names += ("lyrics_text",)
     # 스테이션의 곡도 화면에서 온다. 동작은 사용자의 계정이 있어야 해서 연결한 사용자에게만 준다
     if station_on:
         names += ("station_info",)
@@ -1692,6 +1881,8 @@ def tools_for(
         names += ("my_likes",)
     if recent_on:
         names += ("recent_plays",)
+    if stats_on:
+        names += ("my_taste",)
     if can_act:
         names += ACTION_TOOLS
     return names + ("request_source",) if any(name not in used for name in SOURCES) else names
@@ -1708,7 +1899,7 @@ def call_tool(name: str, arguments: dict, session: Session, allowed: tuple[str, 
         return {"error": f"지금은 쓸 수 없는 도구: {name}. 쓸 수 있는 도구: {', '.join(allowed)}. 이 중에 맞는 것이 있으면 그걸로 다시 시도하고, 없으면 할 수 없다고 말한다."}
     try:
         run = tool["run"]
-        return run(session, **arguments) if name in ("top_tracks", "similar_to", "now_playing", "station_info", "my_likes", "recent_plays", *ACTION_TOOLS) else run(**arguments)
+        return run(session, **arguments) if name in ("top_tracks", "similar_to", "now_playing", "station_info", "my_likes", "recent_plays", "my_taste", "lyrics_text", *ACTION_TOOLS) else run(**arguments)
     except TypeError as e:
         return {"error": f"인자가 맞지 않습니다: {e}"}
     except Exception as e:  # 네트워크 실패 등 — 모델이 사용자에게 설명할 수 있도록 문구로 전달

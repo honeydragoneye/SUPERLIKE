@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { signedInUser, withTokens } from "@/lib/db/account";
 import { avoidKeys, getMemory, summarize } from "@/lib/db/memory";
+import { MIN_PLAYS, TASTE_DAYS, tasteOf } from "@/lib/db/taste";
 
 /**
  * Where the chat agent listens — a separate local process, `npm run agent`
@@ -154,12 +155,26 @@ export async function POST(request: NextRequest) {
     // see above
   }
 
+  // the last four weeks as the account's own play records count them. Only when the listener shares recent plays:
+  // the agent reads it when asked what their taste is
+  let stats: { days: number; totalPlays: number; artists: { name: string; plays: number }[]; tracks: { title: string; artist: string }[] } | undefined;
+  if (recent !== undefined && signedIn) {
+    try {
+      const t = await tasteOf(signedIn.id);
+      if (t.totalPlays >= MIN_PLAYS && t.artists.length) {
+        stats = { days: TASTE_DAYS, totalPlays: t.totalPlays, artists: t.artists.slice(0, 8), tracks: t.tracks.slice(0, 8) };
+      }
+    } catch {
+      // no plays to read, or no database: the tool is simply not offered
+    }
+  }
+
   let upstream: Response;
   try {
     upstream = await fetch(`${AGENT_URL}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(AGENT_TOKEN ? { Authorization: `Bearer ${AGENT_TOKEN}` } : {}) },
-      body: JSON.stringify({ question, history, refine, sources, taste, nowPlaying, station, canAct, likes, recent, memory, avoid }),
+      body: JSON.stringify({ question, history, refine, sources, taste, nowPlaying, station, canAct, likes, recent, memory, avoid, stats }),
       // closing the chat or sending the next question cuts the agent's work short too
       signal: request.signal,
       cache: "no-store",

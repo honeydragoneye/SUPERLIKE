@@ -285,6 +285,19 @@ export function useStation({
   const [seed, setSeed] = useState<StationSeed | null>(null);
   const seedLabel = seed ? `${seed.name} — ${seed.artist}` : null;
   const [busy, setBusy] = useState<string | null>(null);
+  /**
+   * When a timed station ends ("40분 스테이션"): epoch ms, or null for one that runs until it is stopped.
+   * Wall clock on purpose — the listener asked for the time they will be busy, not for a number of songs.
+   */
+  const [endsAt, setEndsAt] = useState<number | null>(null);
+  const endsAtRef = useRef<number | null>(null);
+  /** the minutes a prepared (not yet playing) station was asked for: the clock starts when it is played */
+  const pendingMinutesRef = useRef(0);
+  /**
+   * Whether the station has begun playing. A prepared station is active (its queue is built) but silent: a song
+   * that was already playing and ends meanwhile must not be taken over by it — only the listener's press starts it.
+   */
+  const startedRef = useRef(false);
 
   // mirrored in an effect rather than during render: callbacks below run after
   // commit, so the committed value is the one they should act on
@@ -494,6 +507,8 @@ export function useStation({
         const outcome = await attempt(head.uri);
         if (outcome === "unavailable") return;   // no device: nothing to skip to
         if (outcome === "played") {
+          // a press on next or on an upcoming song begins the station too
+          startedRef.current = true;
           setQueue(rest);
           historyRef.current.push(head);
           stationRef.current.lastPlayed = {
@@ -578,7 +593,14 @@ export function useStation({
   }, [attempt]);
 
   const startStation = useCallback(
-    async (seed: StationSeed) => {
+    async (seed: StationSeed, minutes?: number, opts?: { play?: boolean }) => {
+      const play = opts?.play !== false;
+      // a station that is only prepared starts its clock when it is played, not when it is built
+      const until = play && minutes && minutes > 0 ? Date.now() + minutes * 60_000 : null;
+      pendingMinutesRef.current = !play && minutes && minutes > 0 ? minutes : 0;
+      startedRef.current = play;
+      endsAtRef.current = until;
+      setEndsAt(until);
       /**
        * A new station starts with no tags.
        *
@@ -615,7 +637,8 @@ export function useStation({
         },
       ];
       setSeed(seed);
-      const started = await attempt(seed.uri);
+      // prepared only: the queue is built, nothing plays until playSeed
+      const started = play ? await attempt(seed.uri) : "played";
       const candidates = await fillQueue(true, 0);
       // the seed itself can be refused — an explicit track on a filtered
       // account, say. Build the queue anyway and start at the first one that
@@ -698,7 +721,27 @@ export function useStation({
     [fillQueue],
   );
 
+  /** Plays a prepared station from its seed, and starts the clock of a timed one. */
+  const playSeed = useCallback(async (): Promise<boolean> => {
+    const seed = stationRef.current.seed;
+    if (!seed) return false;
+    startedRef.current = true;
+    if (pendingMinutesRef.current > 0) {
+      const until = Date.now() + pendingMinutesRef.current * 60_000;
+      pendingMinutesRef.current = 0;
+      endsAtRef.current = until;
+      setEndsAt(until);
+    }
+    const outcome = await attempt(seed.uri);
+    if (outcome === "refused") await playFromQueue();
+    return outcome !== "unavailable";
+  }, [attempt, playFromQueue]);
+
   const stopStation = useCallback(() => {
+    startedRef.current = false;
+    pendingMinutesRef.current = 0;
+    endsAtRef.current = null;
+    setEndsAt(null);
     stationRef.current = emptyState();
     historyRef.current = [];
     setQueue([]);
@@ -728,13 +771,21 @@ export function useStation({
     const before = prev.current;
     prev.current = { uri: currentUri, paused: isPaused, position: positionMs };
 
-    if (!stationRef.current.seed) return;
+    if (!stationRef.current.seed || !startedRef.current) return;
     if (!currentUri || before.uri !== currentUri) return;
     if (!(before.paused === false && isPaused && positionMs === 0)) return;
 
     const now = Date.now();
     if (now - lastEndAt.current < 2000) return;
     lastEndAt.current = now;
+
+    // a timed station ends with the song that ran past its time: the track has just finished and Spotify is
+    // paused at its start, so closing the station is all that is left to do. A minute of slack keeps a song
+    // that would end right at the deadline from being followed by another.
+    if (endsAtRef.current !== null && now >= endsAtRef.current - 60_000) {
+      stopStation();
+      return;
+    }
 
     // the queue drives playback here, so repeat-one has to be honoured by us
     if (repeatOne) {
@@ -746,7 +797,7 @@ export function useStation({
       return;
     }
     void playFromQueue();
-  }, [currentUri, isPaused, positionMs, repeatOne, attempt, playFromQueue]);
+  }, [currentUri, isPaused, positionMs, repeatOne, attempt, playFromQueue, stopStation]);
 
   return {
     queue,
@@ -760,8 +811,10 @@ export function useStation({
     moodError,
     moodMs,
     isActive: seed !== null,
+    endsAt,
     station: stationRef,
     startStation,
+    playSeed,
     stopStation,
     playFromQueue,
     removeFromQueue,

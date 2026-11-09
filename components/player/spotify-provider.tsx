@@ -127,7 +127,12 @@ type Ctx = {
   stationMoodError: string | null;
   /** how long the last queue build waited on Gemini, for the panel */
   stationMoodMs: number | null;
-  startStation: (seed: StationSeed) => Promise<void>;
+  /** a timed station (minutes) stops itself after that long */
+  startStation: (seed: StationSeed, minutes?: number, opts?: { play?: boolean }) => Promise<void>;
+  /** plays a station that was only prepared (`play: false`) */
+  playStationSeed: () => Promise<boolean>;
+  /** when the running station ends, or null if it has no end */
+  stationEndsAt: number | null;
   stopStation: () => void;
   playFromStation: (track: StationCandidate) => Promise<void>;
   /** drops one upcoming track; it does not come back while this station runs */
@@ -670,7 +675,9 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
       setStationFilter: station.setFilter,
       stationMoodError: station.moodError,
       stationMoodMs: station.moodMs,
-      startStation: async (seed) => {
+      stationEndsAt: station.endsAt,
+      playStationSeed: station.playSeed,
+      startStation: async (seed, minutes, opts) => {
         /**
          * A station owns shuffle for its whole life, not just once the user
          * turns it on: Spotify's flag can still be set from an earlier PLAY ALL,
@@ -679,7 +686,7 @@ export function SpotifyProvider({ children }: { children: React.ReactNode }) {
         stationOwnsShuffleRef.current = true;
         setShuffle(false);
         if (deviceId) await setMode({ action: "shuffle", state: false }, true);
-        await station.startStation(seed);
+        await station.startStation(seed, minutes, opts);
       },
       stopStation: () => {
         stationOwnsShuffleRef.current = false;

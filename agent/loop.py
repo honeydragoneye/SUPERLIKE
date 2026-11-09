@@ -33,6 +33,23 @@ _NAMED = (
 _NAMED_CARDS = (
     "찾은 곡은 화면에 카드로 나오니, 카드의 재생 버튼을 누르면 들을 수 있다고 안내한다.\n"
 )
+# 곡 이름 없이 단서만 준 경우: 후보를 짐작해 도구로 확인하고, 확인된 것만 후보로 말한다
+_IDENTIFY = (
+    "사용자가 곡 이름 없이 가사 한 줄이나 분위기, 들었던 상황만 말하며 '이 노래 뭐야', '제목이 기억 안 나'라고 하면 identify_song을 부른다. "
+    "단서로 짐작한 후보를 guesses에 '제목 - 가수' 형식으로 넣고(확신이 없어도 최대 5개), 도구가 확인해 준 곡만 '이 곡일 수 있어요'라고 말한다. "
+    "확인되지 않은 곡은 말하지 않고, 가사를 길게 옮기지 않는다.\n"
+)
+# 가사의 뜻을 묻는 질문: 가사를 가져와 읽고 풀이한다. 가사 전문을 옮겨 쓰지 않는다
+_LYRICS_MEANING = (
+    "'이 노래 가사 무슨 뜻이야', '가사 번역해줘', '이 부분 해석해줘'처럼 가사의 뜻을 물으면 lyrics_text를 불러 돌려받은 가사로만 풀이한다. "
+    "제목을 말하지 않았으면 지금 듣는 곡이다. 가사를 전부 옮겨 쓰거나 전체를 번역하지 않고, 물은 부분의 뜻이나 곡의 주제를 짧게 풀이한다(인용은 한두 줄까지). "
+    "가사에 없는 만든 배경이나 사연은 지어내지 않는다. 가사가 없다고 나오면 없다고만 말한다.\n"
+)
+# 사용자 자신의 취향을 묻는 질문: 계정 기록으로 센 값으로만 답한다
+_MY_TASTE = (
+    "'내 취향이 뭐야', '요즘 내가 뭘 많이 들었지', '내가 자주 듣는 가수'처럼 사용자 자신의 취향을 묻는 말에는 먼저 my_taste를 불러, "
+    "돌려받은 가수·곡으로만 답한다. 없는 장르나 성향을 지어내지 않는다.\n"
+)
 # 가수·곡에 대한 질문: 글이 곧 답이다. 모델의 기억 대신 Last.fm이 돌려준 내용으로만 답하게 한다
 _INFO = (
     "가수나 곡에 대해 묻는 말(어떤 가수·곡인지, 어느 나라인지, 언제 데뷔했는지, 어느 앨범인지, 비슷한 "
@@ -61,7 +78,7 @@ _NO_NOW = (
 _ACTIONS = (
     "사용자가 동작을 시키면 맞는 도구를 한 번 부른다: 좋아요(like_track), 재생·멈춤·다음 곡(playback), "
     "셔플·반복(player_mode), 재생 위치 옮기기(seek), 음량(volume), 곡 하나만 들려 달라는 말(play_one), "
-    "곡 하나, 또는 방금 보여 준 곡들(source=\"shown\")을 기존 플레이리스트에 담기(add_to_playlist), 다음에 나올 곡 목록(up_next), 가사 화면 열기(lyrics), 스테이션 끝내기(stop_station), 스테이션 시작(start_station), 새 플레이리스트 만들기(make_playlist), 다른 페이지로 옮기기(open_page: 홈·최근 재생 기록·마이페이지·지난 호·금주의 아티스트·에디터스 픽·스테이션·검색 결과·가수·앨범 페이지), 가수 팔로우(follow_artist: ‘팔로우해줘’는 가수 이름만 있으면 곧바로 이 도구를 부른다. 도구를 부르지 않고 ‘팔로우할게요’라고만 답하지 않는다). 도구는 제안만 하고 실행은 화면이 하며, "
+    "곡 하나, 또는 방금 보여 준 곡들(source=\"shown\")을 기존 플레이리스트에 담기(add_to_playlist), 다음에 나올 곡 목록(up_next), 가사 화면 열기(lyrics), 스테이션 끝내기(stop_station), 스테이션 시작(start_station: ‘스테이션 만들어/추천해/다시’처럼 스테이션을 달라는 말에는 곡 목록만 보여 주고 끝내지 말고 반드시 이 도구를 부른다. ‘청소하는 동안 40분’처럼 들을 시간을 말하면 minutes에 분을 넣는다. 시간이 있는 요청은 플레이리스트가 아니라 스테이션으로 처리하고, 기준 곡이나 가수를 말하지 않고 분위기만 말했으면 먼저 top_tracks로 그 분위기의 곡을 찾아 그중 하나를 title·artist로 넣는다), 새 플레이리스트 만들기(make_playlist), 다른 페이지로 옮기기(open_page: 홈·최근 재생 기록·마이페이지·지난 호·금주의 아티스트·에디터스 픽·스테이션·검색 결과·가수·앨범 페이지), 가수 팔로우(follow_artist: ‘팔로우해줘’는 가수 이름만 있으면 곧바로 이 도구를 부른다. 도구를 부르지 않고 ‘팔로우할게요’라고만 답하지 않는다). 도구는 제안만 하고 실행은 화면이 하며, "
     "결과(좋아요에 담았는지, 만들었는지)는 화면에 카드로 따로 보인다. 그래서 글은 한두 문장으로 짧게 "
     "\"~할게요\"처럼 알리고, 이미 됐다고 단정하지 않으며 곡 목록을 되풀이하지 않는다. 플레이리스트는 사용자가 "
     "만들기를 눌러야 만들어지니 \"만들어 볼까요?\"처럼 말한다. 곡 이름을 말하며 틀어 달라거나 좋아요를 "
@@ -124,8 +141,8 @@ _TAIL = (
     "날씨, 시간, 뉴스처럼 네가 알 수 없는 것은 모른다고 짧게 말하고, 음악 이야기로 돌아오도록 "
     "이끈다."
 )
-SYSTEM_PROMPT = _HEAD + _NAMED + _INFO + _RULE_LIST + _TAIL
-SYSTEM_PROMPT_CARDS = _HEAD + _NAMED + _NAMED_CARDS + _INFO + _LINK_CARDS + _RULE_CARDS + _TAIL
+SYSTEM_PROMPT = _HEAD + _NAMED + _IDENTIFY + _LYRICS_MEANING + _INFO + _RULE_LIST + _TAIL
+SYSTEM_PROMPT_CARDS = _HEAD + _NAMED + _NAMED_CARDS + _IDENTIFY + _LYRICS_MEANING + _INFO + _LINK_CARDS + _RULE_CARDS + _TAIL
 
 
 # 곡을 틀거나 찾아 달라는 말, 추천해 달라는 말: 이런 요청은 도구로 확인해야 답할 수 있다
@@ -188,6 +205,9 @@ def _direct_action(question: str) -> tuple[str, dict] | None:
         found = target(m) if callable(target) else target
         if found is None:
             continue
+        # '40분 스테이션'처럼 시간을 말한 스테이션은 minutes를 읽어야 해서 모델에게 맡긴다
+        if found[0] == "start_station" and re.search(r"\d+\s*(분|시간)", q):
+            return None
         name, args = found
         return name, dict(args)
     return None
@@ -211,6 +231,26 @@ _TAG_CREATE = (
 _MAKES_TAG = re.compile(r"태그.*(만들|만드|생성|새로\s*추가)|(만들|만드|생성).*태그")
 _NOT_TAG_JOB = re.compile(r"삭제|지워|없애|플레이리스트")
 _TAG_FILLER = re.compile(r"이런|곡만|모으는|모을|내|새로|새|하나|좀|를|을|은|는|이|가|만들어|만들고|만들|만드는|만들래|만들어줘|줘|주세요|싶어요|싶어|해줘|해 줘|태그|요|\s")
+
+
+# 스테이션을 만들어 달라는 말: 곡 목록만 보여 주고 끝내면 안 된다(스테이션 카드와 전체 재생이 있어야 한다)
+_WANTS_STATION = re.compile(r"스테이션")
+_STATION_VERB = re.compile(r"만들|추천|다시|더\s*(추가|넣|해)|틀어|시작|해\s*줘|해줘|짜\s*줘")
+_NOT_STATION_JOB = re.compile(r"꺼|끄|종료|끝|그만|중지|멈춰|열어|보여|뭐|어떻게|왜|\?")
+_MINUTES = re.compile(r"(\d+)\s*(분|시간)|(한|두|세)\s*시간")
+
+
+def _station_minutes(question: str, history: list[dict]) -> int:
+    """말에서 들을 시간(분). 이 말에 없으면 앞선 사용자 말에서 찾는다('다시 만들어줘'는 같은 시간으로)."""
+    for text in [question] + [m.get("content", "") for m in reversed(history) if m.get("role") == "user"][:3]:
+        m = _MINUTES.search(str(text))
+        if not m:
+            continue
+        if m.group(1):
+            n = int(m.group(1))
+            return n * 60 if m.group(2) == "시간" else n
+        return {"한": 60, "두": 120, "세": 180}[m.group(3)]
+    return 0
 
 
 # 동작을 했다/하겠다고 말하는 글: 이런 말을 하면서 동작 도구를 부르지 않았으면 거짓말이 된다
@@ -411,6 +451,7 @@ def run_agent(
     recent: list[dict] | None = None,
     memory: dict | None = None,
     avoid: list[str] | None = None,
+    stats: dict | None = None,
 ) -> Iterator[dict]:
     """이벤트를 하나씩 내보낸다.
 
@@ -459,7 +500,7 @@ def run_agent(
         # 곡 검색 도구는 뺀다: propose_definition이 이미 곡을 찾아 보여 주고, 많이 주면 작은 모델이 고르기 어려워한다
         + tuple(t for t in tools_for([], now_playing is not None, can_act, station is not None, likes is not None, recent is not None) if t != "request_source")
         if refine
-        else tools_for(sources, now_playing is not None, can_act, station is not None, likes is not None, recent is not None)
+        else tools_for(sources, now_playing is not None, can_act, station is not None, likes is not None, recent is not None, stats is not None)
     )
     system = (
         refine_prompt(refine["label"], refine["definition"])
@@ -516,7 +557,7 @@ def run_agent(
             system += _TAG_CREATE + (_TAG_PENDING if answering else "")
             if force_tag and not force_first:
                 force_first = ["propose_tag"]
-    session = Session(now_playing, station, likes, recent)
+    session = Session(now_playing, station, likes, recent, stats)
     # 사용자에 대한 기억은 말투와 취향에 반영한다(태그 다듬기에서는 말투만 의미가 있지만 같이 보낸다)
     if memory and memory.get("text"):
         system += _memory_prompt(str(memory["text"]))
@@ -534,6 +575,8 @@ def run_agent(
             system += "\n" + _LIKES
         if recent is not None:
             system += "\n" + _RECENT
+        if stats is not None:
+            system += "\n" + _MY_TASTE
         if likes is None or recent is None:
             system += _NO_SHARE
     if taste and not refine:
@@ -574,6 +617,12 @@ def run_agent(
     # 마지막 top_tracks가 돌려준 곡 수. 0곡이면 답하기 전에 다른 태그로 한 번 더 찾아 본다.
     last_found: int | None = None
     retried_empty = False
+    # 스테이션을 만들어 달라는 말인데 start_station을 아직 안 불렀다면, 찾아 둔 곡으로 마저 부른다
+    wants_station = bool(
+        can_act and not refine and _WANTS_STATION.search(question) and _STATION_VERB.search(question) and not _NOT_STATION_JOB.search(question)
+    )
+    station_called = bool(direct and direct[0] == "start_station")
+    last_tracks: list[dict] = []
 
     if memory and memory.get("text"):
         yield {"type": "memory", "count": int(memory.get("count") or 1)}
@@ -633,6 +682,26 @@ def run_agent(
                         ),
                     }
                 )
+                continue
+            # 스테이션을 만들어 달라고 했는데 곡 목록만 찾고 끝내려는 경우: 찾은 첫 곡을 기준으로 스테이션을 이어서 만든다
+            # (그래야 곡마다 따로가 아니라 스테이션 하나로 전체를 이어 들을 수 있다)
+            if wants_station and not station_called and "start_station" in tools and last_tracks and step < MAX_STEPS:
+                first = last_tracks[0]
+                args = {"title": str(first.get("title", "")), "artist": str(first.get("artist", ""))}
+                minutes = _station_minutes(question, history)
+                if minutes:
+                    args["minutes"] = minutes
+                call = {
+                    "function": {"name": "start_station", "arguments": args},
+                    "_part": {"functionCall": {"name": "start_station", "args": args}, "thoughtSignature": "skip_thought_signature_validator"},
+                }
+                station_called = True
+                acted = True
+                yield {"type": "tool_call", "name": "start_station", "arguments": args}
+                result = call_tool("start_station", args, session, tools)
+                yield {"type": "tool_result", "name": "start_station", "result": result}
+                messages.append({"role": "assistant", "content": content, "tool_calls": [call]})
+                messages.append({"role": "tool", "tool_name": "start_station", "content": json.dumps(result, ensure_ascii=False)})
                 continue
             # 곡 이름을 말했는데 도구를 부르지 않고 "그런 곡은 없다"거나 아는 척 답하는 경우: 작은 모델이
             # 확인 없이 단정하는 버릇이라, 도구를 먼저 쓰도록 한 번 되돌린다.
@@ -703,6 +772,8 @@ def run_agent(
             fn = call["function"]
             if fn["name"] in ACTION_TOOLS:
                 acted = True
+            if fn["name"] == "start_station":
+                station_called = True
             args = fn.get("arguments") or {}
             yield {"type": "tool_call", "name": fn["name"], "arguments": args}
             if fn["name"] == "request_source" and "request_source" in tools:
@@ -719,6 +790,8 @@ def run_agent(
                     canned.append(line)
             if isinstance(result, dict) and isinstance(result.get("tracks"), list):
                 seen_titles += [t["title"] for t in result["tracks"] if "title" in t]
+                if result["tracks"] and fn["name"] != "start_station":
+                    last_tracks = result["tracks"]
                 if fn["name"] == "top_tracks":
                     last_found = len(result["tracks"])
             messages.append(

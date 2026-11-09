@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { usePlaybackPosition, useSpotify } from "@/components/player/spotify-provider";
+import { LoadingDots } from "@/components/ui/loading-dots";
 import { clock, playQueued, showsPlayer, type ChatAction } from "./chat-actions";
 import { useChat } from "./chat-provider";
 
@@ -139,13 +140,16 @@ function Follow({ messageId, a }: { messageId: string; a: ChatAction }) {
 function Station({ messageId, a }: { messageId: string; a: ChatAction }) {
   const { actOn } = useChat();
   const router = useRouter();
+  const sp = useSpotify();
   const track = a.tracks?.[0];
   const title = track?.title ?? (a.title || a.artist);
+  // the card shows the song the station is built on; the songs that follow wait in its queue
+  const queued = track && sp.stationSeedTrack?.uri === track.uri ? sp.stationQueue.length : 0;
   return (
     <li className="flex flex-col gap-[8px] rounded-[8px] bg-chart p-[10px]">
       <div className="flex items-center gap-[6px]">
-        <span className="text-[8px] tracking-[0.8px] text-accent-bright">STATION</span>
-        {a.state === "done" && <span className="rounded-pill bg-ink px-[7px] py-[2px] text-[7px] tracking-[0.5px] text-on-ink">시작했어요 ✓</span>}
+        <span className="text-[8px] tracking-[0.8px] text-accent-bright">STATION{a.minutes ? ` · ${a.minutes}분` : ""}</span>
+        {a.state === "done" && <span className="rounded-pill bg-ink px-[7px] py-[2px] text-[7px] tracking-[0.5px] text-on-ink">{a.started === false ? "준비했어요" : "시작했어요 ✓"}</span>}
         {a.state === "cancelled" && <span className="rounded-pill bg-soft px-[7px] py-[2px] text-[7px] tracking-[0.5px] text-on-bright-muted">취소했어요</span>}
       </div>
       <div className="flex items-center gap-[8px]">
@@ -160,7 +164,11 @@ function Station({ messageId, a }: { messageId: string; a: ChatAction }) {
           <span aria-hidden className="relative h-[4px] w-full overflow-hidden rounded-pill bg-soft">
             <span className="absolute inset-y-0 w-1/3 animate-pulse rounded-pill bg-accent-bright" />
           </span>
-          <p className="text-[8px] leading-[12px] tracking-[0.4px] text-on-bright-muted">비슷한 곡을 찾고 가사를 확인하는 중… 보통 10~20초</p>
+          <p className="flex items-center gap-[4px] text-[8px] leading-[12px] tracking-[0.4px] text-on-bright-muted">
+            비슷한 곡을 찾고 가사를 확인하는 중
+            <LoadingDots size={3} label="곡을 찾는 중" />
+            <span>보통 10~20초</span>
+          </p>
           <div className="flex gap-[6px]">
             <Button onClick={() => actOn(messageId, a.id, { type: "cancel" })}>취소</Button>
           </div>
@@ -168,9 +176,23 @@ function Station({ messageId, a }: { messageId: string; a: ChatAction }) {
       )}
       {a.state === "done" && (
         <>
-          <p className="text-[9px] leading-[14px]">지금 재생을 스테이션으로 바꿨어요. 대기열은 스테이션 화면에서 볼 수 있어요.</p>
+          <p className="text-[9px] leading-[14px]">
+            {a.started === false
+              ? a.minutes
+                ? `${a.minutes}분짜리 스테이션을 준비했어요. 재생을 누르면 시작하고, ${a.minutes}분쯤 뒤에 마지막 곡이 끝나면 스스로 멈춰요.`
+                : "스테이션을 준비했어요. 재생을 누르면 시작해요."
+              : a.minutes
+                ? `스테이션을 재생 중이에요. ${a.minutes}분쯤 뒤에 마지막 곡이 끝나면 스스로 멈춰요.`
+                : "스테이션을 재생 중이에요. 대기열은 스테이션 화면에서 볼 수 있어요."}
+          </p>
+          {queued > 0 && <p className="text-[8px] tracking-[0.4px] text-on-bright-muted">이어서 나올 곡 {queued}곡이 대기열에 준비돼 있어요</p>}
           <div className="flex gap-[6px]">
-            <Button dark onClick={() => router.push("/station")}>
+            {a.started === false && (
+              <Button dark onClick={() => actOn(messageId, a.id, { type: "play" })}>
+                ▶ 재생
+              </Button>
+            )}
+            <Button dark={a.started !== false} onClick={() => router.push("/station")}>
               스테이션 열기 →
             </Button>
           </div>
