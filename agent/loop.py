@@ -213,6 +213,24 @@ def _direct_action(question: str) -> tuple[str, dict] | None:
     return None
 
 
+# 모델이 도구를 부르지 않고 "my_likes{}"처럼 호출을 글자로 적어 내보내는 일이 있다(작은 모델의 가끔 나오는 오류)
+_TEXT_CALL = re.compile(r"^`*\s*([a-z][a-z_]*)\s*(\{.*\})?\s*(?:\(\s*\))?\s*`*$", re.DOTALL)
+
+
+def _text_tool_call(content: str, tools: tuple[str, ...]) -> tuple[str, dict] | None:
+    """답 전체가 도구 호출을 적은 글자면 (도구 이름, 인자). 아니면 None."""
+    m = _TEXT_CALL.match(content.strip())
+    if not m or m.group(1) not in tools:
+        return None
+    args: object = {}
+    if m.group(2):
+        try:
+            args = json.loads(m.group(2))
+        except ValueError:
+            return None
+    return (m.group(1), args) if isinstance(args, dict) else None
+
+
 # 새 태그 만들기: 곡을 추천하는 대신 태그를 제안한다. 만드는 건 화면이고 사용자가 카드에서 눌러야 한다
 _TAG_CREATE = (
     "\n\n사용자가 새 태그를 만들자고 한다. 곡을 추천하지 말고 propose_tag 도구로 태그를 제안한다. "
@@ -661,6 +679,27 @@ def run_agent(
             content = ""
 
         if not calls:
+            # 호출을 글자로만 적어 내보냈다("my_likes{}"): 그 글자는 버리고 그 호출을 대신 실행한다
+            pseudo = _text_tool_call(content, tools) if content.strip() else None
+            if pseudo and step < MAX_STEPS:
+                name, args = pseudo
+                call = {
+                    "function": {"name": name, "arguments": args},
+                    "_part": {"functionCall": {"name": name, "args": args}, "thoughtSignature": "skip_thought_signature_validator"},
+                }
+                yield {"type": "retry", "reason": "도구 호출이 글자로 나와 대신 실행"}
+                yield {"type": "tool_call", "name": name, "arguments": args}
+                result = call_tool(name, args, session, tools)
+                yield {"type": "tool_result", "name": name, "result": result}
+                if name in ACTION_TOOLS:
+                    acted = True
+                if name == "start_station":
+                    station_called = True
+                if isinstance(result, dict) and isinstance(result.get("tracks"), list):
+                    seen_titles += [t["title"] for t in result["tracks"] if "title" in t]
+                messages.append({"role": "assistant", "content": "", "tool_calls": [call]})
+                messages.append({"role": "tool", "tool_name": name, "content": json.dumps(result, ensure_ascii=False)})
+                continue
             # 동작을 했다거나 하겠다고 말하면서 동작 도구는 안 불렀다: 한 것처럼 말하게 두지 않고 한 번 되돌린다
             if (
                 can_act
