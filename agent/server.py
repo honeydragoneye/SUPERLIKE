@@ -295,7 +295,9 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"[agent] http://{HOST}:{PORT}  model={config.DEFAULT_MODEL} ({config.PROVIDER})", flush=True)
+    # Render는 배포한 커밋을 RENDER_GIT_COMMIT로 알려 준다: 로그에서 어떤 코드가 떠 있는지 바로 알 수 있게 함께 찍는다
+    commit = (os.environ.get("RENDER_GIT_COMMIT") or "local")[:7]
+    print(f"[agent] http://{HOST}:{PORT}  model={config.DEFAULT_MODEL} ({config.PROVIDER})  commit={commit}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

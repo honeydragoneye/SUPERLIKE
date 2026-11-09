@@ -2033,4 +2033,6 @@ def call_tool(name: str, arguments: dict, session: Session, allowed: tuple[str, 
     except TypeError as e:
         return {"error": f"인자가 맞지 않습니다: {e}"}
     except Exception as e:  # 네트워크 실패 등 — 모델이 사용자에게 설명할 수 있도록 문구로 전달
+        # 모델에게는 오류가 값으로만 가서 서버 로그에 안 남는다: 배포 환경에서 도구가 왜 실패하는지 볼 수 있게 찍는다
+        print(f"[tool] {name} 실패: {str(e)[:200]}", file=sys.stderr, flush=True)
         return {"error": str(e)}
