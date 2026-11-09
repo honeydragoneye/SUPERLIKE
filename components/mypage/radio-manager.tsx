@@ -6,6 +6,7 @@ import { StationLogo } from "@/components/radio/station-parts";
 import { useSpotify } from "@/components/player/spotify-provider";
 import { useHydrated } from "@/components/ui/use-hydrated";
 import { playedAgo } from "@/lib/time";
+import { ROW_ACTION, ROW_ACTION_OFF } from "./row-action";
 import { SectionHead } from "./section-head";
 
 /** What one account may keep (lib/db/radio FAVORITE_LIMIT), shown beside the count. */
@@ -83,20 +84,20 @@ export function RadioManager() {
                         </span>
                       )}
                     </span>
-                    <span className="flex w-[210px] shrink-0 items-center justify-end gap-[8px]">
+                    <span className="flex w-[210px] shrink-0 items-center justify-end">
                       {s.homepage ? (
                         <a
                           href={s.homepage}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="whitespace-nowrap rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors hover:bg-soft border-[1.5px] border-transparent"
+                          className={ROW_ACTION}
                         >
                           공식 사이트 ↗
                         </a>
                       ) : (
                         <span
                           title="이 방송국은 공식 사이트 주소가 없어요"
-                          className="whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.7px] opacity-40 border-[1.5px] border-transparent"
+                          className={ROW_ACTION_OFF}
                         >
                           공식 사이트 ↗
                         </span>
@@ -104,7 +105,7 @@ export function RadioManager() {
                       <button
                         type="button"
                         onClick={() => void toggleFavorite(s)}
-                        className="cursor-pointer whitespace-nowrap rounded-pill bg-paper px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors hover:bg-soft border-[1.5px] border-transparent"
+                        className={ROW_ACTION}
                       >
                         즐겨찾기 해제
                       </button>

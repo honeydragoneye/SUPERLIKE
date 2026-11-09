@@ -14,14 +14,14 @@ import {
   type PlaylistSummary,
 } from "@/lib/playlists";
 import { playedAgo } from "@/lib/time";
+import { ROW_ACTION } from "./row-action";
 import { SectionHead } from "./section-head";
 
 /** What one account may keep (lib/db/playlists MAX_PLAYLISTS), shown beside the count. */
 const LIMIT = 50;
 
-/** A text-only action: no outline, blue under the cursor. */
-const ACTION =
-  "shrink-0 cursor-pointer whitespace-nowrap px-[8px] py-[6px] text-[10px] tracking-[0.7px] transition-colors hover:text-accent-bright";
+/** A text-only action: no outline, blue under the cursor (shared with the radio list). */
+const ACTION = ROW_ACTION;
 
 /**
  * 플레이리스트: the playlists this account keeps in Superlike, one per line,

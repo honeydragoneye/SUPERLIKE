@@ -5,7 +5,9 @@ import { useSpotify } from "@/components/player/spotify-provider";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { EXPLICIT_NOTE, LOCKED_LOOK, useExplicitLock } from "@/components/ui/explicit";
 import { useHydrated } from "@/components/ui/use-hydrated";
+import { createLookupCache } from "@/lib/lookup-cache";
 import { nameMatch, sameTitle } from "@/lib/names";
+import type { Reaction } from "@/components/memory/memory-store";
 
 export type Seed = Parameters<ReturnType<typeof useSpotify>["startStation"]>[0];
 
@@ -35,6 +37,20 @@ export type Found = Seed & {
 };
 
 const lookups = new Map<string, Promise<Found | null>>();
+/** Songs found before (this visit or an earlier one), so a song is not searched for twice. */
+const found = createLookupCache<Found>("superlike:lookups:v1");
+const keyOf = (track: TrackCardTrack) => `${track.title}|${track.artist}`.toLowerCase();
+
+/** What is already known about a song without searching: the song, `null` if it was not on Spotify (a short while ago), `undefined` if nothing is known. */
+export function peekLookup(track: TrackCardTrack): Found | null | undefined {
+  return found.peek(keyOf(track));
+}
+
+/** A song that turned out not to play is searched for afresh next time. */
+export function forgetLookup(track: TrackCardTrack): void {
+  lookups.delete(keyOf(track));
+  found.forget(keyOf(track));
+}
 /** The songs that have been found, so the pages around them can be linked from what Spotify already said. */
 const resolved = new Set<Found>();
 
@@ -45,9 +61,17 @@ export async function foundSongs(): Promise<Found[]> {
 }
 
 export function lookUp(track: TrackCardTrack): Promise<Found | null> {
-  const key = `${track.title}|${track.artist}`.toLowerCase();
+  const key = keyOf(track);
   const known = lookups.get(key);
   if (known) return known;
+  // found on an earlier visit or an earlier card: no search at all
+  const remembered = found.peek(key);
+  if (remembered !== undefined) {
+    if (remembered) resolved.add(remembered);
+    const ready = Promise.resolve(remembered);
+    lookups.set(key, ready);
+    return ready;
+  }
 
   const pending = (async (): Promise<Found | null> => {
     type Raw = Seed & {
@@ -110,7 +134,10 @@ export function lookUp(track: TrackCardTrack): Promise<Found | null> {
         break;
       }
     }
-    if (!first) return null;
+    if (!first) {
+      found.remember(key, null);
+      return null;
+    }
     const song: Found = {
       id: first.id,
       uri: first.uri,
@@ -126,6 +153,7 @@ export function lookUp(track: TrackCardTrack): Promise<Found | null> {
       explicit: first.explicit === true,
     };
     resolved.add(song);
+    found.remember(key, song);
     return song;
   })();
   // a failed lookup is not remembered, so the next card for the same song tries again
@@ -154,17 +182,39 @@ function Sleeve({ src }: { src: string | null }) {
  * Used wherever a list names songs without Spotify ids (the chatbot's picks, the
  * weekly chart); the card finds the song on Spotify once the listener is connected.
  */
-export function TrackCard({ track, rank }: { track: TrackCardTrack; rank?: number }) {
+/** What the listener thought of the song, and how to change it: the chat passes this when it is remembering. */
+export type CardReaction = { value: Reaction | null; onChange: (next: Reaction | null) => void };
+
+/** A thumb, up or (turned over) down. */
+function Thumb({ down }: { down?: boolean }) {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" aria-hidden fill="currentColor" className={down ? "rotate-180" : ""}>
+      <path d="M2 21h4V9H2v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z" />
+    </svg>
+  );
+}
+
+/**
+ * `eager` cards (the first few of an answer) look their song up as soon as they appear; the others wait until the
+ * cursor or focus is on them, or until one of their buttons is pressed. A song already known is read at once.
+ */
+export function TrackCard({ track, rank, reaction, eager = false }: { track: TrackCardTrack; rank?: number; reaction?: CardReaction; eager?: boolean }) {
   const { connected, play, startStation, stationBusy } = useSpotify();
   const hydrated = useHydrated();
   const [seed, setSeed] = useState<Seed | null>(null);
   const [looked, setLooked] = useState(false);
   const [starting, setStarting] = useState(false);
   const [explicit, setExplicit] = useState(false);
-  const locked = useExplicitLock()(explicit);
+  const explicitLock = useExplicitLock();
+  const locked = explicitLock(explicit);
+  // someone is looking at this card: worth a search
+  const [wanted, setWanted] = useState(eager);
+  // a button was pressed before the song was found: it is being looked for now
+  const [finding, setFinding] = useState(false);
 
   useEffect(() => {
     if (!connected) return;
+    if (!wanted && peekLookup(track) === undefined) return;
     let live = true;
     lookUp(track)
       .then((s) => live && (setSeed(s), setExplicit(s?.explicit === true), setLooked(true)))
@@ -172,16 +222,44 @@ export function TrackCard({ track, rank }: { track: TrackCardTrack; rank?: numbe
     return () => {
       live = false;
     };
-  }, [connected, track]);
+  }, [connected, track, wanted]);
 
-  const ready = hydrated && connected && seed !== null && !locked;
+  /** The song on Spotify: already known, or searched for now (a press does not wait for the cursor). */
+  const find = async (): Promise<Seed | null> => {
+    if (seed) return seed;
+    setWanted(true);
+    setFinding(true);
+    try {
+      const s = await lookUp(track);
+      setSeed(s);
+      setExplicit(s?.explicit === true);
+      setLooked(true);
+      return s && !explicitLock(s.explicit === true) ? s : null;
+    } catch {
+      setLooked(true);
+      return null;
+    } finally {
+      setFinding(false);
+    }
+  };
+  const playIt = async () => {
+    const s = await find();
+    if (!s) return;
+    // a song Spotify refused is not worth keeping the old answer for
+    if ((await play({ uris: [s.uri] })) === "refused") forgetLookup(track);
+  };
+
+  // pressable before the song is found; only a song known not to be there, or an explicit one, is not
+  const ready = hydrated && connected && !(looked && !seed) && !locked;
   // one station at a time: the others look as they did and ignore the press
   const blocked = hydrated && stationBusy !== null && !starting;
 
   return (
     <li
       title={locked ? EXPLICIT_NOTE : undefined}
-      className={`flex items-center gap-[8px] rounded-[8px] bg-chart py-[6px] pl-[6px] pr-[8px] transition-colors hover:bg-soft ${locked ? LOCKED_LOOK : ""}`}
+      onMouseEnter={() => setWanted(true)}
+      onFocusCapture={() => setWanted(true)}
+      className={`group flex items-center gap-[8px] rounded-[8px] bg-chart py-[6px] pl-[6px] pr-[8px] transition-colors hover:bg-soft ${reaction?.value === "down" ? "opacity-50" : ""} ${locked ? LOCKED_LOOK : ""}`}
     >
       {rank !== undefined && (
         <span className="tnum w-[18px] shrink-0 text-right text-[11px] font-black text-on-bright">{rank}</span>
@@ -195,9 +273,11 @@ export function TrackCard({ track, rank }: { track: TrackCardTrack; rank?: numbe
             ? "Spotify를 연결하면 재생할 수 있어요"
             : looked && !seed
               ? "Spotify에서 이 곡을 찾지 못했어요"
-              : "재생"
+              : finding
+                ? "Spotify에서 곡을 찾는 중…"
+                : "재생"
         }
-        onClick={() => seed && void play({ uris: [seed.uri] })}
+        onClick={() => void playIt()}
         className="flex min-w-0 flex-1 cursor-pointer flex-col gap-px text-left disabled:cursor-default"
       >
         <span className="w-full truncate text-[10px] text-on-bright">{track.title}</span>
@@ -212,9 +292,11 @@ export function TrackCard({ track, rank }: { track: TrackCardTrack; rank?: numbe
             ? "Spotify를 연결하면 재생할 수 있어요"
             : looked && !seed
               ? "Spotify에서 이 곡을 찾지 못했어요"
-              : "재생"
+              : finding
+                ? "Spotify에서 곡을 찾는 중…"
+                : "재생"
         }
-        onClick={() => seed && void play({ uris: [seed.uri] })}
+        onClick={() => void playIt()}
         className="flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-pill bg-ink text-on-ink transition-colors enabled:hover:bg-accent-bright enabled:hover:text-paper-solid disabled:cursor-default disabled:opacity-40"
       >
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden className="ml-[1px]">
@@ -228,10 +310,11 @@ export function TrackCard({ track, rank }: { track: TrackCardTrack; rank?: numbe
           title={starting ? "스테이션 구성 중…" : `${track.title} 기준으로 스테이션 시작`}
           aria-disabled={blocked || undefined}
           onClick={async () => {
-            if (blocked || !seed) return;
+            if (blocked) return;
             setStarting(true);
             try {
-              await startStation(seed);
+              const s = await find();
+              if (s) await startStation(s);
             } finally {
               setStarting(false);
             }
@@ -250,6 +333,37 @@ export function TrackCard({ track, rank }: { track: TrackCardTrack; rank?: numbe
           )}
         </button>
       )}
+          {reaction &&
+        (reaction.value === "known" ? (
+          <button
+            type="button"
+            title="이미 아는 곡으로 표시했어요. 누르면 되돌려요"
+            onClick={() => reaction.onChange(null)}
+            className="shrink-0 cursor-pointer text-[8px] tracking-[0.4px] text-on-bright-muted underline hover:text-on-bright"
+          >
+            이미 알아요
+          </button>
+        ) : (
+          // shown when the cursor is over the card (the way ··· is), and kept once one is pressed
+          <div className={`flex shrink-0 items-center gap-[4px] transition-opacity focus-within:opacity-100 ${reaction.value ? "" : "opacity-0 group-hover:opacity-100"}`}>
+            {(["up", "down"] as const).map((kind) => {
+              const on = reaction.value === kind;
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={kind === "up" ? "취향에 맞아요" : "별로예요"}
+                  title={kind === "up" ? "취향에 맞아요" : "별로예요 (비슷한 곡을 덜 추천해요)"}
+                  onClick={() => reaction.onChange(on ? null : kind)}
+                  className={`flex size-[22px] cursor-pointer items-center justify-center rounded-pill transition-colors ${on ? "bg-ink text-on-ink" : "bg-card text-on-bright hover:bg-paper-press"}`}
+                >
+                  <Thumb down={kind === "down"} />
+                </button>
+              );
+            })}
+          </div>
+        ))}
     </li>
   );
 }

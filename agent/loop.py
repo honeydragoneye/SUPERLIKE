@@ -14,7 +14,7 @@ from collections.abc import Iterator
 import requests
 
 from agent import config, gemini
-from agent.tools import DEFAULT_SOURCES, SOURCES, TOOLS, TOOLS_CHAT, TOOLS_REFINE, Session, call_tool, tools_for
+from agent.tools import ACTION_TOOLS, DEFAULT_SOURCES, SOURCES, TOOLS, TOOLS_CHAT, TOOLS_REFINE, Session, call_tool, tools_for
 
 MAX_STEPS = 4
 
@@ -61,12 +61,15 @@ _NO_NOW = (
 _ACTIONS = (
     "사용자가 동작을 시키면 맞는 도구를 한 번 부른다: 좋아요(like_track), 재생·멈춤·다음 곡(playback), "
     "셔플·반복(player_mode), 재생 위치 옮기기(seek), 음량(volume), 곡 하나만 들려 달라는 말(play_one), "
-    "곡 하나를 기존 플레이리스트에 담기(add_to_playlist), 다음에 나올 곡 목록(up_next), 가사 화면 열기(lyrics), 스테이션 끝내기(stop_station), 스테이션 시작(start_station), 새 플레이리스트 만들기(make_playlist), 다른 페이지로 옮기기(open_page: 홈·최근 재생 기록·마이페이지·지난 호·금주의 아티스트·에디터스 픽·스테이션·검색 결과·가수·앨범 페이지), 가수 팔로우(follow_artist: ‘팔로우해줘’는 가수 이름만 있으면 곧바로 이 도구를 부른다. 도구를 부르지 않고 ‘팔로우할게요’라고만 답하지 않는다). 도구는 제안만 하고 실행은 화면이 하며, "
+    "곡 하나, 또는 방금 보여 준 곡들(source=\"shown\")을 기존 플레이리스트에 담기(add_to_playlist), 다음에 나올 곡 목록(up_next), 가사 화면 열기(lyrics), 스테이션 끝내기(stop_station), 스테이션 시작(start_station), 새 플레이리스트 만들기(make_playlist), 다른 페이지로 옮기기(open_page: 홈·최근 재생 기록·마이페이지·지난 호·금주의 아티스트·에디터스 픽·스테이션·검색 결과·가수·앨범 페이지), 가수 팔로우(follow_artist: ‘팔로우해줘’는 가수 이름만 있으면 곧바로 이 도구를 부른다. 도구를 부르지 않고 ‘팔로우할게요’라고만 답하지 않는다). 도구는 제안만 하고 실행은 화면이 하며, "
     "결과(좋아요에 담았는지, 만들었는지)는 화면에 카드로 따로 보인다. 그래서 글은 한두 문장으로 짧게 "
     "\"~할게요\"처럼 알리고, 이미 됐다고 단정하지 않으며 곡 목록을 되풀이하지 않는다. 플레이리스트는 사용자가 "
     "만들기를 눌러야 만들어지니 \"만들어 볼까요?\"처럼 말한다. 곡 이름을 말하며 틀어 달라거나 좋아요를 "
     "누르라고 하면 이름은 사용자가 쓴 그대로 넣는다. 곡 삭제, 플레이리스트에서 곡 빼기·지우기처럼 "
-    "이 도구들로 못 하는 일은 할 수 없다고 한 문장으로 말한다.\n"
+    "이 도구들로 못 하는 일은 할 수 없다고 한 문장으로 말한다. 동작을 했다거나 하겠다고 말하는 것은 그 도구를 부른 뒤에만 한다: "
+    "도구를 부르지 않았으면 '했어요', '이동할게요', '재생할게요'라고 말하지 않는다. 대화 기록에 '(해 준 동작: …)'이 없는 동작은 하지 않은 것이라, "
+    "'했어?'라고 물으면 기록을 보고 사실대로 말하고 안 했으면 안 했다고 한다. 곡의 후렴, 간주, 클라이맥스 같은 구간이 어디인지는 알 수 없다: "
+    "그런 부탁에는 위치를 짐작해 seek를 부르지 말고, 위치를 알 수 없다고 말한 뒤 원하는 시각(예: 1분 30초)을 말해 달라고 한다.\n"
 )
 # 사용자가 공유를 켠 좋아요·최근 재생: 목록은 화면에서 오니 먼저 도구로 확인하고, 그 목록에 있는 것만 말한다
 _LIKES = (
@@ -190,6 +193,75 @@ def _direct_action(question: str) -> tuple[str, dict] | None:
     return None
 
 
+# 새 태그 만들기: 곡을 추천하는 대신 태그를 제안한다. 만드는 건 화면이고 사용자가 카드에서 눌러야 한다
+_TAG_CREATE = (
+    "\n\n사용자가 새 태그를 만들자고 한다. 곡을 추천하지 말고 propose_tag 도구로 태그를 제안한다. "
+    "label(태그 이름)은 사용자가 말했으면 그대로, 아니면 곡들의 공통점을 담은 12자 이내의 짧은 한국어 이름을 직접 붙인다. "
+    "definition은 곡 제목과 가수 이름만 보고 판정할 수 있는 영어 한 문장(80자 이내: 가수, 나라, 언어, 분위기, 장르)이다. "
+    "소리나 박자, 가사를 말하는 표현(beat, rhythm, lyrics 등)은 정의에 넣지 않는다. 시간을 말하는 표현(recently, new, debuted, 최근, 신인 등)도 "
+    "넣지 않는다: 판정기는 날짜를 모른다. 대신 사용자가 예로 든 가수가 있으면 그 가수들과 비슷하다고 쓰고(예: 'hip hop-leaning songs by "
+    "K-pop boy groups similar to Stray Kids and CORTIS'), 그 가수들을 sample_artists에 영어 표기로 넣는다. "
+    "sample_tag는 Last.fm에 실제 있는 한두 단어 장르 태그(kpop, korean hip hop, indie rock, city pop 등)만 쓴다. "
+    "가사나 소리처럼 판정할 수 없는 기준이면 그렇다고 말하고 판정할 수 있는 말로 바꿔 보자고 한다. "
+    "무슨 곡을 모으고 싶은지 아직 모르면(예: '태그 만들고 싶어') 도구를 부르기 전에 한 가지만 구체적으로 묻는다. "
+    "도구가 돌려준 미리보기는 화면에 카드로 따로 보인다. 글은 어떻게 정리했는지 한두 문장만 쓰고, 곡 목록을 나열하지 "
+    "않으며, 이미 만들었다고 말하지 않는다(만드는 건 사용자가 카드의 '태그 만들기'를 눌렀을 때뿐이다). 마크다운 기호는 쓰지 않는다. "
+    "사용자가 이름이나 기준을 고치고 싶다고 하면 propose_tag를 다시 불러 새 제안을 만든다."
+)
+_MAKES_TAG = re.compile(r"태그.*(만들|만드|생성|새로\s*추가)|(만들|만드|생성).*태그")
+_NOT_TAG_JOB = re.compile(r"삭제|지워|없애|플레이리스트")
+_TAG_FILLER = re.compile(r"이런|곡만|모으는|모을|내|새로|새|하나|좀|를|을|은|는|이|가|만들어|만들고|만들|만드는|만들래|만들어줘|줘|주세요|싶어요|싶어|해줘|해 줘|태그|요|\s")
+
+
+# 동작을 했다/하겠다고 말하는 글: 이런 말을 하면서 동작 도구를 부르지 않았으면 거짓말이 된다
+_CLAIMS_ACTION = re.compile(
+    r"(이동(?:할게|할께|했|해 드릴|하겠)|건너뛸|건너뛰었|옮길|옮겼|틀게|틀어 드릴|틀었|재생할게|재생해 드릴|재생했|멈출게|멈췄|일시정지했|좋아요를 (?:눌렀|누를게)|담았|담을게|켤게|켰|껐|끌게|올렸|낮췄|시작할게|시작했|만들게|바꿨|바꿀게)"
+)
+# '했어?'처럼 이미 한 일을 확인하는 말에는 다시 하지 않는다(대화 기록을 보고 사실대로 답하게 한다)
+_ASKS_DONE = re.compile(r"했어\?|됐어\?|한 거야|된 거야|했나요|됐나요|했니|됐니|했어요\?|됐어요\?")
+
+# 태그 제안에 답하는 중에도 다른 일을 시키는 말: 이런 말은 제안을 고치는 말로 보지 않는다
+_OTHER_JOB = re.compile(r"틀어|재생|좋아요|다음 곡|이전 곡|멈춰|일시정지|볼륨|음량|스테이션|페이지|이동|팔로우|가사 보여|취소|아니|고마워|됐어")
+# 방금 제안한 새 태그에 사용자가 아직 답하지 않았다(화면이 대화 기록에 이렇게 적어 보낸다)
+_TAG_PENDING = (
+    "\n\n방금 새 태그를 제안했고 사용자는 아직 답하지 않았다. 사용자의 말이 그 제안을 고치려는 말이면(더 밝게, 가사가 있어도 좋다, "
+    "어떤 가수 느낌이 부족하다, 이름을 바꾸자 등) 곡을 추천하지 말고 propose_tag를 다시 불러 고친 새 제안을 만든다. "
+    "곡 추천처럼 답하지 않는다. 사용자가 샘플 곡을 바꿔 다시 보여 달라고 하면 이름과 기준은 그대로 두고 "
+    "sample_tag만 다른 흔한 장르 태그로 바꿔 propose_tag를 다시 부른다."
+)
+
+
+def _tag_creation(question: str, history: list[dict]) -> tuple[bool, bool, bool]:
+    """(태그 만들기 도구를 줄지, 첫 호출에서 강제할지, 제안에 답하는 중인지).
+    도구는 만들자는 말이나, 방금 제안한 태그를 고치자는 말에 준다. 강제는 어떤 곡을 모을지 말한 요청이나 제안을 고치는
+    말에만 한다: '태그 만들고 싶어'만 있으면 먼저 물어야 한다."""
+    q = " ".join(question.split())
+    if _NOT_TAG_JOB.search(q):
+        return False, False, False
+    last = next((m for m in reversed(history) if m.get("role") == "assistant"), None)
+    content = str(last.get("content", "")) if last else ""
+    pending = "제안한 새 태그" in content and "아직 답 없음" in content
+    if pending and not _OTHER_JOB.search(q):
+        # 제안이 떠 있는 동안의 말은 그 제안을 고치는 말이다: '조금 더 밝았으면 좋겠어'에 '태그'나 '바꿔'가 없어도
+        return True, True, True
+    if _MAKES_TAG.search(q):
+        specific = len(_TAG_FILLER.sub("", q)) >= 4
+        return True, specific, pending
+    if "태그" in content and re.search(r"바꿔|고쳐|수정|말고|대신|이름|으로 해|다시", q):
+        return True, False, pending
+    return False, False, False
+
+
+# 사용자에 대한 기억(화면이 계정에서 읽어 보낸 짧은 줄들): 말투와 취향에 자연스럽게 반영한다
+def _memory_prompt(text: str) -> str:
+    return (
+        "\n\n이 사용자에 대해 기억하는 것:\n" + text + "\n"
+        "이 기억을 말투와 추천에 자연스럽게 반영한다: 말투 줄이 있으면 그 말투(존댓말/반말, 길이, 이모지)를 따르고, "
+        "좋아해요 줄은 곡을 고를 때, 피해요 줄은 피할 때 참고한다. 지금 사용자가 하는 말이 기억과 다르면 지금 말을 따른다. "
+        "기억하고 있다는 말을 하거나 기억을 그대로 읊지 않는다. 기억에 없는 것을 아는 것처럼 말하지 않는다."
+    )
+
+
 # 취향을 묻는 말. 취향 정보가 없을 때는 도구를 부르게 되돌리지 않고, 켜는 법을 안내한 답을 그대로 둔다
 _ASKS_TASTE = re.compile(r"내 취향|내가 좋아(할|하는)")
 
@@ -207,12 +279,32 @@ def refine_prompt(label: str, definition: str) -> str:
         "4. 도구가 돌려준 미리보기는 화면에 따로 보여 준다. 글에서는 어떻게 정리했는지 한두 문장만 "
         "말하고, 곡 목록을 나열하지 않는다. 마크다운 기호는 쓰지 않는다.\n"
         "5. 사용자가 고치고 싶다고 하면 기준을 고쳐 propose_definition을 다시 부른다. 정의를 실제로 "
-        "바꾸는 건 사용자가 화면에서 적용을 눌렀을 때뿐이다.\n"
+        "바꾸는 건 사용자가 화면에서 적용을 눌렀을 때뿐이다. 사용자가 샘플 곡을 바꿔 다시 보여 달라고 하면 기준은 그대로 두고 "
+        "sample_tag나 sample_artists만 바꿔 다시 부른다.\n"
+        "5-1. 기준에 시간을 말하는 표현(recently, new, debuted, 최근, 신인 등)이나 소리·가사를 말하는 표현은 넣지 않는다: 판정기는 제목과 "
+        "가수 이름만 본다. 사용자가 예로 든 가수가 있으면 '그 가수들과 비슷한 가수의 곡'으로 쓰고, 그 가수들을 sample_artists에 "
+        "영어 표기로 넣는다(예: Stray Kids, CORTIS). sample_tag는 Last.fm에 있는 한두 단어 장르 태그만 쓴다.\n"
         "6. '지금 듣는 노래', '이 곡'처럼 재생 중인 곡을 가리키며 그걸 기준으로 삼고 싶다고 하면 먼저 "
         "now_playing을 불러 곡 제목과 가수를 확인한다. 이 대화에서는 track_info나 artist_info를 쓸 수 "
         "없으니, 확인한 제목과 가수만으로 기준을 정리해 propose_definition을 부른다. 재생 중인 곡이 "
         "없다고 나오면 그렇게 말한다."
     )
+
+
+# 다듬기 대화에서 곡·플레이리스트 동작을 부탁받았을 때. 동작을 할 수 없는 사용자(Spotify 연결 없음)에게는 다른 문장을 쓴다
+_REFINE_ACTIONS = (
+    "\n7. 기준 정리 말고 다른 부탁(플레이리스트 만들기, 좋아요, 재생, 스테이션 등)이 오면 '할 수 없다'고 하기 전에 "
+    "쓸 수 있는 도구 중 맞는 것이 있는지 먼저 본다. 방금 찾은(미리보기에서 통과한) 곡들을 플레이리스트에 담아 달라거나 "
+    "만들어 달라는 말에는 make_playlist(name, source=\"shown\")를 부른다. name은 사용자가 말했으면 그대로, 아니면 "
+    "태그 이름을 쓴다. 이미 있는 플레이리스트에 곡을 담으라면 add_to_playlist이고, 방금 찾은 여러 곡을 담으라는 말이면 source=\"shown\"과 사용자가 말한 플레이리스트 이름(name)을 넣는다. 좋아요는 like_track, 곡 하나만 "
+    "틀어 달라면 play_one이다. 이 도구들은 제안만 하고 결과는 화면이 카드로 따로 보여 준다. 그래서 글은 "
+    "\"~할게요\"처럼 한 문장으로 알리고 이미 됐다고 단정하지 않으며, 곡 목록을 되풀이하지 않는다. 플레이리스트는 "
+    "사용자가 만들기를 눌러야 만들어진다. 도구에 없는 일은 할 수 없다고 한 문장으로 말한다."
+)
+_REFINE_NO_ACTIONS = (
+    "\n7. 플레이리스트에 담기, 좋아요, 재생 같은 동작은 지금 할 수 없다(사용자가 Spotify에 연결하지 않았다). "
+    "그런 부탁에는 Spotify를 연결하면 할 수 있다고 한 문장으로 말한다."
+)
 
 
 # 취향 정보 없이 "내 취향"을 묻는 경우: 아무 곡이나 고르지 않고, 켜는 법을 알려 준다
@@ -317,8 +409,14 @@ def run_agent(
     can_act: bool = False,
     likes: list[dict] | None = None,
     recent: list[dict] | None = None,
+    memory: dict | None = None,
+    avoid: list[str] | None = None,
 ) -> Iterator[dict]:
     """이벤트를 하나씩 내보낸다.
+
+    memory={"text", "count"}는 화면이 계정에서 읽어 보낸 이 사용자에 대한 기억(취향·말투)의 요약이고, 시작할 때
+    {"type": "memory", "count"}로 몇 가지를 참고했는지 알린다. avoid는 이미 추천했거나 반응이 있는 곡의 키("제목|가수")로,
+    다시 추천하지 않는다.
 
     {"type": "tool_call", "name", "arguments"} — 모델이 도구를 부르기로 했다
     {"type": "tool_result", "name", "result"}  — 도구가 돌려준 값
@@ -355,7 +453,14 @@ def run_agent(
         model = config.LOCAL_GENERATION_MODEL
     # sources: 사용자가 켜 둔 출처(lastfm·wikipedia·musicbrainz). None이면 전부. 다듬기 대화는 출처와 무관하다.
     # 다듬기 대화에서도 화면이 지금 듣는 곡을 보내 줬다면 now_playing을 쓸 수 있다("지금 듣는 노래랑 비슷하게")
-    tools = (TOOLS_REFINE + (("now_playing",) if now_playing is not None else ())) if refine else tools_for(sources, now_playing is not None, can_act, station is not None, likes is not None, recent is not None)
+    tools = (
+        TOOLS_REFINE
+        # 다듬기에서도 화면이 하는 일(플레이리스트에 담기, 좋아요, 재생 등)과 화면이 보내 준 정보를 쓸 수 있다.
+        # 곡 검색 도구는 뺀다: propose_definition이 이미 곡을 찾아 보여 주고, 많이 주면 작은 모델이 고르기 어려워한다
+        + tuple(t for t in tools_for([], now_playing is not None, can_act, station is not None, likes is not None, recent is not None) if t != "request_source")
+        if refine
+        else tools_for(sources, now_playing is not None, can_act, station is not None, likes is not None, recent is not None)
+    )
     system = (
         refine_prompt(refine["label"], refine["definition"])
         if refine
@@ -396,7 +501,30 @@ def run_agent(
         and not re.search(r"스테이션|가사|플레이리스트", question)
     ):
         force_first = ["open_page"]
+    # 플레이리스트에 담아 달라는 분명한 부탁: 작은 모델이 '담아드릴게요'라고만 답하고 도구를 안 부르는 일이 있다. 만들기와 담기 중 어느 쪽인지는 모델이 고른다
+    elif (
+        can_act
+        and re.search(r"플레이리스트", question)
+        and re.search(r"담|넣|만들", question)
+        and not re.search(r"\?|어떻게|방법|뭐|왜|추천", question)
+    ):
+        force_first = [t for t in ("make_playlist", "add_to_playlist") if t in tools]
+    if not refine:
+        wants_tag, force_tag, answering = _tag_creation(question, history)
+        if wants_tag:
+            tools = tuple(tools) + ("propose_tag",)
+            system += _TAG_CREATE + (_TAG_PENDING if answering else "")
+            if force_tag and not force_first:
+                force_first = ["propose_tag"]
     session = Session(now_playing, station, likes, recent)
+    # 사용자에 대한 기억은 말투와 취향에 반영한다(태그 다듬기에서는 말투만 의미가 있지만 같이 보낸다)
+    if memory and memory.get("text"):
+        system += _memory_prompt(str(memory["text"]))
+    # 이미 보여 줬거나 반응이 있는 곡은 추천에서 뺀다(곡 찾는 도구가 session.seen을 걸러 낸다)
+    if avoid and not refine:
+        session.seen |= {str(k).lower() for k in avoid}
+    if refine:
+        system += _REFINE_ACTIONS if can_act else _REFINE_NO_ACTIONS
     if not refine:
         system += ("\n\n" + _NOW) if now_playing is not None else _NO_NOW
         system += ("\n" + _ACTIONS) if can_act else _NO_ACT
@@ -437,11 +565,18 @@ def run_agent(
         messages.append({"role": "assistant", "content": "", "tool_calls": [call]})
         messages.append({"role": "tool", "tool_name": name, "content": json.dumps(result, ensure_ascii=False)})
         nudged = True
+    # 이번 대화 차례에 동작 도구를 불렀는지(미리 실행한 동작 포함). 안 불렀는데 했다고 말하면 바로잡는다
+    acted = bool(direct and direct[0] in tools)
+    claim_guard = False
+    claim_nudged = False
     # 도구를 쓰라고 되돌린 직후의 호출: 도구를 부르면 그 답으로 바꾸고, 안 부르면 처음 답을 그대로 둔다
     after_nudge = False
     # 마지막 top_tracks가 돌려준 곡 수. 0곡이면 답하기 전에 다른 태그로 한 번 더 찾아 본다.
     last_found: int | None = None
     retried_empty = False
+
+    if memory and memory.get("text"):
+        yield {"type": "memory", "count": int(memory.get("count") or 1)}
 
     for step in range(1, MAX_STEPS + 1):
         content = ""
@@ -463,14 +598,42 @@ def run_agent(
         if after_nudge:
             after_nudge = False
             if not calls:
+                if claim_guard:
+                    # 하지도 않은 동작을 했다고 말했고 그래도 도구를 안 부른다: 처음 답을 지우고 바로잡은 말을 보여 준다
+                    claim_guard = False
+                    yield {"type": "retry", "reason": "하지 않은 동작을 했다고 말해 바로잡음"}
+                    yield {"type": "token", "data": content.strip() or "그 동작은 하지 못했어요. 할 수 있는 동작이면 다시 말씀해 주세요."}
                 # 도구를 안 쓰기로 했다: 처음 답이 화면에 그대로 남는다
                 yield from tail(step)
                 return
+            claim_guard = False
             # 도구를 쓴다: 처음 답은 버리고 도구 결과로 다시 답한다
             yield {"type": "retry", "reason": "도구로 확인하지 않아 다시 시도"}
             content = ""
 
         if not calls:
+            # 동작을 했다거나 하겠다고 말하면서 동작 도구는 안 불렀다: 한 것처럼 말하게 두지 않고 한 번 되돌린다
+            if (
+                can_act
+                and not acted
+                and not claim_nudged
+                and not _ASKS_DONE.search(question)
+                and _CLAIMS_ACTION.search(content)
+            ):
+                claim_nudged = True
+                claim_guard = True
+                after_nudge = True
+                messages.append({"role": "assistant", "content": content})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "방금 동작을 했다거나 하겠다고 말했지만 동작 도구를 부르지 않았어. 할 수 있는 동작이면 지금 맞는 도구를 불러. "
+                            "도구로 할 수 없는 일이면(예: 곡의 후렴이 어디인지 모를 때) 한 것처럼 말하지 말고 할 수 없다고 한 문장으로 말해."
+                        ),
+                    }
+                )
+                continue
             # 곡 이름을 말했는데 도구를 부르지 않고 "그런 곡은 없다"거나 아는 척 답하는 경우: 작은 모델이
             # 확인 없이 단정하는 버릇이라, 도구를 먼저 쓰도록 한 번 되돌린다.
             if (
@@ -538,6 +701,8 @@ def run_agent(
         canned: list[str] = []
         for call in calls:
             fn = call["function"]
+            if fn["name"] in ACTION_TOOLS:
+                acted = True
             args = fn.get("arguments") or {}
             yield {"type": "tool_call", "name": fn["name"], "arguments": args}
             if fn["name"] == "request_source" and "request_source" in tools:

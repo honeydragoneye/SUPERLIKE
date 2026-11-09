@@ -38,6 +38,8 @@
   --color-mint: #dbe2ea;
   /* the signed-in label, in the accent: this app has no green of its own */
   --color-spotify: #3d5afe;
+  /* the only green: a switch or a dot that says "on" (the chatbot's memory). Off is the usual faint grey. */
+  --color-live: #22c55e;
 
   /* surfaces */
   --color-panel: rgba(0, 0, 0, 0.82);

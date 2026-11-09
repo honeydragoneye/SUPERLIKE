@@ -330,6 +330,14 @@ export async function startAction(a: ChatAction, env: ActionEnv): Promise<Partia
       return { state: "pending", tracks: [track] };
     }
 
+    if (a.kind === "addTo" && a.source === "shown") {
+      // the songs just shown, found on Spotify; the listener picks which of them go in, and into which playlist
+      const found = await gather(a, env);
+      if (found.state === "error") return found;
+      const lists = (await listPlaylists()).map((p) => ({ id: p.id, name: p.name, count: p.count, has: false }));
+      return { state: "pending", tracks: found.tracks, lists };
+    }
+
     if (a.kind === "addTo") {
       const track = await subject(a, env);
       if (!track) return fail(a.source === "now" ? NOTHING_PLAYING : NOT_FOUND);
@@ -432,7 +440,7 @@ export async function chooseOption(a: ChatAction, value: "loop" | "once", env: A
   }
 }
 
-const MAX_GATHER = 15;
+const MAX_GATHER = 20;
 
 /** The songs a playlist would hold, found on Spotify; the card waits for the listener when there are some. */
 async function gather(a: ChatAction, env: ActionEnv): Promise<Partial<ChatAction>> {
@@ -448,8 +456,11 @@ async function gather(a: ChatAction, env: ActionEnv): Promise<Partial<ChatAction
   } else {
     // songs already shown in the chat were found when their cards appeared, so this costs Spotify nothing more
     const shown = env.shown().slice(0, MAX_GATHER);
-    const found = await Promise.all(shown.map((t) => lookUp(t).catch(() => null)));
-    tracks = found.flatMap((f) => (f ? [toTrack(f)] : []));
+    // a few at a time: a song not yet looked up costs Spotify a search, and twenty at once runs into its rate limit
+    for (let i = 0; i < shown.length; i += 3) {
+      const found = await Promise.all(shown.slice(i, i + 3).map((t) => lookUp(t).catch(() => null)));
+      tracks.push(...found.flatMap((f) => (f ? [toTrack(f)] : [])));
+    }
   }
   const unique = [...new Map(tracks.map((t) => [t.id, t])).values()].slice(0, MAX_GATHER);
   if (unique.length === 0) return fail(a.source === "now" ? NOTHING_PLAYING : a.source === "station" ? "스테이션에 담을 곡이 없어요" : "담을 곡이 없어요. 먼저 곡을 추천받아 보세요");
@@ -548,19 +559,30 @@ export async function playQueued(a: ChatAction, track: ActionTrack, sp: Spotify)
  * A row of an add-to-playlist card pressed: put the song in that playlist, or in a new one made for it.
  * A new one is named by what the listener typed; the name the chat guessed is only the fallback.
  */
-export async function putInPlaylist(a: ChatAction, target: string | "new", typed?: string): Promise<Partial<ChatAction>> {
-  const track = a.tracks?.[0];
-  if (!track) return fail("담을 곡이 없어요");
+export async function putInPlaylist(a: ChatAction, target: string | "new", typed?: string, ids?: string[]): Promise<Partial<ChatAction>> {
+  const all = a.tracks ?? [];
+  // more than one song when the card let the listener pick: only the picked ones go in, in the order they were shown
+  const picked = ids ? all.filter((t) => ids.includes(t.id)) : all.slice(0, 1);
+  const [track, ...rest] = picked;
+  if (!track) return fail(ids ? "담을 곡을 골라 주세요" : "담을 곡이 없어요");
   const lists = a.lists ?? [];
+  const many = picked.length > 1;
   try {
     if (target === "new") {
       const name = (typed ?? a.name ?? "").replace(/\s+/g, " ").trim().slice(0, 60) || "새 플레이리스트";
       const id = await createPlaylist(name, false, track);
-      return { state: "pending", lists: [{ id, name, count: 1, has: true }, ...lists], summary: `‘${name}’을 만들어 담았어요` };
+      for (const t of rest) await addToPlaylist(id, t);
+      return { state: "pending", lists: [{ id, name, count: picked.length, has: !ids }, ...lists], summary: many ? `‘${name}’을 만들어 ${picked.length}곡을 담았어요` : `‘${name}’을 만들어 담았어요` };
     }
     const list = lists.find((l) => l.id === target);
     if (!list) return {};
-    await addToPlaylist(list.id, track);
+    for (const t of picked) await addToPlaylist(list.id, t);
+    if (ids) {
+      // a song that was already in it is not added twice, so the count is read back instead of guessed
+      const fresh = await listPlaylists().catch(() => null);
+      const count = fresh?.find((p) => p.id === list.id)?.count ?? list.count + picked.length;
+      return { state: "pending", lists: lists.map((l) => (l.id === list.id ? { ...l, count } : l)), summary: many ? `‘${list.name}’에 ${picked.length}곡을 담았어요` : `‘${list.name}’에 담았어요` };
+    }
     return { state: "pending", lists: lists.map((l) => (l.id === list.id ? { ...l, has: true, count: l.count + 1 } : l)), summary: `‘${list.name}’에 담았어요` };
   } catch (e) {
     return { note: playlistErrorText(e) };

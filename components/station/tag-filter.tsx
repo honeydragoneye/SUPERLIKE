@@ -128,7 +128,7 @@ export function TagFilter() {
   const moodMs = hydrated ? moodWait : null;
   const rejects = useRejectCount(stationFilter.mood);
   const custom = useCustomTags();
-  const { openRefine } = useChat();
+  const { openRefine, startTagCreate } = useChat();
   // the right-click menu of one of the listener's own tags
   const [menu, setMenu] = useState<TagMenuTarget | null>(null);
   // the listener's own tag that is on, if one is: the one the chat can settle the meaning of
@@ -343,6 +343,22 @@ export function TagFilter() {
               취소
             </button>
           </div>
+          {/* the other way to make a tag: say what it should hold, and the chat settles the name and the meaning */}
+          <button
+            type="button"
+            title="이름과 기준을 챗봇과 말로 정하기"
+            onClick={() => {
+              setAdding(false);
+              setFormError(null);
+              startTagCreate();
+            }}
+            className={`${PILL} w-fit bg-accent text-on-bright`}
+          >
+            대화로 만들기
+          </button>
+          <p className="text-[8px] leading-[12px] text-on-bright-muted">
+            이름과 기준을 챗봇과 말로 정해요. 미리보기를 보고 마음에 들면 만들어요.
+          </p>
         </form>
       )}
 

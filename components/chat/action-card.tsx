@@ -466,42 +466,96 @@ function Choice({ messageId, a }: { messageId: string; a: ChatAction }) {
 }
 
 /** One action of an answer. Some leave no card: moving the player on is a word, not a thing to keep. */
-/** One song, and the playlists it could go to: a press puts it in, and more than one is fine. */
+/**
+ * The songs to put in a playlist, and the playlists they could go to: a press puts them in, and more than one is fine.
+ *
+ * One song (the one playing, or one named) shows as itself. When the agent found several (`source: "shown"`),
+ * every one is ticked at first and the listener unticks what should stay out; the playlist the listener
+ * named, if there is one, comes first.
+ */
 function AddTo({ messageId, a }: { messageId: string; a: ChatAction }) {
   const { actOn } = useChat();
   const [sent, setSent] = useState<string[]>([]);
   /** the name field of a new playlist is open, and what has been typed in it */
   const [naming, setNaming] = useState(false);
   const [title, setTitle] = useState(a.name ?? "");
-  const track = a.tracks?.[0];
+  /** the ticked songs, by id; `null` is every song, which is how a card starts */
+  const [picked, setPicked] = useState<string[] | null>(null);
+  const tracks = a.tracks ?? [];
+  const track = tracks[0];
   if (a.state === "error" || !track) return <li className="text-[8px] leading-[12px] tracking-[0.4px] text-alert">{a.note ?? "하지 못했어요"}</li>;
+  const several = a.source === "shown";
+  const chosen = picked ?? tracks.map((t) => t.id);
+  const toggle = (id: string) => setPicked(chosen.includes(id) ? chosen.filter((x) => x !== id) : [...chosen, id]);
   const put = (target: string, name?: string) => {
     setSent((all) => [...all, target]);
-    actOn(messageId, a.id, { type: "addTo", target, name });
+    actOn(messageId, a.id, { type: "addTo", target, name, ...(several ? { ids: chosen } : {}) });
   };
-  const lists = a.lists ?? [];
+  const wanted = several ? (a.name ?? "").trim().toLowerCase() : "";
+  const named = (n: string) => wanted !== "" && n.toLowerCase().includes(wanted);
+  const lists = [...(a.lists ?? [])].sort((x, y) => Number(named(y.name)) - Number(named(x.name)));
   return (
     <li className="flex flex-col gap-[8px] rounded-[8px] bg-chart p-[10px]">
       <span className="text-[8px] tracking-[0.8px] text-accent-bright">ADD TO PLAYLIST</span>
-      <div className="flex items-center gap-[8px]">
-        <Tile src={track.artwork} />
-        <span className="flex min-w-0 flex-1 flex-col gap-px">
-          <span className="w-full truncate text-[11px] font-black">{track.title}</span>
-          <span className="w-full truncate text-[8px] tracking-[0.5px] text-on-bright-muted">{track.artist}</span>
-        </span>
-      </div>
+      {several ? (
+        <div className="flex flex-col gap-[6px]">
+          <div className="flex items-center justify-between gap-[8px]">
+            <span className="text-[8px] tracking-[0.5px] text-on-bright-muted">담을 곡 · {chosen.length}/{tracks.length}곡 선택</span>
+            <button
+              type="button"
+              onClick={() => setPicked(chosen.length === tracks.length ? [] : null)}
+              className="cursor-pointer text-[8px] font-bold tracking-[0.5px] transition-colors hover:text-accent-bright"
+            >
+              {chosen.length === tracks.length ? "전체 해제" : "전체 선택"}
+            </button>
+          </div>
+          <ul className="flex max-h-[190px] flex-col gap-[4px] overflow-y-auto">
+            {tracks.map((t) => {
+              const on = chosen.includes(t.id);
+              return (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={on}
+                    onClick={() => toggle(t.id)}
+                    className="flex w-full cursor-pointer items-center gap-[8px] rounded-[8px] px-[4px] py-[3px] text-left transition-colors hover:bg-soft"
+                  >
+                    <span className={`flex size-[14px] shrink-0 items-center justify-center rounded-[4px] text-[9px] font-black ${on ? "bg-ink text-on-ink" : "bg-card text-transparent"}`}>✓</span>
+                    <Tile src={t.artwork} />
+                    <span className="flex min-w-0 flex-1 flex-col gap-px">
+                      <span className="w-full truncate text-[10px] font-black">{t.title}</span>
+                      <span className="w-full truncate text-[8px] tracking-[0.5px] text-on-bright-muted">{t.artist}</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : (
+        <div className="flex items-center gap-[8px]">
+          <Tile src={track.artwork} />
+          <span className="flex min-w-0 flex-1 flex-col gap-px">
+            <span className="w-full truncate text-[11px] font-black">{track.title}</span>
+            <span className="w-full truncate text-[8px] tracking-[0.5px] text-on-bright-muted">{track.artist}</span>
+          </span>
+        </div>
+      )}
       <ul className="flex flex-col gap-[4px]">
         {lists.map((l) => (
           <li key={l.id} className="flex items-center gap-[8px] rounded-[8px] bg-card px-[10px] py-[6px]">
             <span className="flex min-w-0 flex-1 flex-col gap-px">
               <span className="w-full truncate text-[10px] font-bold">{l.name}</span>
-              <span className="text-[7px] tracking-[0.4px] text-on-bright-muted">{l.count}곡</span>
+              <span className="text-[7px] tracking-[0.4px] text-on-bright-muted">{l.count}곡{named(l.name) ? " · 말씀하신 플레이리스트" : ""}</span>
             </span>
-            {l.has ? (
-              <span className="shrink-0 rounded-pill border-[1.5px] border-rule px-[10px] py-[4px] text-[8px] tracking-[0.6px]">담았어요 ✓</span>
+            {!several && l.has ? (
+              <span className="shrink-0 rounded-pill border-[1.5px] border-transparent px-[10px] py-[4px] text-[8px] tracking-[0.6px]">담았어요 ✓</span>
+            ) : several && sent.includes(l.id) && !a.note ? (
+              <span className="shrink-0 rounded-pill border-[1.5px] border-transparent px-[10px] py-[4px] text-[8px] tracking-[0.6px]">담았어요 ✓</span>
             ) : (
-              <Button dark disabled={sent.includes(l.id) && !a.note} onClick={() => put(l.id)}>
-                담기
+              <Button dark disabled={(sent.includes(l.id) && !a.note) || (several && chosen.length === 0)} onClick={() => put(l.id)}>
+                {several ? `${chosen.length}곡 담기` : "담기"}
               </Button>
             )}
           </li>
@@ -537,7 +591,7 @@ function AddTo({ messageId, a }: { messageId: string; a: ChatAction }) {
                 setNaming(false);
               }}
             >
-              만들고 담기
+              {several ? `만들고 ${chosen.length}곡 담기` : "만들고 담기"}
             </Button>
             <Button onClick={() => setNaming(false)}>취소</Button>
           </div>
@@ -545,7 +599,7 @@ function AddTo({ messageId, a }: { messageId: string; a: ChatAction }) {
       ) : (
         <button
           type="button"
-          disabled={sent.includes("new") && !a.note}
+          disabled={(sent.includes("new") && !a.note) || (several && chosen.length === 0)}
           onClick={() => setNaming(true)}
           className="cursor-pointer rounded-pill border-[1.5px] border-transparent px-[12px] py-[7px] text-left text-[9px] font-bold transition-colors hover:bg-soft disabled:cursor-default disabled:opacity-40"
         >

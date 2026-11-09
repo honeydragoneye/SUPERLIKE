@@ -97,7 +97,7 @@ export function RecentlyPlayed({ contained = false }: { contained?: boolean }) {
                 aria-pressed={active}
                 title={option === "TODAY" ? "오늘 재생한 곡" : "최근 재생한 곡 최대 100곡"}
                 onClick={() => setRange(option)}
-                className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors rule ${
+                className={`shrink-0 cursor-pointer whitespace-nowrap rounded-pill px-[12px] py-[6px] text-[8px] tracking-[0.7px] transition-colors border-[1.5px] border-transparent ${
                   active ? "bg-ink text-on-ink" : "bg-soft text-ink hover:bg-accent"
                 }`}
               >

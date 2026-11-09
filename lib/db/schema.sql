@@ -271,3 +271,30 @@ create table if not exists user_follows (
   check (follower_id <> target_id)
 );
 create index if not exists user_follows_target on user_follows (target_id);
+
+-- What the chatbot remembers about a listener (lib/db/memory.ts). `items` is the
+-- profile: short lines of what they like, avoid, how they like to be talked to,
+-- and what they said. It is on by default and the listener can see, edit, switch
+-- off or clear it; `notice_seen` is whether the first-time notice was dismissed.
+create table if not exists listener_memory (
+  user_id     text primary key references users (spotify_id) on delete cascade,
+  enabled     boolean not null default true,
+  notice_seen boolean not null default false,
+  items       jsonb not null default '[]'::jsonb,
+  learned_at  timestamptz,
+  updated_at  timestamptz not null default now()
+);
+
+-- What the listener did with songs the chatbot showed: up / down / known (they
+-- already know it) are theirs; `shown` is only that it was recommended once, so it
+-- is not recommended again. One row per song, newest answer wins.
+create table if not exists track_feedback (
+  user_id   text not null references users (spotify_id) on delete cascade,
+  track_key text not null,
+  title     text not null,
+  artist    text not null,
+  value     text not null check (value in ('up', 'down', 'known', 'shown')),
+  at        timestamptz not null default now(),
+  primary key (user_id, track_key)
+);
+create index if not exists track_feedback_user_at on track_feedback (user_id, at desc);

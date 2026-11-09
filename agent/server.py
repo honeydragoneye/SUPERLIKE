@@ -53,6 +53,23 @@ def _clean_history(raw: object) -> list[dict]:
     return out
 
 
+def _clean_memory(raw: object) -> dict | None:
+    """사용자에 대한 기억의 요약. 모델의 지시문에 들어가므로 길이를 자른다."""
+    if not isinstance(raw, dict):
+        return None
+    text, count = raw.get("text"), raw.get("count")
+    if not isinstance(text, str) or not text.strip():
+        return None
+    return {"text": text.strip()[:1500], "count": count if isinstance(count, int) and 0 < count < 100 else 1}
+
+
+def _clean_avoid(raw: object) -> list[str]:
+    """이미 보여 줬거나 반응이 있는 곡의 키("제목|가수", 소문자). 다시 추천하지 않는다."""
+    if not isinstance(raw, list):
+        return []
+    return [k.strip()[:300].lower() for k in raw[:150] if isinstance(k, str) and k.strip()]
+
+
 def _clean_refine(raw: object) -> dict | None:
     """태그 이름과 지금 정의. 모델의 지시문에 들어가므로 길이를 자르고 한 줄로 만든다."""
     if not isinstance(raw, dict):
@@ -194,6 +211,8 @@ class Handler(BaseHTTPRequestHandler):
         can_act = body.get("canAct") is True
         likes = _clean_listed(body.get("likes"))
         recent = _clean_listed(body.get("recent"), with_time=True)
+        memory = _clean_memory(body.get("memory"))
+        avoid = _clean_avoid(body.get("avoid"))
 
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -206,7 +225,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         try:
-            for event in run_agent(history, question, cards=True, refine=refine, sources=sources, taste=taste, now_playing=now_playing, station=station, can_act=can_act, likes=likes, recent=recent):
+            for event in run_agent(history, question, cards=True, refine=refine, sources=sources, taste=taste, now_playing=now_playing, station=station, can_act=can_act, likes=likes, recent=recent, memory=memory, avoid=avoid):
                 send(event)
         except (BrokenPipeError, ConnectionResetError):
             pass  # 브라우저가 창을 닫거나 대화를 끊었다

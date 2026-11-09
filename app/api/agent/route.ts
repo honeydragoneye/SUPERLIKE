@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { signedInUser, withTokens } from "@/lib/db/account";
+import { avoidKeys, getMemory, summarize } from "@/lib/db/memory";
 
 /**
  * Where the chat agent listens — a separate local process, `npm run agent`
@@ -134,12 +136,30 @@ export async function POST(request: NextRequest) {
   // whether the browser can carry out like / playback / station / playlist actions for this listener
   const canAct = body.canAct === true;
 
+  // what the chatbot remembers about this listener, and the songs it should not offer again. A listener who is not
+  // signed in, a switched-off memory or a database that is not there all mean the same: the chat runs without it.
+  let memory: { text: string; count: number } | undefined;
+  let avoid: string[] | undefined;
+  let signedIn: Awaited<ReturnType<typeof signedInUser>> | null = null;
+  try {
+    signedIn = await signedInUser();
+    // both reads at once: this is in front of the first word of every answer
+    const [state, keys] = await Promise.all([getMemory(signedIn.id), avoidKeys(signedIn.id)]);
+    if (state.enabled) {
+      const s = summarize(state.items);
+      if (s.count > 0) memory = s;
+      avoid = keys;
+    }
+  } catch {
+    // see above
+  }
+
   let upstream: Response;
   try {
     upstream = await fetch(`${AGENT_URL}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(AGENT_TOKEN ? { Authorization: `Bearer ${AGENT_TOKEN}` } : {}) },
-      body: JSON.stringify({ question, history, refine, sources, taste, nowPlaying, station, canAct, likes, recent }),
+      body: JSON.stringify({ question, history, refine, sources, taste, nowPlaying, station, canAct, likes, recent, memory, avoid }),
       // closing the chat or sending the next question cuts the agent's work short too
       signal: request.signal,
       cache: "no-store",
@@ -152,10 +172,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "agent_error" }, { status: 502 });
   }
 
-  return new Response(upstream.body, {
+  const stream = new NextResponse(upstream.body, {
     headers: {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
     },
   });
+  // a Spotify token refreshed while the memory was read is handed on, as every other route does
+  return signedIn ? withTokens(stream, signedIn.resolved, []) : stream;
 }

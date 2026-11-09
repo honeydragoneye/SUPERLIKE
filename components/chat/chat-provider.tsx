@@ -18,7 +18,8 @@ import { loadChat, saveChat } from "@/lib/chat/history";
 import { actionFrom, cancelAction, chooseOption, makePlaylist, putInPlaylist, startAction, undoAction, type ActionEnv, type ChatAction } from "./chat-actions";
 import { snapshot as likedSnapshot } from "@/lib/likes";
 import { pageZoom } from "@/lib/page-zoom";
-import { updateCustomDefinition } from "@/lib/station/custom-tags";
+import { addCustomTag, CUSTOM_LABEL_MAX, snapshot as tagSnapshot, updateCustomDefinition } from "@/lib/station/custom-tags";
+import { getMemoryView, learnFrom, loadMemory, recordShown, resetMemory } from "@/components/memory/memory-store";
 import type { CustomMoodKey } from "@/lib/station/filter";
 
 /** The width the chat column starts at, and the narrowest it can be dragged to. */
@@ -54,12 +55,29 @@ export type ChatTrack = { title: string; artist: string };
  * Nothing changes until the listener presses 적용: `state` is where it stands.
  */
 export type ChatProposal = {
+  /**
+   * "refine": a new meaning for the tag being worked on. "create": a new tag, name and meaning.
+   * Conversations saved before tags could be made have no kind, and are refine.
+   */
+  kind?: "refine" | "create";
+  /** create: the name the agent suggests, which the listener may change on the card before making the tag */
+  label?: string;
   definition: string;
   reason: string;
   /** set when the criterion is something a title and an artist cannot settle */
   warning: string | null;
-  preview: { checked: number; passedCount: number; passed: ChatTrack[]; failed: ChatTrack[] };
-  state: "pending" | "applied" | "dismissed";
+  preview: {
+    checked: number;
+    passedCount: number;
+    passed: ChatTrack[];
+    failed: ChatTrack[];
+    /** where the sample songs came from; `fallback` is the chart, used because no songs were found for the tag asked for */
+    sample?: { tag: string | null; fallback: boolean };
+  };
+  /** created: the tag was made. superseded: a newer proposal in the same chat replaced this one. */
+  state: "pending" | "applied" | "dismissed" | "created" | "superseded";
+  /** create: the key of the tag that was made, once it was */
+  tagKey?: string;
 };
 
 export type ChatMessage =
@@ -82,6 +100,10 @@ export type ChatMessage =
       offer: { tried: ChatSource[]; options: ChatSource[] } | null;
       error: string | null;
       streaming: boolean;
+      /** how many lines of the memory the agent read for this answer */
+      memoryUsed?: number;
+      /** what the memory learned from this exchange, so the listener can see it and take it back */
+      memoryNote?: { ids: string[]; texts: string[] };
     };
 
 /** A page of this app an answer is about: the artist, or the album a song is on. Found by name when shown. */
@@ -112,6 +134,12 @@ type Ctx = {
   /** makes the proposal in this message the tag's definition */
   applyProposal: (messageId: string) => void;
   dismissProposal: (messageId: string) => void;
+  /** makes the tag a create proposal describes, under this name; the reason it could not be made, or null when it was */
+  createTag: (messageId: string, name: string) => string | null;
+  /** a fresh conversation about making a new tag, which shows examples to start from */
+  startTagCreate: () => void;
+  /** the chat was opened to make a tag and nothing has been said yet */
+  creating: boolean;
   send: (question: string) => Promise<void>;
   stop: () => void;
   clear: () => void;
@@ -125,7 +153,7 @@ type Ctx = {
   actOn: (
     messageId: string,
     actionId: string,
-    op: { type: "undo" | "cancel" | "retry" } | { type: "confirm"; name: string } | { type: "choose"; value: "loop" | "once" } | { type: "addTo"; target: string; name?: string },
+    op: { type: "undo" | "cancel" | "retry" } | { type: "confirm"; name: string } | { type: "choose"; value: "loop" | "once" } | { type: "addTo"; target: string; name?: string; ids?: string[] },
   ) => void;
   /** the listener picked where to look next, for the question this answer was about */
   searchWith: (messageId: string, source: ChatSource) => void;
@@ -315,6 +343,9 @@ async function* eventsOf(res: Response): AsyncGenerator<Record<string, unknown>>
   }
 }
 
+/** What in a listener's message suggests it is about their taste or how they like to be talked to. */
+const SAYS_TASTE = /좋아|싫어|별로|취향|스타일|즐겨|자주|선호|듣고 싶|좋았|질려|말고|위주|반말|존댓말|짧게|길게|이모지|부족|더 (밝|잔잔|신나|조용|시끄|부드)/;
+
 const OFFLINE = "에이전트에 연결하지 못했어요. 오래 쓰지 않았다면 서버가 깨어나는 데 1분쯤 걸려요. 잠시 뒤에 다시 시도해 주세요.";
 
 /** What the model is shown of the earlier turns: the cards' songs are not in the text, so they are added. */
@@ -339,8 +370,14 @@ function historyOf(messages: ChatMessage[]): { role: "user" | "assistant"; conte
             .join(", ")})`
         : "";
       const proposed = m.proposal
-        ? `\n(제안한 기준: ${m.proposal.definition} — ${
-            { pending: "아직 답 없음", applied: "사용자가 적용함", dismissed: "사용자가 취소함" }[m.proposal.state]
+        ? `\n(${m.proposal.kind === "create" ? `제안한 새 태그: 이름 '${m.proposal.label ?? ""}', 기준 ${m.proposal.definition}` : `제안한 기준: ${m.proposal.definition}`} — ${
+            {
+              pending: "아직 답 없음",
+              applied: "사용자가 적용함",
+              dismissed: "사용자가 취소함",
+              created: "사용자가 태그를 만듦",
+              superseded: "새 제안으로 바뀜",
+            }[m.proposal.state]
           })`
         : "";
       out.push({ role: "assistant", content: m.text.trim() + songs + did + proposed });
@@ -382,6 +419,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
   const [refineKey, setRefineKey] = useState<CustomMoodKey | null>(null);
+  /** the chat was opened from TAGS to make a tag: it shows examples until something is said */
+  const [createStart, setCreateStart] = useState(false);
   const tags = useCustomTags();
   // read live: a tag that was deleted, or redefined, is no longer what the conversation started from
   const tag = refineKey ? tags.find((t) => t.key === refineKey) : undefined;
@@ -441,6 +480,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const connectedRef = useRef(false);
   useEffect(() => {
     connectedRef.current = connected;
+    // what the chatbot remembers lives in the account: read it once connected, let go of it when not
+    if (connected) void loadMemory();
+    else resetMemory();
   }, [connected]);
   const conversation = useRef(0);
   const savedIds = useRef(new Map<number, string | null>([[0, null]]));
@@ -478,6 +520,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   /** Starts a new conversation: its own number, and the id of the saved one it continues if there is one. */
   const beginConversation = useCallback((savedAs: string | null, key: string) => {
+    setCreateStart(false);
     conversation.current += 1;
     savedIds.current.set(conversation.current, savedAs);
     savedKey.current = key;
@@ -538,6 +581,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     for (let i = messagesRef.current.length - 1; i >= 0; i--) {
       const m = messagesRef.current[i];
       if (m.role === "assistant" && m.tracks.length) return m.tracks;
+      // tag refining shows its songs in the proposal's preview, not on cards: the ones that passed are what "the songs just found" means
+      if (m.role === "assistant" && m.proposal && m.proposal.state !== "dismissed" && m.proposal.state !== "superseded" && m.proposal.preview.passed.length) return m.proposal.preview.passed;
     }
     return [];
   }, []);
@@ -563,7 +608,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           patchAction(messageId, actionId, { state: "working" });
           patchAction(messageId, actionId, await chooseOption(action, op.value, actionEnv()));
         } else if (op.type === "addTo") {
-          patchAction(messageId, actionId, await putInPlaylist(action, op.target, op.name));
+          patchAction(messageId, actionId, await putInPlaylist(action, op.target, op.name, op.ids));
         } else if (op.type === "confirm") {
           patchAction(messageId, actionId, { state: "working" });
           patchAction(messageId, actionId, await makePlaylist(action, op.name));
@@ -571,6 +616,38 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       })();
     },
     [actionEnv, patchAction],
+  );
+
+  /**
+   * A reply is over: the songs it showed are noted (so they are not offered again), and when the exchange looks
+   * like it said something about taste or manner (or every third one), the memory reads it and learns. Nothing
+   * happens for a listener who is not connected, in a tag conversation, or with the memory switched off.
+   */
+  const turnsSinceLearn = useRef(0);
+  const afterReply = useCallback(
+    (id: string) => {
+      setTimeout(() => {
+        const list = messagesRef.current;
+        const m = list.find((x) => x.id === id);
+        const memory = getMemoryView();
+        if (!m || m.role !== "assistant" || m.error || !connectedRef.current || refineRef.current) return;
+        if (memory.status !== "ok" || !memory.enabled) return;
+        if (m.tracks.length) recordShown(m.tracks);
+        const lastUser = [...list].reverse().find((x) => x.role === "user");
+        turnsSinceLearn.current += 1;
+        if (!(lastUser && SAYS_TASTE.test(lastUser.text)) && turnsSinceLearn.current < 3) return;
+        turnsSinceLearn.current = 0;
+        const turns = list.slice(-6).map((x) => ({ role: x.role, text: x.text }));
+        void learnFrom(turns).then((added) => {
+          if (added.length) {
+            patch(id, (copy) => {
+              copy.memoryNote = { ids: added.map((a) => a.id), texts: added.map((a) => a.text) };
+            });
+          }
+        });
+      }, 0);
+    },
+    [patch],
   );
 
   const run = useCallback(
@@ -674,8 +751,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     based_on?: string;
                     tracks?: ChatTrack[];
                     checked?: number;
-                    proposal?: { definition: string; reason?: string; warning?: string };
-                    preview?: { checked: number; passed_count?: number; passed: ChatTrack[]; failed: ChatTrack[] };
+                    proposal?: { definition: string; reason?: string; warning?: string; label?: string };
+                    preview?: { checked: number; passed_count?: number; passed: ChatTrack[]; failed: ChatTrack[]; sample?: { tag?: string | null; fallback?: boolean } };
                   }
                 | undefined;
               const action = actionFrom(result?.action);
@@ -693,6 +770,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 patch(reply, (m) => {
                   // a newer proposal replaces the one before it: only the last is on the table
                   m.proposal = {
+                    ...(typeof proposal.label === "string" && proposal.label ? { kind: "create" as const, label: String(proposal.label) } : {}),
                     definition: String(proposal.definition),
                     reason: String(proposal.reason ?? ""),
                     warning: proposal.warning ? String(proposal.warning) : null,
@@ -701,11 +779,22 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                       passedCount: Number(preview.passed_count ?? preview.passed.length) || 0,
                       passed: preview.passed.map((t) => ({ title: String(t.title), artist: String(t.artist) })),
                       failed: preview.failed.map((t) => ({ title: String(t.title), artist: String(t.artist) })),
+                      ...(preview.sample ? { sample: { tag: preview.sample.tag ? String(preview.sample.tag) : null, fallback: preview.sample.fallback === true } } : {}),
                     },
                     state: "pending",
                   };
-                  m.status = "기준을 정리했어요";
+                  m.status = typeof proposal.label === "string" && proposal.label ? "태그를 정리했어요" : "기준을 정리했어요";
                 });
+                // a newer tag proposal replaces the ones before it that are still waiting
+                if (typeof proposal.label === "string" && proposal.label) {
+                  setMessages((all) =>
+                    all.map((x) =>
+                      x.id !== reply && x.role === "assistant" && x.proposal?.kind === "create" && x.proposal.state === "pending"
+                        ? { ...x, proposal: { ...x.proposal, state: "superseded" as const } }
+                        : x,
+                    ),
+                  );
+                }
                 break;
               }
               const note = NOTE_OF[String(event.name)];
@@ -779,6 +868,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               }
               break;
             }
+            case "memory":
+              // how many remembered lines this answer was written with
+              patch(reply, (m) => {
+                m.memoryUsed = Number(event.count) || 0;
+              });
+              break;
             case "retry":
               // the agent is starting its answer over: what was typed so far is dropped
               patch(reply, (m) => {
@@ -818,9 +913,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           // reported back leaves nothing true to say, so the line goes rather than lingering
           if (m.status?.endsWith("…")) m.status = null;
         });
+        afterReply(reply);
       }
     },
-    [patch, patchAction, actionEnv, shownTracks],
+    [patch, patchAction, actionEnv, shownTracks, afterReply],
   );
 
   const send = useCallback((question: string) => run(question), [run]);
@@ -858,7 +954,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const stop = useCallback(() => abortRef.current?.abort(), []);
 
   const setProposalState = useCallback(
-    (id: string, state: "applied" | "dismissed") =>
+    (id: string, state: ChatProposal["state"]) =>
       setMessages((all) =>
         all.map((m) =>
           m.id === id && m.role === "assistant" && m.proposal
@@ -879,6 +975,25 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [setProposalState],
   );
   const dismissProposal = useCallback((id: string) => setProposalState(id, "dismissed"), [setProposalState]);
+
+  const createTag = useCallback(
+    (id: string, name: string): string | null => {
+      const message = messagesRef.current.find((m) => m.id === id);
+      const p = message && message.role === "assistant" ? message.proposal : null;
+      if (!p || p.kind !== "create" || p.state !== "pending") return "이미 처리된 제안이에요";
+      const why = addCustomTag(name, p.definition);
+      if (why) return why;
+      const label = name.replace(/\s+/g, " ").trim().slice(0, CUSTOM_LABEL_MAX);
+      const made = tagSnapshot().find((t) => t.label === label);
+      setMessages((all) =>
+        all.map((m) =>
+          m.id === id && m.role === "assistant" && m.proposal ? { ...m, proposal: { ...m.proposal, state: "created" as const, label, tagKey: made?.key } } : m,
+        ),
+      );
+      return null;
+    },
+    [],
+  );
 
   const clear = useCallback(() => {
     persist();
@@ -926,6 +1041,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setRefineKey(key);
     setOpen(true);
   }, [persist, beginConversation]);
+  const startTagCreate = useCallback(() => {
+    persist();
+    abortRef.current?.abort();
+    beginConversation(null, "");
+    setMessages([]);
+    setRefineKey(null);
+    setCreateStart(true);
+    setOpen(true);
+  }, [persist, beginConversation]);
+  // the examples are for a conversation that has not started: the first word ends them
+  const creating = createStart && messages.length === 0 && !refineKey;
   const leaveRefine = useCallback(() => {
     abortRef.current?.abort();
     beginConversation(null, "");
@@ -936,11 +1062,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Ctx>(
     () => ({
       open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
-      applyProposal, dismissProposal, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, retry, actOn, shareTaste, toggleTaste, shareHistory, toggleHistory,
+      applyProposal, dismissProposal, createTag, startTagCreate, creating, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, retry, actOn, shareTaste, toggleTaste, shareHistory, toggleHistory,
     }),
     [
       open, toggle, close, messages, busy, refine, openRefine, leaveRefine,
-      applyProposal, dismissProposal, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, retry, actOn, shareTaste, toggleTaste, shareHistory, toggleHistory,
+      applyProposal, dismissProposal, createTag, startTagCreate, creating, send, stop, clear, restore, width, setWidth, maxWidth, searchWith, retry, actOn, shareTaste, toggleTaste, shareHistory, toggleHistory,
     ],
   );
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

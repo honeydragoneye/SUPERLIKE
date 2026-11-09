@@ -471,9 +471,11 @@ def make_playlist(session: Session, name: str, source: str = "shown") -> dict:
     return _action("playlist", "화면이 이름과 곡을 보여 주고 사용자가 만들기를 눌러야 만들어진다. 곡 목록을 글로 나열하지 말고, 만들어 볼지 물어본다.", name=name, source=source)
 
 
-def add_to_playlist(session: Session, title: str = "", artist: str = "", name: str = "") -> dict:
-    """곡 하나를 사용자의 기존 플레이리스트에 담자는 말('이 곡 내 플레이리스트에 담아줘')에 부른다. 어느 플레이리스트인지는 사용자가 카드에서 고른다."""
+def add_to_playlist(session: Session, title: str = "", artist: str = "", name: str = "", source: str = "") -> dict:
+    """곡을 사용자의 기존 플레이리스트에 담자는 말에 부른다. 곡 하나('이 곡 내 플레이리스트에 담아줘')도, 방금 찾아 보여 준 여러 곡(source="shown")도 된다. 어느 플레이리스트인지, 어느 곡을 담을지는 사용자가 카드에서 고른다."""
     title, artist, name = _line(title), _line(artist), _line(name, 60)
+    if _line(source, 20).lower() == "shown" and not title:
+        return _action("addTo", "화면이 방금 보여 준 곡들과 플레이리스트 목록 카드를 보여 주고, 사용자가 담을 곡과 플레이리스트를 고른다. 어디에 담을지 물어보는 한 문장만 쓴다. 아직 담지 않았다.", source="shown", name=name)
     if title:
         return _action("addTo", "화면이 플레이리스트 목록 카드를 보여 주고 사용자가 고른다. 어느 곳에 담을지 물어보는 한 문장만 쓴다. 아직 담지 않았다.", source="named", title=title, artist=artist, name=name)
     now = session.now_playing or {}
@@ -760,6 +762,8 @@ def albums(artist: str) -> dict:
 
 # 태그 정의의 길이 상한. Superlike(lib/station/moods.ts의 CUSTOM_DEFINITION_MAX)와 같아야 한다.
 DEFINITION_MAX = 80
+# 태그 이름의 길이 상한. Superlike(lib/station/moods.ts의 CUSTOM_LABEL_MAX)와 같아야 한다.
+LABEL_MAX = 12
 # 미리보기에서 판정해 보는 곡 수와, 화면에 보여 줄 통과·탈락 곡 수
 _PREVIEW_SAMPLE = 20
 _PREVIEW_SHOWN = 6
@@ -784,13 +788,107 @@ def _sample_pool(sample_tag: str) -> list[dict]:
 
 
 # 판정기는 곡 제목과 가수 이름만 본다. 이런 말이 든 기준은 그것만으로는 정확히 가릴 수 없다.
+# 시간을 말하는 표현: 판정기는 제목과 가수만 보고 날짜를 모르니, "최근에 데뷔한" 같은 기준은 모델의 기억에 기대게 된다
+_RELATIVE_TIME = re.compile(r"\b(?:recent(?:ly)?|newest|latest|newly|debuted|debut|rookie|nowadays|these days|current(?:ly)?)\b|최근|요즘|신인|데뷔", re.IGNORECASE)
+
+# 가수를 알면 가릴 수 있는 말(보컬, 목소리 같은 것)은 뺀다: "female vocal"은 가수만 알면 판정된다.
 _NOT_JUDGEABLE = re.compile(
-    r"lyric|melody|beat|tempo|bpm|vocal|voice|guitar|piano|instrument|sound|rhythm|chorus|가사|멜로디|박자|목소리|악기|소리",
+    r"lyric|melody|tempo|bpm|guitar|piano|instrument|sound|chorus|가사|멜로디|박자|악기|소리",
     re.IGNORECASE,
 )
 
 
-def propose_definition(definition: str, reason: str = "", sample_tag: str = "") -> dict:
+def _lastfm(method: str, **params) -> dict:
+    response = requests.get(
+        _LASTFM_URL,
+        params={"method": method, "api_key": config.LASTFM_API_KEY, "format": "json", "autocorrect": 1, **params},
+        timeout=10,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def _top_of(artist: str, n: int) -> list[dict]:
+    try:
+        found = (_lastfm("artist.gettoptracks", artist=artist, limit=n).get("toptracks") or {}).get("track", [])
+    except requests.RequestException:
+        return []
+    return [{"title": t["name"], "artist": artist} for t in found if t.get("name")]
+
+
+def _pool_from_artists(named: list[str]) -> list[dict]:
+    """사용자가 예로 든 가수들과, 그 가수들과 비슷한 가수들의 대표곡. 최근에 나온 가수도 태그 인기 순위와 달리 여기선 들어온다.
+
+    예시 가수 자신의 곡(가수마다 2곡)을 먼저 담고, 나머지는 비슷한 가수들의 대표곡 2곡씩으로 채운다. 최대 _PREVIEW_SAMPLE곡."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    names = [" ".join(str(a).split()) for a in named if str(a).strip()][:3]
+    if not names:
+        return []
+
+    def similar(artist: str) -> list[str]:
+        try:
+            found = (_lastfm("artist.getsimilar", artist=artist, limit=8).get("similarartists") or {}).get("artist", [])
+        except requests.RequestException:
+            return []
+        return [a["name"] for a in found if a.get("name")]
+
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        own_jobs = [ex.submit(_top_of, a, 2) for a in names]
+        sim_jobs = [ex.submit(similar, a) for a in names]
+        own = [t for j in own_jobs for t in j.result()]
+        lowered = {a.lower() for a in names}
+        others: list[str] = []
+        for j in sim_jobs:
+            for a in j.result():
+                if a.lower() not in lowered and a not in others:
+                    others.append(a)
+        # 가수가 여럿이면 각자의 비슷한 가수가 고르게 들어오도록 섞어서 앞에서부터 쓴다
+        random.shuffle(others)
+        sim_tracks = [t for j in [ex.submit(_top_of, a, 2) for a in others[:12]] for t in j.result()]
+    pool: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for t in own + sim_tracks:
+        key = (t["title"].lower(), t["artist"].lower())
+        if key not in seen:
+            seen.add(key)
+            pool.append(t)
+    return pool[:_PREVIEW_SAMPLE]
+
+
+# 같은 기준으로 샘플 태그가 비었던 횟수. 처음에는 모델에게 다시 고르게 하고, 그래도 비면 다른 길로 채운다.
+_tag_misses: dict[str, int] = {}
+
+
+def _pool_from_parts(sample_tag: str) -> tuple[list[dict], str | None]:
+    """모델이 쓴 태그가 통째로는 Last.fm에 없을 때: 쉼표로 나눈 조각, 그다음 두 단어, 한 단어 조각으로 찾는다.
+    곡이 나온 조각 둘까지 합친다. ("k-pop boy group hip hop"은 없어도 "k-pop"과 "hip hop"은 있다)"""
+    text = " ".join(sample_tag.lower().replace(",", " , ").split())
+    pieces = [p.strip() for p in text.split(",") if p.strip()]
+    words = [w for w in text.replace(",", " ").split() if w]
+    candidates = list(pieces)
+    candidates += [" ".join(words[i : i + 2]) for i in range(len(words) - 1)]
+    candidates += words
+    seen: set[str] = set()
+    pool: list[dict] = []
+    used: list[str] = []
+    for c in candidates:
+        if c in seen or len(used) >= 2:
+            continue
+        seen.add(c)
+        try:
+            found = _sample_pool(c)
+        except requests.RequestException:
+            continue
+        # 곡이 몇 개 안 나오는 조각은 엉뚱한 태그일 가능성이 크다
+        if len(found) >= 10:
+            used.append(c)
+            have = {(t["title"], t["artist"]) for t in pool}
+            pool += [t for t in found if (t["title"], t["artist"]) not in have]
+    return pool, (" + ".join(used) if used else None)
+
+
+def propose_definition(definition: str, reason: str = "", sample_tag: str = "", sample_artists: list | None = None) -> dict:
     """사용자의 태그에 새 기준(정의)을 제안하고, 그 기준이 곡들에 어떻게 적용되는지 미리 보여 준다.
 
     예시를 주면서 규칙을 짐작하게 하는 것보다, 사용자에게 기준을 물어 말로 적은 정의가 훨씬 정확하다
@@ -806,22 +904,64 @@ def propose_definition(definition: str, reason: str = "", sample_tag: str = "") 
     if len(d) > DEFINITION_MAX:
         return {"error": f"정의가 {len(d)}자입니다. {DEFINITION_MAX}자 이내의 영어 한 문장으로 줄여 다시 불러 주세요."}
 
-    try:
-        pool = _sample_pool(sample_tag)
-    except requests.RequestException:
-        pool = []
+    # 사용자가 예로 든 가수가 있으면 그 가수와 비슷한 가수들의 곡이 가장 정확한 샘플이다(태그 인기곡은 오래된 곡으로 쏠린다)
+    artists = [str(a) for a in (sample_artists or []) if isinstance(a, (str, int)) and str(a).strip()][:3]
+    pool: list[dict] = []
+    used_artists: list[str] | None = None
+    if artists:
+        try:
+            pool = _pool_from_artists(artists)
+        except requests.RequestException:
+            pool = []
+        # 곡이 너무 적게 나오면(가수 이름이 틀렸거나 Last.fm에 없을 때) 태그로 간다
+        if len(pool) >= 6:
+            used_artists = artists
+        else:
+            pool = []
+    if not pool:
+        try:
+            pool = _sample_pool(sample_tag)
+        except requests.RequestException:
+            pool = []
+    used_tag: str | None = None if used_artists else (sample_tag.strip().lower() or None)
+    fell_back = False
     if not pool and sample_tag.strip():
-        # 모델이 지어낸 태그("sad, non-korean")면 Last.fm에 곡이 없다. 실패로 돌려주면 모델이 그 오류를
-        # 사용자에게 읊고 멈추니, 차트로 바꿔서 미리보기는 반드시 보여 준다.
+        # 모델이 지어낸 태그("k-pop boy group hip hop")면 Last.fm에 곡이 없다. 차트로 바꾸면 기준과 상관없는 곡이라
+        # 0곡 통과가 나오니, 처음 한 번은 모델에게 흔한 장르 태그로 다시 고르게 한다.
+        key = d.lower()
+        misses = _tag_misses.get(key, 0)
+        if len(_tag_misses) > 500:
+            _tag_misses.clear()
+        _tag_misses[key] = misses + 1
+        if misses == 0:
+            return {
+                "error": (
+                    f"'{sample_tag}'라는 Last.fm 태그에는 곡이 없습니다. 문장이나 여러 조건을 합친 말은 태그가 아닙니다. "
+                    "kpop, korean hip hop, indie rock, city pop, chill처럼 실제로 쓰이는 한두 단어의 장르 태그로 "
+                    "sample_tag를 바꿔 다시 불러 주세요."
+                )
+            }
+        # 두 번째부터는 쓴 말의 조각으로 찾고, 그래도 없을 때만 차트로 간다
+        pool, used_tag = _pool_from_parts(sample_tag)
+    if not pool:
+        # 샘플이 기준과 상관없을 수 있다: 화면이 그렇게 알리도록 표시한다
         pool = _sample_pool("")
+        used_tag, fell_back = None, bool(sample_tag.strip())
     random.shuffle(pool)
     pool = pool[:_PREVIEW_SAMPLE]
     if not pool:
         return {"error": "미리보기에 쓸 곡을 가져오지 못했습니다. sample_tag를 바꾸거나 비워서 다시 불러 주세요."}
     verdicts = judge(d, pool)
     proposal = {"definition": d, "reason": " ".join(str(reason).split())[:200]}
-    if _NOT_JUDGEABLE.search(d):
-        proposal["warning"] = "가사나 소리 같은 기준은 곡 제목과 가수만 보는 판정에서는 정확히 가려내기 어려워요."
+    words = sorted({m.group(0).lower() for m in _NOT_JUDGEABLE.finditer(d)})
+    times = sorted({m.group(0).lower() for m in _RELATIVE_TIME.finditer(d)})
+    notes = []
+    if words:
+        notes.append(f"‘{', '.join(words)}’ 같은 말은 곡 제목과 가수만 보는 판정에서는 정확히 가려내기 어려워요.")
+    if times:
+        notes.append(f"‘{', '.join(times)}’ 같은 시간 표현은 언제 데뷔했는지 몰라서 가리기 어려워요. 비슷한 가수를 예로 들면 더 정확해요.")
+    if notes:
+        proposal["warning"] = " ".join(notes)
     passed = [t for t, ok in zip(pool, verdicts) if ok]
     failed = [t for t, ok in zip(pool, verdicts) if ok is False]
     return {
@@ -830,6 +970,8 @@ def propose_definition(definition: str, reason: str = "", sample_tag: str = "") 
             "checked": len(pool),
             # 보여 주는 곡은 일부지만, 몇 곡이 통과했는지는 전체로 알려 준다
             "passed_count": len(passed),
+            # 샘플을 어디서 가져왔는지: 태그가 비어 차트로 갔으면 fallback이다(그러면 0곡 통과가 기준 탓이 아닐 수 있다)
+            "sample": {"tag": used_tag, "artists": used_artists, "fallback": fell_back},
             # 통과한 곡은 전부 보낸다(최대 20곡): 화면이 이 곡들을 재생 목록으로 들려 준다. 목록에 보이는 건 일부만이다
             "passed": passed,
             "failed": failed[:_PREVIEW_SHOWN],
@@ -896,6 +1038,23 @@ def follow_artist(session: Session, artist: str = "") -> dict:
         return {"error": "지금 재생 중인 곡이 없어서 팔로우할 가수를 모른다. 가수 이름을 말해 달라고 한다."}
     return _action("follow", "화면이 지금 듣는 곡의 가수를 팔로우하고 취소 버튼을 보여 준다. 짧게 알린다.", source="now", artist=now["artist"])
 
+
+
+def propose_tag(label: str, definition: str, reason: str = "", sample_tag: str = "", sample_artists: list | None = None) -> dict:
+    """사용자가 말한 곡들을 모으는 새 태그(이름과 기준)를 제안하고, 그 기준이 곡들에 어떻게 적용되는지 미리 보여 준다.
+
+    기준을 판정하고 미리보기를 만드는 일은 propose_definition과 같다. 다른 점은 이름이 함께 간다는 것이다.
+    태그를 실제로 만드는 건 화면이고, 사용자가 카드에서 "태그 만들기"를 눌렀을 때만 일어난다.
+    """
+    name = " ".join(str(label).split())
+    if not name:
+        return {"error": f"태그 이름이 비어 있습니다. 곡들의 공통점을 담은 {LABEL_MAX}자 이내의 짧은 이름을 정해 다시 불러 주세요."}
+    if len(name) > LABEL_MAX:
+        return {"error": f"태그 이름이 {len(name)}자입니다. {LABEL_MAX}자 이내로 줄여 다시 불러 주세요."}
+    result = propose_definition(definition, reason, sample_tag, sample_artists)
+    if "proposal" in result:
+        result["proposal"]["label"] = name
+    return result
 
 TOOLS: dict[str, dict] = {
     "top_tracks": {
@@ -1134,7 +1293,8 @@ TOOLS: dict[str, dict] = {
             "function": {
                 "name": "seek",
                 "description": (
-                    "지금 곡의 재생 위치를 옮긴다. '1분 30초로 가줘'는 seconds=90, relative=false. '처음부터'는 seconds=0, relative=false. "
+                    "지금 곡의 재생 위치를 옮긴다. 사용자가 말한 시각이나 초만 쓴다: '후렴', '간주', '클라이맥스', '하이라이트'처럼 곡의 구간을 가리키는 말은 "
+                    "그 위치를 알 수 없으니 이 도구를 부르지 않고, 위치를 알 수 없다고 말하며 원하는 시각을 말해 달라고 한다. '1분 30초로 가줘'는 seconds=90, relative=false. '처음부터'는 seconds=0, relative=false. "
                     "'30초 앞으로(건너뛰기)'는 seconds=30, relative=true, '30초 뒤로(되감기)'는 seconds=-30, relative=true. '끝에서 30초 전'은 seconds=-30, relative=false(음수면 곡 끝에서부터)."
                 ),
                 "parameters": {
@@ -1176,16 +1336,19 @@ TOOLS: dict[str, dict] = {
             "function": {
                 "name": "add_to_playlist",
                 "description": (
-                    "곡 하나를 사용자의 기존 플레이리스트에 담는다. '이 곡 내 플레이리스트에 담아줘'(title 없이), "
-                    "'Everlong 플레이리스트에 담아줘'(title)에 부른다. 곧바로 담지 않고 사용자가 카드에서 플레이리스트를 고른다. "
-                    "새 플레이리스트를 만들자는 말이나 여러 곡을 담는 말은 make_playlist를 쓴다."
+                    "곡을 사용자의 기존 플레이리스트에 담는다. '이 곡 내 플레이리스트에 담아줘'(title 없이), "
+                    "'Everlong 플레이리스트에 담아줘'(title)처럼 곡 하나를 담는 말에 부른다. 방금 찾아 보여 준 여러 곡을 '내 ○○ "
+                    "플레이리스트에 다 넣어줘'처럼 이미 있는 플레이리스트에 담으라는 말에는 source=\"shown\"으로 부른다(name에는 사용자가 "
+                    "말한 플레이리스트 이름). 곧바로 담지 않고 사용자가 카드에서 곡과 플레이리스트를 고른다. "
+                    "새 플레이리스트를 만들어 담자는 말은 make_playlist를 쓴다."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "title": {"type": "string", "description": "곡 제목. 지금 듣는 곡이면 비운다"},
                         "artist": {"type": "string", "description": "가수(알면)"},
-                        "name": {"type": "string", "description": "새로 만들 플레이리스트 이름(사용자가 말했을 때만)"},
+                        "name": {"type": "string", "description": "사용자가 말한 플레이리스트 이름(말했을 때만)"},
+                        "source": {"type": "string", "description": "방금 찾아 보여 준 여러 곡을 담을 때 \"shown\". 곡 하나면 비운다"},
                     },
                 },
             },
@@ -1445,7 +1608,12 @@ TOOLS: dict[str, dict] = {
                         "reason": {"type": "string", "description": "사용자의 말을 어떻게 정리했는지 한국어 한 문장"},
                         "sample_tag": {
                             "type": "string",
-                            "description": "미리보기 곡을 가져올 영어 태그 (예: korean, k-pop). 모르면 비운다",
+                            "description": "미리보기 곡을 가져올 Last.fm 장르 태그. 실제로 쓰이는 한두 단어만 (예: kpop, korean hip hop, indie rock). 문장이나 여러 조건을 합친 말은 안 된다. 모르면 비운다",
+                        },
+                        "sample_artists": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "사용자가 예로 든 가수(영어 표기, 최대 3명. 예: Stray Kids, CORTIS). 있으면 이 가수들과 비슷한 가수들의 곡으로 미리보기를 만든다. 없으면 비운다",
                         },
                     },
                     "required": ["definition"],
@@ -1453,6 +1621,32 @@ TOOLS: dict[str, dict] = {
             },
         },
         "run": propose_definition,
+    },
+    "propose_tag": {
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "propose_tag",
+                "description": (
+                    "사용자가 새 태그를 만들자고 할 때 쓴다. 태그 이름(label)과, 어떤 곡을 모으는지 영어 한 문장 기준(definition)을 "
+                    "정리해 제안하고, 그 기준이 실제 곡들에 어떻게 적용되는지 미리 본다. 이름은 12자 이내, 기준은 곡 제목과 가수만 보고 "
+                    "판정할 수 있는(가수, 나라, 언어, 분위기, 장르) 80자 이내여야 한다. 곧바로 만들지 않고 사용자가 카드에서 "
+                    "'태그 만들기'를 눌러야 만들어진다."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "label": {"type": "string", "description": "태그 이름. 사용자가 말했으면 그대로, 아니면 12자 이내의 짧은 한국어 이름 (예: 비 오는 날)"},
+                        "definition": {"type": "string", "description": "영어 한 문장의 기준 (예: 'calm, quiet songs that suit a rainy day')"},
+                        "reason": {"type": "string", "description": "사용자의 말을 어떻게 정리했는지 한국어 한 문장"},
+                        "sample_tag": {"type": "string", "description": "미리보기 곡을 가져올 Last.fm 장르 태그. 실제로 쓰이는 한두 단어만 (예: kpop, korean hip hop, indie rock, city pop, chill). 문장이나 여러 조건을 합친 말은 안 된다. 모르면 비운다"},
+                        "sample_artists": {"type": "array", "items": {"type": "string"}, "description": "사용자가 예로 든 가수(영어 표기, 최대 3명. 예: Stray Kids, CORTIS). 있으면 이 가수들과 비슷한 가수들의 곡으로 미리보기를 만든다. 없으면 비운다"},
+                    },
+                    "required": ["label", "definition"],
+                },
+            },
+        },
+        "run": propose_tag,
     },
 }
 
@@ -1507,8 +1701,11 @@ def call_tool(name: str, arguments: dict, session: Session, allowed: tuple[str, 
     """모델이 고른 도구를 실행한다. 없는 도구나 잘못된 인자는 예외 대신 오류 값으로 돌려줘서
     모델이 스스로 고쳐 다시 시도할 수 있게 한다."""
     tool = TOOLS.get(name)
-    if tool is None or tool["run"] is None or (allowed is not None and name not in allowed):
+    if tool is None or tool["run"] is None:
         return {"error": f"없는 도구: {name}"}
+    if allowed is not None and name not in allowed:
+        # 포기하지 않고 다른 도구로 다시 시도할 수 있게, 지금 쓸 수 있는 도구를 알려 준다
+        return {"error": f"지금은 쓸 수 없는 도구: {name}. 쓸 수 있는 도구: {', '.join(allowed)}. 이 중에 맞는 것이 있으면 그걸로 다시 시도하고, 없으면 할 수 없다고 말한다."}
     try:
         run = tool["run"]
         return run(session, **arguments) if name in ("top_tracks", "similar_to", "now_playing", "station_info", "my_likes", "recent_plays", *ACTION_TOOLS) else run(**arguments)
