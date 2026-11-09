@@ -1099,43 +1099,165 @@ def lyrics_text(session: Session, title: str = "", artist: str = "") -> dict:
 _IDENTIFY_MAX = 5
 
 
+def _plain_lyrics(title: str, artist: str) -> str | None:
+    """LRCLIB에 있는 가사 본문. 곡이 없거나 가사가 없으면 None(모른다는 뜻이지 가사가 다르다는 뜻이 아니다)."""
+    try:
+        response = requests.get(_LRCLIB, params={"track_name": title, "artist_name": artist}, headers={"User-Agent": _WIKI_UA}, timeout=10)
+    except requests.RequestException:
+        return None
+    if not response.ok:
+        return None
+    return str(response.json().get("plainLyrics") or "").strip() or None
+
+
+def _clue_words(clues: str) -> list[str]:
+    """단서에서 가사 확인에 쓸 낱말(한글·영문 2자 이상). 숫자만인 것은 뺀다."""
+    return [w for w in re.findall(r"[0-9A-Za-z가-힣]+", clues.lower()) if len(w) >= 2 and not w.isdigit()]
+
+
+def _lyrics_match(clues: str, lyrics: str) -> bool | None:
+    """단서가 가사에 있는가. 낱말의 절반 이상이 있으면 True, 아니면 False.
+    한글 발음으로 적은 영어 가사처럼 글자 종류가 달라 비교할 수 없으면 None(모른다)이다.
+    띄어쓰기가 달라도 맞도록 공백을 뺀 가사에서도 찾는다."""
+    text = lyrics.lower()
+    letters = re.findall(r"[A-Za-z가-힣]", text)
+    if not letters:
+        return None
+    hangul = sum(1 for c in letters if "가" <= c <= "힣") / len(letters)
+    words = [
+        w
+        for w in _clue_words(clues)
+        if (re.search(r"[가-힣]", w) and hangul >= 0.3) or (re.search(r"[a-z]", w) and hangul <= 0.7)
+    ]
+    # 단서의 낱말 대부분을 가사와 같은 글자로 비교할 수 있어야 맞다/아니다를 말할 수 있다
+    # (한국어 단서에 영어 낱말만 겹친 것을 '맞다'로 보지 않는다: 비교할 수 없는 낱말이 4분의 1을 넘으면 모른다)
+    if not words or len(words) * 4 < len(_clue_words(clues)) * 3:
+        return None
+    squeezed = re.sub(r"\s+", "", text)
+    hits = sum(1 for w in words if w in text or w in squeezed)
+    return hits * 4 >= len(words) * 3
+
+
+# 검색 연동이 막혀 있으면(무료 한도에는 포함되지 않을 수 있다) 한동안 다시 묻지 않는다
+_web_off_until = 0.0
+
+
+def _web_guesses(clues: str) -> list[str]:
+    """가사 단서를 구글 검색(Gemini 검색 연동)으로 찾아, 곡 후보를 '제목 - 가수'로 돌려준다. 실패하면 빈 목록이다.
+    검색에서 나온 후보도 아래에서 Last.fm으로 곡을 확인하고 LRCLIB 가사로 맞는지 본다."""
+    global _web_off_until
+    from agent import gemini
+
+    if time.monotonic() < _web_off_until:
+        return []
+    prompt = (
+        "다음은 어떤 노래의 가사 일부(또는 곡에 대한 단서)다. 웹 검색으로 이 가사가 들어 있는 곡을 찾아라.\n"
+        f"단서: {clues[:300]}\n"
+        "검색 결과에서 실제로 그 가사가 확인된 곡만 '제목 - 가수' 형식으로 한 줄에 하나씩, 최대 3개 적어라. "
+        "다른 설명은 쓰지 마라. 확인되지 않으면 '없음'이라고만 적어라."
+    )
+    try:
+        response = gemini._post(
+            "generateContent",
+            {"contents": [{"role": "user", "parts": [{"text": prompt}]}], "tools": [{"google_search": {}}], "generationConfig": {"temperature": 0}},
+        )
+        parts = response.json()["candidates"][0]["content"]["parts"]
+    except Exception:  # noqa: BLE001 — 검색이 안 되면(한도 포함) 모델의 짐작만으로 간다
+        _web_off_until = time.monotonic() + 3600
+        return []
+    text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+    out = []
+    for raw in text.splitlines():
+        line = re.sub(r"^[\s\-*•\d.)]+", "", raw).strip().strip("*`\"'")
+        if " - " in line and len(line) < 120:
+            out.append(line)
+    return out[:3]
+
+
 def identify_song(clues: str = "", guesses: list | None = None) -> dict:
     """가사 조각이나 분위기 설명만 아는 곡을 찾는다. 모델이 짐작한 후보("제목 - 가수")를 Last.fm에서 하나씩 확인해,
     실제로 있는 곡만 카드로 돌려준다. 확인되지 않은 후보는 말하지 않는다."""
     found: list[dict] = []
     checked: list[str] = []
+    rejected: list[str] = []
+    confirmed: dict[str, bool] = {}
+    origin: dict[str, str] = {}
     seen: set[str] = set()
-    for raw in (guesses or [])[:_IDENTIFY_MAX]:
-        text = " ".join(str(raw).split())
-        if not text:
-            continue
-        title, _, artist = text.rpartition(" - ") if " - " in text else (text, "", "")
-        checked.append(text)
-        try:
-            r = find_track(title.strip(), artist.strip())
-        except Exception:  # noqa: BLE001 — 한 후보가 실패해도 다음 후보를 확인한다
-            continue
-        if not r.get("found") or r.get("substitute"):
-            continue
-        key = f"{r['title']}|{r['artist']}".lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        found.append({"title": r["title"], "artist": r["artist"]})
+
+    def check(candidates: list, via: str) -> None:
+        for raw in candidates[:_IDENTIFY_MAX]:
+            text = " ".join(str(raw).split())
+            if not text:
+                continue
+            title, _, artist = text.rpartition(" - ") if " - " in text else (text, "", "")
+            checked.append(text)
+            try:
+                r = find_track(title.strip(), artist.strip())
+            except Exception:  # noqa: BLE001 — 한 후보가 실패해도 다음 후보를 확인한다
+                continue
+            if not r.get("found") or r.get("substitute"):
+                continue
+            key = f"{r['title']}|{r['artist']}".lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            # 곡이 있다고 그 곡이 맞는 건 아니다: 가사를 구할 수 있으면 단서가 정말 그 가사에 있는지 본다
+            lyrics = _plain_lyrics(r["title"], r["artist"]) if clues.strip() else None
+            verdict = _lyrics_match(clues, lyrics) if lyrics is not None else None
+            if verdict is False:
+                rejected.append(f"{r['title']} - {r['artist']}")
+                continue
+            found.append({"title": r["title"], "artist": r["artist"]})
+            confirmed[key] = verdict is True
+            origin[key] = via
+
+    check(guesses or [], "memory")
+    # 모델의 짐작으로 가사가 확인된 곡이 없으면 웹 검색으로 한 번 더 찾는다(마이너한 곡은 모델의 기억에 없다)
+    searched = False
+    if clues.strip() and not any(confirmed.values()):
+        extra = _web_guesses(clues)
+        searched = bool(extra)
+        check(extra, "web")
+    # 가사로 확인된 곡을 앞에 둔다
+    found.sort(key=lambda t: not confirmed.get(f"{t['title']}|{t['artist']}".lower(), False))
+    # 가사로 확인된 곡이 있으면 확인 못 한 짐작 후보는 보여 주지 않는다(엉뚱한 곡이 같이 나오지 않게)
+    if any(confirmed.get(f"{t['title']}|{t['artist']}".lower()) for t in found):
+        found = [t for t in found if confirmed.get(f"{t['title']}|{t['artist']}".lower())]
     if not found:
         return {
             "found": False,
             "clues": _line(clues, 200),
             "checked": checked,
+            "rejected": rejected,
             "tracks": [],
-            "note": "후보를 확인하지 못했다. 곡을 단정하지 말고, 기억나는 가사 한 줄이나 가수·시기·언어를 더 알려 달라고 한 문장으로 말한다.",
+            "note": "후보를 확인하지 못했다"
+            + (f"(가사가 단서와 맞지 않아 뺀 곡: {', '.join(rejected)})" if rejected else "")
+            + ". 곡을 단정하지 말고, 모른다고 말한 뒤 기억나는 가사 한 줄이나 가수·시기·언어를 더 알려 달라고 한 문장으로 말한다.",
         }
+    keys = [f"{t['title']}|{t['artist']}".lower() for t in found]
+    via_web = any(origin.get(k) == "web" for k in keys)
+    lyrics_ok = any(confirmed.get(k) for k in keys)
+    if via_web:
+        note = (
+            "웹 검색(구글)으로 찾은 곡이다. 글은 '웹 검색에서 찾아본 결과예요.'라고 알리고 곡은 카드로 보여 준다. "
+            + ("가사도 단서와 맞았다고 덧붙인다. " if lyrics_ok else "가사 대조를 했는지는 말하지 않는다(가사 서비스에 없다거나 확인하지 못했다는 말은 하지 않는다). ")
+            + "'혹시', '일 수 있어요' 같은 머뭇거리는 말투는 쓰지 않는다. 가사를 길게 옮기지 않는다."
+        )
+    else:
+        note = (
+            "모델의 기억으로 짐작한 곡이다. 글은 '기억으로 짐작해 찾은 곡이에요.'라고 알리고 곡은 카드로 보여 준다. "
+            + ("가사가 단서와 맞는 것까지 확인했다고 덧붙인다. " if lyrics_ok else "가사 대조를 했는지는 말하지 않는다(확인하지 못했다는 말은 하지 않는다). ")
+            + "가사를 길게 옮기지 않는다."
+        )
     return {
         "found": True,
         "clues": _line(clues, 200),
         "checked": checked,
         "tracks": found,
-        "note": "단서로 짐작해 확인된 후보다. 확실하다고 단정하지 말고 '이 곡일 수 있어요'라고 말하고, 카드를 눌러 들어 보고 맞는지 알려 달라고 한다. 가사를 길게 옮기지 않는다.",
+        "lyrics_checked": sum(1 for v in confirmed.values() if v),
+        "web_searched": searched,
+        "via_web": via_web,
+        "note": note,
     }
 
 

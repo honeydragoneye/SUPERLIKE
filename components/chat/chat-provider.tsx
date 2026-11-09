@@ -752,6 +752,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     title?: string;
                     album?: string | null;
                     based_on?: string;
+                    /** identify_song: the song came from a web search, not from the model's memory */
+                    via_web?: boolean;
                     tracks?: ChatTrack[];
                     checked?: number;
                     proposal?: { definition: string; reason?: string; warning?: string; label?: string };
@@ -842,7 +844,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                         ? "곡을 찾았어요"
                         : "곡을 찾지 못했어요";
                   } else if (event.name === "identify_song") {
-                    m.status = found.length ? "이 곡일 수 있어요" : "곡을 확인하지 못했어요";
+                    m.status = found.length ? (result.via_web ? "웹 검색에서 찾아본 결과" : "기억으로 짐작한 곡") : "곡을 확인하지 못했어요";
                   } else if (event.name === "similar_to") {
                     m.status = found.length
                       ? `비슷한 곡 · ${String(result.based_on ?? "")}`
