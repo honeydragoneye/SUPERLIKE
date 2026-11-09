@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import html
+import sys
 import random
 import re
 import uuid
@@ -1162,8 +1163,12 @@ def _web_guesses(clues: str) -> list[str]:
             {"contents": [{"role": "user", "parts": [{"text": prompt}]}], "tools": [{"google_search": {}}], "generationConfig": {"temperature": 0}},
         )
         parts = response.json()["candidates"][0]["content"]["parts"]
-    except Exception:  # noqa: BLE001 — 검색이 안 되면(한도 포함) 모델의 짐작만으로 간다
-        _web_off_until = time.monotonic() + 3600
+    except Exception as e:  # noqa: BLE001 — 검색이 안 되면(한도 포함) 모델의 짐작만으로 간다
+        # 서버 로그에 이유를 남긴다(배포 환경에서 왜 검색이 안 되는지 볼 수 있게)
+        print(f"[identify_song] 웹 검색 실패: {str(e)[:200]}", file=sys.stderr, flush=True)
+        # 크레딧·권한 문제(402·403·404)는 곧 낫지 않으니 한동안 쉬고, 잠깐의 한도나 서버 오류는 바로 다음에 다시 시도한다
+        if getattr(e, "status", None) in (402, 403, 404):
+            _web_off_until = time.monotonic() + 600
         return []
     text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
     out = []
@@ -1223,6 +1228,9 @@ def identify_song(clues: str = "", guesses: list | None = None) -> dict:
     # 가사로 확인된 곡이 있으면 확인 못 한 짐작 후보는 보여 주지 않는다(엉뚱한 곡이 같이 나오지 않게)
     if any(confirmed.get(f"{t['title']}|{t['artist']}".lower()) for t in found):
         found = [t for t in found if confirmed.get(f"{t['title']}|{t['artist']}".lower())]
+    # 웹 검색으로 찾은 곡이 있으면 기억으로 짐작한 확인 못 한 후보는 같이 보여 주지 않는다
+    elif any(origin.get(f"{t['title']}|{t['artist']}".lower()) == "web" for t in found):
+        found = [t for t in found if origin.get(f"{t['title']}|{t['artist']}".lower()) == "web"]
     if not found:
         return {
             "found": False,
