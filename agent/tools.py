@@ -1841,7 +1841,7 @@ TOOLS: dict[str, dict] = {
             "function": {
                 "name": "open_page",
                 "description": (
-                    "화면을 다른 페이지로 옮긴다. page는 home(홈), history(최근 재생 기록), mypage(마이페이지), issues(지난 호·금요일의 앨범 편지), "
+                    "화면을 다른 페이지로 옮긴다. page는 home(홈), history(최근 재생 기록), mypage(마이페이지), issues(지난 호·주간 매거진), "
                     "weekly_artist(금주의 아티스트), editors_pick(에디터스 픽), station(스테이션), search(검색 결과: name에 검색어), "
                     "artist(가수 페이지: name에 가수), album(앨범 페이지: name에 앨범, 알면 artist). '~ 보여줘', '~ 열어줘', '~로 가자'에 부른다."
                 ),

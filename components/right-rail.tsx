@@ -138,9 +138,9 @@ export function StayConnected({ onSubscribe, open = false }: { onSubscribe?: () 
       <p className="text-[8px] tracking-[0.8px] text-accent-bright">{theme} · 이번 달 주제</p>
       <h2 className="mt-[6px] text-[24px] font-black leading-[28px] tracking-[-0.5px] text-on-bright">
         <Link href="/issues" className="transition-colors hover:text-accent-bright">
-          금요일의
+          주간
           <br />
-          앨범 편지
+          매거진
         </Link>
       </h2>
       <div

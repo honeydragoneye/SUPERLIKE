@@ -151,7 +151,7 @@ export function IssuesPage() {
     return (
       <DetailShell
         eyebrow={shown ? `ISSUES · ${no(shown.no)} · ${sentOn(shown)}` : "ISSUES · 지난 호 모아 보기"}
-        title={shown?.title ?? "금요일의 앨범 편지"}
+        title={shown?.title ?? "주간 매거진"}
         aside={shown && <ThemeChip theme={shown.theme} />}
       >
         <DetailStatus loading={loading} error={error ? "지난 호를 불러오지 못했어요" : null} />
@@ -166,12 +166,12 @@ export function IssuesPage() {
   return (
     <DetailShell
       eyebrow="ISSUES · 지난 호 모아 보기"
-      title="금요일의 앨범 편지"
+      title="주간 매거진"
     >
       <DetailStatus loading={loading} error={error ? "지난 호를 불러오지 못했어요" : null} />
       {!loading && !error && issues.length === 0 && (
         <p className="rule rounded-[8px] bg-card p-[16px] text-[10px] leading-[16px]">
-          아직 보낸 편지가 없어요. 첫 편지가 나가면 여기에 쌓여요.
+          아직 보낸 매거진이 없어요. 첫 매거진이 나가면 여기에 쌓여요.
         </p>
       )}
       {issues.map((i) => (
