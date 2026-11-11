@@ -67,7 +67,7 @@ const KIND = {
 const ON = "bg-ink text-on-ink";
 
 const PILL =
-  "shrink-0 rounded-pill px-[14px] py-[8px] text-[10px] tracking-[0.6px] transition-colors rule disabled:opacity-40";
+  "shrink-0 rounded-pill px-[14px] py-[8px] text-[10px] tracking-[0.6px] transition-colors border-[1.5px] border-transparent disabled:opacity-40";
 
 /** "7sec" until a minute has passed, "1min 1sec" after. */
 function clock(seconds: number): string {
@@ -436,7 +436,7 @@ export function TagFilter() {
             type="button"
             title={`${selectedCustom.label} 태그의 기준을 챗봇과 대화로 정하기`}
             onClick={() => openRefine(selectedCustom.key)}
-            className="flex h-[30px] w-fit cursor-pointer items-center gap-[4px] rounded-pill bg-accent pl-[10px] pr-[14px] text-[10px] tracking-[0.6px] text-on-bright transition-colors rule hover:bg-soft"
+            className="flex h-[30px] w-fit cursor-pointer items-center gap-[4px] rounded-pill bg-accent pl-[10px] pr-[14px] text-[10px] tracking-[0.6px] text-on-bright transition-colors border-[1.5px] border-transparent hover:bg-soft"
           >
             <Icon name="eyes-ink" size={22} />
             대화로 다듬기
